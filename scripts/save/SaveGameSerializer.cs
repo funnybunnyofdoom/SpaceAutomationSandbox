@@ -22,10 +22,10 @@ public static class SaveGameSerializer
 {
     /// <summary>
     /// Version written. v2 added the landed state; v3 added rail orbits, inventories, build queues
-    /// and the order counter; v4 added the anchored flag. Older files still load (missing parts read
-    /// as empty / not anchored).
+    /// and the order counter; v4 added the anchored flag; v5 added part rotation, craft targets,
+    /// docking, and order landing sites. Older files still load (missing parts read as empty / none).
     /// </summary>
-    public const int SchemaVersion = 4;
+    public const int SchemaVersion = 5;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -69,6 +69,9 @@ public static class SaveGameSerializer
                     HeadingRad = c.HeadingRad,
                     Controls = new ControlsDto { Throttle = c.Controls.Throttle, Turn = c.Controls.Turn, Brake = c.Controls.Brake },
                     TargetBodyId = c.TargetBodyId.Value,
+                    TargetCraftId = c.TargetCraftId.Value,
+                    DockedToCraftId = c.DockedToCraftId.Value,
+                    DockPort = c.DockPortIndex,
                     LandedOnBodyId = c.LandedOnBodyId.Value,
                     LandedOffset = c.IsLanded ? Vec(c.LandedOffset) : null,
                     Anchored = c.IsAnchored,
@@ -82,6 +85,7 @@ public static class SaveGameSerializer
                             Design = DesignToDto(o.Design),
                             MaterialsKg = new SortedDictionary<string, long>(o.MaterialsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal),
                             ProgressKg = o.ProgressKg,
+                            LandingSiteBodyId = o.LandingSite.Value,
                         }).ToList()
                         : null,
                 }).ToList(),
@@ -141,17 +145,25 @@ public static class SaveGameSerializer
                 foreach (var o in c.BuildQueue ?? new List<OrderDto>())
                 {
                     var orderDesign = DesignFromDto(o.Design, $"Order {o.OrderId}");
-                    var orderErrors = orderDesign.Validate(catalog, DesignRole.Ship);
+                    var orderErrors = orderDesign.Validate(catalog, orderDesign.SuggestedRole(catalog));
                     if (orderErrors.Count > 0)
                         throw new FormatException($"Order {o.OrderId} design '{orderDesign.Id}' is invalid: {string.Join("; ", orderErrors)}");
                     var materials = o.MaterialsKg ?? new SortedDictionary<string, long>();
                     if (materials.Any(kv => !catalog.Materials.Contains(kv.Key) || kv.Value < 0))
                         throw new FormatException($"Order {o.OrderId} holds unknown or negative materials.");
                     sector.RestoreOrder(craft.Id, new BuildOrder(new OrderId(o.OrderId), o.ShipName ?? "", orderDesign,
-                        orderDesign.ComputeStats(catalog), materials, o.ProgressKg));
+                        orderDesign.ComputeStats(catalog), materials, o.ProgressKg, new BodyId(o.LandingSiteBodyId)));
+                    if (o.LandingSiteBodyId != 0) sector.GetBody(new BodyId(o.LandingSiteBodyId));
                 }
             }
             if (dto.NextOrderId > 0) sector.RestoreNextOrderId(dto.NextOrderId);
+
+            // Links between crafts, after every craft exists (v5; older files have none).
+            foreach (var c in dto.Crafts ?? new List<CraftDto>())
+            {
+                if (c.TargetCraftId != 0) sector.SetTargetCraft(new CraftId(c.Id), new CraftId(c.TargetCraftId));
+                if (c.DockedToCraftId != 0) sector.RestoreDock(new CraftId(c.Id), new CraftId(c.DockedToCraftId), c.DockPort);
+            }
 
             var player = new CraftId(file.PlayerCraftId);
             if (!player.IsNone) sector.GetCraft(player); // must exist
@@ -194,7 +206,7 @@ public static class SaveGameSerializer
     {
         Id = d.Id,
         Name = d.Name,
-        Cells = d.Cells.Select(cell => new CellDto { X = cell.Pos.X, Y = cell.Pos.Y, Part = cell.PartId }).ToList(),
+        Cells = d.Cells.Select(cell => new CellDto { X = cell.Pos.X, Y = cell.Pos.Y, Part = cell.PartId, Rot = cell.Rotation }).ToList(),
     };
 
     private static ShipDesign DesignFromDto(DesignDto? d, string owner)
@@ -202,13 +214,13 @@ public static class SaveGameSerializer
         if (d is null) throw new FormatException($"{owner} has no design.");
         return new ShipDesign(d.Id ?? "", d.Name ?? "",
             (d.Cells ?? new List<CellDto>()).Select(cell =>
-                new DesignCell(new GridPos(cell.X, cell.Y), cell.Part ?? throw new FormatException("Cell without a part."))));
+                new DesignCell(new GridPos(cell.X, cell.Y), cell.Part ?? throw new FormatException("Cell without a part."), cell.Rot)));
     }
 
     private static Vector2D ToVec(VecDto? v, string what) =>
         v is null ? throw new FormatException($"Craft is missing {what}.") : new Vector2D(v.X, v.Y);
 
-    // --- File shape (schema 4). Change only together with SchemaVersion and docs/08. ---
+    // --- File shape (schema 5). Change only together with SchemaVersion and docs/08. ---
 
     private sealed class SaveFile
     {
@@ -256,6 +268,9 @@ public static class SaveGameSerializer
         public double HeadingRad { get; set; }
         public ControlsDto? Controls { get; set; }
         public uint TargetBodyId { get; set; }
+        public uint TargetCraftId { get; set; }
+        public uint DockedToCraftId { get; set; }
+        public int DockPort { get; set; }
         public uint LandedOnBodyId { get; set; }
         public VecDto? LandedOffset { get; set; }
         public bool Anchored { get; set; }
@@ -271,6 +286,7 @@ public static class SaveGameSerializer
         public DesignDto? Design { get; set; }
         public SortedDictionary<string, long>? MaterialsKg { get; set; }
         public double ProgressKg { get; set; }
+        public uint LandingSiteBodyId { get; set; }
     }
 
     private sealed class DesignDto
@@ -285,6 +301,9 @@ public static class SaveGameSerializer
         public int X { get; set; }
         public int Y { get; set; }
         public string? Part { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int Rot { get; set; }
     }
 
     private sealed class VecDto

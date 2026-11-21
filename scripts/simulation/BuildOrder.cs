@@ -19,7 +19,7 @@ public readonly record struct OrderId(long Value)
 public sealed class BuildOrder
 {
     public BuildOrder(OrderId id, string shipName, ShipDesign design, ShipStats stats,
-        IReadOnlyDictionary<string, long> materialsKg, double progressKg = 0)
+        IReadOnlyDictionary<string, long> materialsKg, double progressKg = 0, BodyId landingSite = default)
     {
         if (!(stats.TotalMassKg > 0)) throw new ArgumentException("Order needs a design with mass.", nameof(stats));
         if (!(progressKg >= 0) || progressKg > stats.TotalMassKg) throw new ArgumentOutOfRangeException(nameof(progressKg));
@@ -29,7 +29,11 @@ public sealed class BuildOrder
         Stats = stats;
         MaterialsKg = new SortedDictionary<string, long>(new Dictionary<string, long>(materialsKg), StringComparer.Ordinal);
         ProgressKg = progressKg;
+        LandingSite = landingSite;
     }
+
+    /// <summary>For fixed structures (foundations): the body whose surface it is placed on. None otherwise.</summary>
+    public BodyId LandingSite { get; }
 
     public OrderId Id { get; }
     public string ShipName { get; }

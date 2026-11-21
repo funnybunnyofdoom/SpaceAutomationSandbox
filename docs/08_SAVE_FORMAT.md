@@ -1,4 +1,4 @@
-# 08 — Save format (schema 4)
+# 08 — Save format (schema 5)
 
 The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs`.
 
@@ -22,7 +22,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
 
 ```jsonc
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "game": "SpaceAutomationSandbox",
   "playerCraftId": 1,                 // 0 = no player craft
   "sector": {
@@ -45,6 +45,8 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
         "headingRad": 2.63,
         "controls": { "throttle": 0, "turn": 0, "brake": false },
         "targetBodyId": 2,                           // 0 = no target
+        "targetCraftId": 0,                          // v5: target craft (exclusive with targetBodyId)
+        "dockedToCraftId": 0, "dockPort": 0,         // v5: station and port index while docked
         "landedOnBodyId": 0,                         // v2: 0 = flying
         "landedOffset": null,                        // v2: craft centre minus body centre while landed
         "anchored": false,                           // v4: only while landed, and only with a clamp or foundation
@@ -57,7 +59,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
 }
 ```
 
-The load checks for: the right `game`, a `schemaVersion` from 1 to 4, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs (as a ship or as a station; queued designs as ships), known materials in inventories and orders, target, landed-on, rail-orbit parent and player IDs that exist, and anchor states the rules allow (anchored only while landed with a clamp or foundation; a landed foundation always anchored). Any failure raises `FormatException` with a reason.
+The load checks for: the right `game`, a `schemaVersion` from 1 to 5, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs (as a ship or as a station; queued designs as ships), known materials in inventories and orders, target, landed-on, rail-orbit parent and player IDs that exist, dock links to real free ports (one ship per port, not also landed or on rails), and anchor states the rules allow (anchored only while landed with a clamp or foundation; a landed foundation always anchored). Any failure raises `FormatException` with a reason.
 
 ## Changing the format
 
@@ -71,3 +73,4 @@ Bump `SaveGameSerializer.SchemaVersion` and update this document. Then either ad
 | 2 | Added `landedOnBodyId` and `landedOffset` per craft (solid bodies) | A v1 file loads with every craft flying. The next save writes v2. |
 | 3 | Added `railOrbit`, `inventoryKg` and `buildQueue` per craft, and `nextOrderId` (shipyards) | v1/v2 files load with empty inventories and no queues. They contain no shipyard; F7 starts a new game that has one. |
 | 4 | Added `anchored` per craft (anchor clamps and foundations) | Older files load with nothing anchored, except a landed foundation, which is always anchored. |
+| 5 | Added `rot` per design cell (omitted when 0), `targetCraftId`, `dockedToCraftId` and `dockPort` per craft, and `landingSiteBodyId` per build order | Older files load with no rotation, no craft targets, nothing docked, and no landing sites. |

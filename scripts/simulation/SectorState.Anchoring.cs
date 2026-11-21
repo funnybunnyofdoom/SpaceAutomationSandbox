@@ -1,7 +1,7 @@
 namespace SpaceAutomationSandbox.Simulation;
 
-/// <summary>Outcome of an anchor/release request: whether it happened, and a message saying why (not).</summary>
-public readonly record struct AnchorResult(bool Done, string Message);
+/// <summary>Outcome of a player action (anchor, dock, transfer…): whether it happened, and a message saying why (not).</summary>
+public readonly record struct ActionResult(bool Done, string Message);
 
 /// <summary>
 /// Anchoring: a landed craft with an anchor clamp can lock itself to the body it rests on and
@@ -11,7 +11,7 @@ public readonly record struct AnchorResult(bool Done, string Message);
 /// </summary>
 public sealed partial class SectorState
 {
-    public AnchorResult TryAnchor(CraftId craftId)
+    public ActionResult TryAnchor(CraftId craftId)
     {
         var craft = GetCraft(craftId);
         if (craft.IsAnchored) return new(false, $"{craft.Name} is already anchored.");
@@ -21,7 +21,7 @@ public sealed partial class SectorState
         return new(true, $"{craft.Name} anchored to {GetBody(craft.LandedOnBodyId).Name}.");
     }
 
-    public AnchorResult TryRelease(CraftId craftId)
+    public ActionResult TryRelease(CraftId craftId)
     {
         var craft = GetCraft(craftId);
         if (!craft.IsAnchored) return new(false, $"{craft.Name} is not anchored.");

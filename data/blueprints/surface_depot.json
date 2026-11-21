@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "id": "surface_depot",
+  "name": "Surface depot",
+  "cells": [
+    { "x":  0, "y": -1, "part": "docking_port" },
+    { "x": -1, "y":  0, "part": "cargo" },
+    { "x":  0, "y":  0, "part": "hull" },
+    { "x":  1, "y":  0, "part": "cargo" },
+    { "x": -1, "y":  1, "part": "foundation" },
+    { "x":  0, "y":  1, "part": "foundation" },
+    { "x":  1, "y":  1, "part": "foundation" }
+  ]
+}

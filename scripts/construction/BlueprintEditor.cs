@@ -6,7 +6,7 @@ using System.Text;
 namespace SpaceAutomationSandbox.Construction;
 
 /// <summary>
-/// Editing model behind the blueprint editor UI: a mutable grid of part IDs with undo, live
+/// Editing model behind the blueprint editor UI: a mutable grid of parts (with rotation) with undo, live
 /// stats, validation errors and non-blocking warnings. Pure C#, so the editing rules are tested
 /// without Godot. It produces immutable <see cref="ShipDesign"/>s; it never touches a live craft.
 /// </summary>
@@ -18,8 +18,8 @@ public sealed class BlueprintEditor
     private const int MaxUndo = 200;
 
     private readonly PartCatalog _catalog;
-    private Dictionary<GridPos, string> _cells = new();
-    private readonly List<Dictionary<GridPos, string>> _undo = new();
+    private Dictionary<GridPos, DesignCell> _cells = new();
+    private readonly List<Dictionary<GridPos, DesignCell>> _undo = new();
     private bool _inStroke;
     private bool _strokeChanged;
     private string _name = "New design";
@@ -41,7 +41,7 @@ public sealed class BlueprintEditor
     /// <summary>File/stable id derived from the name (see <see cref="SlugFromName"/>).</summary>
     public string Id => SlugFromName(Name);
 
-    public IReadOnlyDictionary<GridPos, string> Cells => _cells;
+    public IReadOnlyDictionary<GridPos, DesignCell> Cells => _cells;
 
     /// <summary>True when there are edits that haven't been saved since the last <see cref="Load"/> or <see cref="MarkSaved"/>.</summary>
     public bool IsDirty { get; private set; }
@@ -53,7 +53,7 @@ public sealed class BlueprintEditor
     /// <summary>Replaces the contents with a design (unknown parts are kept and reported as errors).</summary>
     public void Load(ShipDesign design)
     {
-        _cells = design.Cells.ToDictionary(c => c.Pos, c => c.PartId);
+        _cells = design.Cells.ToDictionary(c => c.Pos);
         _name = design.Name.Length > 0 ? design.Name : design.Id;
         _undo.Clear();
         IsDirty = false;
@@ -61,7 +61,7 @@ public sealed class BlueprintEditor
 
     public void New()
     {
-        _cells = new Dictionary<GridPos, string>();
+        _cells = new Dictionary<GridPos, DesignCell>();
         _name = "New design";
         _undo.Clear();
         IsDirty = false;
@@ -85,12 +85,16 @@ public sealed class BlueprintEditor
         if (!_strokeChanged) _undo.RemoveAt(_undo.Count - 1); // nothing happened: no empty undo step
     }
 
-    /// <summary>Puts a part in a cell (replacing what's there). Returns false if nothing changed or it isn't allowed.</summary>
-    public bool Place(GridPos pos, string partId)
+    /// <summary>
+    /// Puts a part in a cell with a rotation (quarter turns clockwise), replacing what's there.
+    /// Returns false if nothing changed or it isn't allowed.
+    /// </summary>
+    public bool Place(GridPos pos, string partId, int rotation = 0)
     {
-        if (!InBounds(pos) || !_catalog.TryGet(partId, out _)) return false;
-        if (_cells.TryGetValue(pos, out var existing) && existing == partId) return false;
-        Change(() => _cells[pos] = partId);
+        if (!InBounds(pos) || !_catalog.TryGet(partId, out _) || rotation is < 0 or > 3) return false;
+        var cell = new DesignCell(pos, partId, rotation);
+        if (_cells.TryGetValue(pos, out var existing) && existing == cell) return false;
+        Change(() => _cells[pos] = cell);
         return true;
     }
 
@@ -111,29 +115,33 @@ public sealed class BlueprintEditor
     }
 
     public ShipDesign ToDesign() =>
-        new(Id, Name, _cells.Select(kv => new DesignCell(kv.Key, kv.Value)));
+        new(Id, Name, _cells.Values);
 
     /// <summary>Stats of the known parts (unknown ones are listed in <see cref="Errors"/>); null when empty.</summary>
     public ShipStats? Stats
     {
         get
         {
-            var known = _cells.Where(kv => _catalog.TryGet(kv.Value, out _)).ToList();
-            return known.Count == 0
-                ? null
-                : new ShipDesign(Id, Name, known.Select(kv => new DesignCell(kv.Key, kv.Value))).ComputeStats(_catalog);
+            var known = _cells.Values.Where(c => _catalog.TryGet(c.PartId, out _)).ToList();
+            return known.Count == 0 ? null : new ShipDesign(Id, Name, known).ComputeStats(_catalog);
         }
     }
 
     /// <summary>Materials to build the current layout (known parts only).</summary>
     public MaterialBill BillOfMaterials => ToDesign().ComputeBillOfMaterials(_catalog);
 
-    /// <summary>Problems that make the design unusable (the same rules as flying a design).</summary>
+    /// <summary>
+    /// What this layout is treated as: a ship if it has a cockpit or thrusters (or nothing that makes a
+    /// station), otherwise a station. Errors use that role's rules (the same rules as flying or ordering).
+    /// </summary>
+    public DesignRole Role => ToDesign().SuggestedRole(_catalog);
+
+    /// <summary>Problems that make the design unusable in its <see cref="Role"/>.</summary>
     public IReadOnlyList<string> Errors
     {
         get
         {
-            var errors = ToDesign().Validate(_catalog).ToList();
+            var errors = ToDesign().Validate(_catalog, Role).ToList();
             if (string.IsNullOrWhiteSpace(Name)) errors.Add("Design needs a name.");
             return errors;
         }
@@ -147,7 +155,7 @@ public sealed class BlueprintEditor
     {
         get
         {
-            var warnings = new List<string>();
+            var warnings = ToDesign().Warnings(_catalog).ToList();
             var groups = CountConnectedGroups();
             if (groups > 1) warnings.Add($"Parts form {groups} separate groups (not edge-connected).");
             return warnings;
@@ -199,7 +207,7 @@ public sealed class BlueprintEditor
 
     private void PushUndo()
     {
-        _undo.Add(new Dictionary<GridPos, string>(_cells));
+        _undo.Add(new Dictionary<GridPos, DesignCell>(_cells));
         if (_undo.Count > MaxUndo) _undo.RemoveAt(0);
     }
 }

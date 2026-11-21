@@ -28,7 +28,8 @@ public static class FlightModel
         var controls = craft.Controls.Clamped();
         craft.HeadingRad = WrapAngle(craft.HeadingRad + controls.Turn * TurnRateRadPerS * dt);
 
-        var maxDeltaV = craft.Stats.MaxAccelerationMps2 * dt;
+        // Cargo counts: a loaded ship accelerates and brakes more slowly.
+        var maxDeltaV = craft.Stats.TotalThrustN / craft.MassKg * dt;
         var velocity = craft.Velocity;
         if (controls.Brake)
         {

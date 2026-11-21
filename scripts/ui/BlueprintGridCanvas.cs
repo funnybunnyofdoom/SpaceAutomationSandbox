@@ -6,8 +6,9 @@ using SpaceAutomationSandbox.Construction;
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>
-/// The editable grid. Left mouse paints the selected part, right mouse erases; a drag is one undo
-/// step. Draws only from <see cref="BlueprintEditor"/>; holds no design state of its own.
+/// The editable grid. Left mouse paints the selected part at the current rotation (R in the panel),
+/// right mouse erases; a drag is one undo step. Every part shows a small arrow for its facing.
+///  Draws only from <see cref="BlueprintEditor"/>; holds no design state of its own.
 /// </summary>
 public partial class BlueprintGridCanvas : Control
 {
@@ -26,17 +27,19 @@ public partial class BlueprintGridCanvas : Control
     private readonly BlueprintEditor _model;
     private readonly IReadOnlyDictionary<string, Color> _colors;
     private readonly Func<string?> _selectedPart;
+    private readonly Func<int> _rotation;
     private GridPos? _hover;
     private MouseButton _dragButton = MouseButton.None;
 
     /// <summary>Raised after any edit so the panel can refresh stats and errors.</summary>
     public event Action? Edited;
 
-    public BlueprintGridCanvas(BlueprintEditor model, IReadOnlyDictionary<string, Color> colors, Func<string?> selectedPart)
+    public BlueprintGridCanvas(BlueprintEditor model, IReadOnlyDictionary<string, Color> colors, Func<string?> selectedPart, Func<int> rotation)
     {
         _model = model;
         _colors = colors;
         _selectedPart = selectedPart;
+        _rotation = rotation;
         CustomMinimumSize = new Vector2(Side, Side);
         MouseFilter = MouseFilterEnum.Stop;
         MouseExited += () => { _hover = null; QueueRedraw(); };
@@ -44,7 +47,7 @@ public partial class BlueprintGridCanvas : Control
 
     // Parameterless constructor required by Godot for script instances; not used.
     public BlueprintGridCanvas() : this(new BlueprintEditor(new PartCatalog(Array.Empty<PartDefinition>(), new MaterialCatalog(Array.Empty<MaterialDefinition>()))),
-        new Dictionary<string, Color>(), () => null) { }
+        new Dictionary<string, Color>(), () => null, () => 0) { }
 
     private static GridPos ToCell(Vector2 local) =>
         new(Mathf.FloorToInt(local.X / CellPx) - H, Mathf.FloorToInt(local.Y / CellPx) - H);
@@ -84,7 +87,7 @@ public partial class BlueprintGridCanvas : Control
     {
         var changed = _dragButton == MouseButton.Right
             ? _model.Remove(cell)
-            : _selectedPart() is { } part && _model.Place(cell, part);
+            : _selectedPart() is { } part && _model.Place(cell, part, _rotation());
         if (changed) { Edited?.Invoke(); QueueRedraw(); }
     }
 
@@ -99,14 +102,16 @@ public partial class BlueprintGridCanvas : Control
         }
 
         var font = ThemeDB.FallbackFont;
-        foreach (var (pos, partId) in _model.Cells)
+        foreach (var (pos, cell) in _model.Cells)
         {
             var origin = CellOrigin(pos);
             DrawRect(new Rect2(origin + new Vector2(2, 2), new Vector2(CellPx - 4, CellPx - 4)),
-                _colors.TryGetValue(partId, out var c) ? c : UnknownPart);
+                _colors.TryGetValue(cell.PartId, out var c) ? c : UnknownPart);
             // Two-letter tag so parts with similar colours stay distinguishable.
-            var tag = partId.Length >= 2 ? partId[..2].ToUpperInvariant() : partId.ToUpperInvariant();
-            DrawString(font, origin + new Vector2(6, CellPx - 10), tag, HorizontalAlignment.Left, -1, 12, new Color(0, 0, 0, 0.75f));
+            var id = cell.PartId;
+            var tag = id.Length >= 2 ? id[..2].ToUpperInvariant() : id.ToUpperInvariant();
+            DrawString(font, origin + new Vector2(5, CellPx - 9), tag, HorizontalAlignment.Left, -1, 11, new Color(0, 0, 0, 0.75f));
+            DrawFacing(origin, cell.Rotation, new Color(0, 0, 0, 0.6f));
         }
 
         if (_model.Stats is { } stats) // centre of mass (cell centres are at integer coordinates)
@@ -120,9 +125,22 @@ public partial class BlueprintGridCanvas : Control
         {
             var erase = _dragButton == MouseButton.Right;
             DrawRect(new Rect2(CellOrigin(hover), new Vector2(CellPx, CellPx)), erase ? HoverErase : HoverPlace, false, 2);
+            if (!erase) DrawFacing(CellOrigin(hover), _rotation(), HoverPlace); // shows the rotation that will be placed
         }
 
         // Forward indicator above the grid centre.
+        DrawString(font, new Vector2(Side - 150, -6), $"placing rotation: {_rotation() * 90} deg", HorizontalAlignment.Left, -1, 12, new Color(1, 1, 1, 0.6f));
         DrawString(font, new Vector2(Side / 2f - 30, -6), "^ FORWARD ^", HorizontalAlignment.Left, -1, 12, new Color(1, 1, 1, 0.6f));
+    }
+
+    /// <summary>Small triangle near the cell edge the part faces (thrusters push that way; ports open that way).</summary>
+    private void DrawFacing(Vector2 origin, int rotation, Color color)
+    {
+        var (fx, fy) = DesignCell.Facing(rotation);
+        var dir = new Vector2(fx, fy);
+        var side = new Vector2(-fy, fx);
+        var centre = origin + new Vector2(CellPx / 2f, CellPx / 2f);
+        var tip = centre + dir * (CellPx / 2f - 2);
+        DrawColoredPolygon(new[] { tip, tip - dir * 6 + side * 5, tip - dir * 6 - side * 5 }, color);
     }
 }

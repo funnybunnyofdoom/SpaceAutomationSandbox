@@ -21,16 +21,26 @@ public sealed partial class SectorState
     public long NextOrderId => _nextOrderId;
 
     /// <summary>
-    /// Queues <paramref name="design"/> at the yard and takes its materials from the yard's inventory now.
-    /// Rejected, with reasons and the exact shortfall, if the yard can't build or stock is short.
+    /// Queues <paramref name="design"/> (a ship or a station) at the yard and takes its materials from
+    /// the yard's inventory now. A fixed structure (foundation) needs <paramref name="landingSite"/>:
+    /// the body it will be placed on. Rejected, with reasons and the exact shortfall, if the yard can't
+    /// build it or stock is short.
     /// </summary>
-    public BuildOrderResult OrderBuild(CraftId yardId, ShipDesign design, PartCatalog catalog, string? shipName = null)
+    public BuildOrderResult OrderBuild(CraftId yardId, ShipDesign design, PartCatalog catalog, string? shipName = null,
+        BodyId landingSite = default)
     {
         var yard = GetCraft(yardId);
         if (!yard.IsShipyard) return BuildOrderResult.Rejected($"{yard.Name} has no fabricator.");
 
-        var errors = design.Validate(catalog, DesignRole.Ship);
+        var role = design.SuggestedRole(catalog);
+        var errors = design.Validate(catalog, role);
         if (errors.Count > 0) return BuildOrderResult.Rejected(errors.Select(e => $"Design '{design.Name}': {e}").ToArray());
+
+        var fixedStructure = design.ComputeStats(catalog).IsFixedStructure;
+        if (fixedStructure && landingSite.IsNone)
+            return BuildOrderResult.Rejected($"'{design.Name}' has a foundation: choose a body to place it on.");
+        if (fixedStructure && !_byId.ContainsKey(landingSite)) return BuildOrderResult.Rejected($"No {landingSite} in this sector.");
+        if (!fixedStructure) landingSite = BodyId.None;
 
         var bill = design.ComputeBillOfMaterials(catalog).ToWholeKg();
         var shortfall = yard.Inventory.Shortfall(bill);
@@ -41,7 +51,8 @@ public sealed partial class SectorState
 
         if (!yard.Inventory.TryRemove(bill)) throw new InvalidOperationException("Inventory changed during an order."); // can't happen: single-threaded
         var id = new OrderId(_nextOrderId++);
-        var order = new BuildOrder(id, shipName ?? $"{design.Name} #{id.Value}", design, design.ComputeStats(catalog), bill);
+        var order = new BuildOrder(id, shipName ?? $"{design.Name} #{id.Value}", design, design.ComputeStats(catalog), bill,
+            landingSite: landingSite);
         yard.BuildQueueList.Add(order);
         return new BuildOrderResult(true, id, Array.Empty<string>(), new Dictionary<string, long>());
     }
@@ -92,8 +103,38 @@ public sealed partial class SectorState
             yard.BuildQueueList.Remove(order);
             var craft = new CraftState(AllocateCraftId(), order.ShipName, order.Design, order.Stats, yard.Position, yard.HeadingRad);
             AddCraft(craft);
-            PlaceNextTo(yard, craft, endS);
+            if (!order.LandingSite.IsNone) PlaceOnSurface(GetBody(order.LandingSite), yard, craft, endS);
+            else PlaceNextTo(yard, craft, endS);
         }
+    }
+
+    /// <summary>
+    /// PLACEHOLDER for construction ships/sites: puts a finished fixed structure straight onto the
+    /// chosen body's surface, on the side facing the yard (first free spot), nose away from the
+    /// body so its foundation is on the ground. Landing anchors it (foundation).
+    /// </summary>
+    private void PlaceOnSurface(CelestialBodyState body, CraftState yard, CraftState craft, double timeS)
+    {
+        var bodyPos = GetPositionAt(body.Id, timeS);
+        var toward = yard.Position - bodyPos;
+        var baseAngle = toward.Length > 0 ? Math.Atan2(toward.Y, toward.X) : -Math.PI / 2;
+        var radius = body.RadiusM + craft.CollisionRadiusM;
+        for (var slot = 0; slot <= 2000; slot++)
+        {
+            // 0, +1, −1, +2, −2 … steps of one craft width along the surface.
+            var step = (slot + 1) / 2 * (slot % 2 == 1 ? 1 : -1) * (2 * craft.CollisionRadiusM + ParkingGapM);
+            var angle = baseAngle + step / radius;
+            var offset = new Vector2D(Math.Cos(angle) * radius, Math.Sin(angle) * radius);
+            if (!IsFree(bodyPos + offset, craft)) continue;
+            craft.LandedOnBodyId = body.Id;
+            craft.LandedOffset = offset;
+            craft.Position = craft.PreviousPosition = bodyPos + offset;
+            craft.Velocity = GetVelocityAt(body.Id, timeS);
+            craft.HeadingRad = craft.PreviousHeadingRad = FlightModel.WrapAngle(Math.Atan2(offset.X, -offset.Y)); // forward = outward
+            OnLanded(craft);
+            return;
+        }
+        throw new InvalidOperationException($"No free spot on {body.Name}.");
     }
 
     /// <summary>
@@ -102,6 +143,13 @@ public sealed partial class SectorState
     /// </summary>
     private void PlaceNextTo(CraftState yard, CraftState craft, double timeS)
     {
+        // A free docking port first: the new ship starts docked at its yard.
+        if (craft.Stats.TotalThrustN > 0 && FreePorts(yard).FirstOrDefault(-1) is var port and >= 0)
+        {
+            DockAt(craft, yard, port);
+            return;
+        }
+
         for (var slot = 1; slot <= 1000; slot++)
         {
             var distance = yard.CollisionRadiusM + craft.CollisionRadiusM + ParkingGapM

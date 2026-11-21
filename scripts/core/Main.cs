@@ -61,6 +61,7 @@ public partial class Main : Node2D
     private BlueprintEditorView? _editor;
     private ShipyardPanel? _shipyardPanel;
     private FleetPanel? _fleetPanel;
+    private CargoPanel? _cargoPanel;
 
     private bool EditorOpen => _editor is { Visible: true };
 
@@ -86,6 +87,8 @@ public partial class Main : Node2D
             _fleetPanel = new FleetPanel(() => _sector, () => _player?.Id) { Visible = false };
             _fleetPanel.CraftChosen += Pilot;
             hudLayer.AddChild(_fleetPanel);
+            _cargoPanel = new CargoPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
+            hudLayer.AddChild(_cargoPanel);
         }
         // Continue where the player left off; a new game only if there's no usable save.
         if (_catalog != null && System.IO.File.Exists(SaveFilePath)) LoadGame(isStartup: true);
@@ -110,7 +113,18 @@ public partial class Main : Node2D
             _player.Controls = ShipControls.Idle;
             ShowStatus(_sector.TryAnchor(_player.Id).Message);
         }
+        if (System.Array.IndexOf(args, "--demo-dock") >= 0 && _player != null
+            && _sector.Crafts.FirstOrDefault(c => c.Stats.DockingPorts.Count > 0) is { } dockYard)
+        {
+            // Dev/test hook: put the player at the yard's first berth, dock, and load 5 t of metal.
+            _player.Position = _sector.BerthPosition(dockYard, 0, _player.CollisionRadiusM, dockYard.Position);
+            _player.Velocity = dockYard.Velocity;
+            _sector.SetTargetCraft(_player.Id, dockYard.Id);
+            ShowStatus(_sector.TryDock(_player.Id).Message);
+            _sector.TryTransfer(dockYard.Id, _player.Id, "metal", 5_000);
+        }
         if (System.Array.IndexOf(args, "--open-editor") >= 0) OpenEditor();
+        if (System.Array.IndexOf(args, "--open-cargo") >= 0) _cargoPanel?.Open();
         if (System.Array.IndexOf(args, "--open-shipyard") >= 0) _shipyardPanel?.Open();
         if (System.Array.IndexOf(args, "--open-fleet") >= 0) _fleetPanel?.Open();
         foreach (var arg in args) // --zoom=0.2
@@ -285,9 +299,16 @@ public partial class Main : Node2D
             case Key.F when _fleetPanel != null:
                 if (_fleetPanel.Visible) _fleetPanel.Visible = false; else _fleetPanel.Open();
                 break;
+            case Key.C when _cargoPanel != null:
+                if (_cargoPanel.Visible) _cargoPanel.Visible = false; else _cargoPanel.Open();
+                break;
+            case Key.K when _player != null:
+                ShowStatus((_player.IsDocked ? _sector.TryUndock(_player.Id) : _sector.TryDock(_player.Id)).Message);
+                break;
             case Key.Escape:
                 if (_shipyardPanel != null) _shipyardPanel.Visible = false;
                 if (_fleetPanel != null) _fleetPanel.Visible = false;
+                if (_cargoPanel != null) _cargoPanel.Visible = false;
                 break;
             case Key.F7: StartNewGame(); ShowStatus("New game. The save file is unchanged until you save or quit."); break;
             case Key.Tab when _player != null: CycleTarget(); break;
@@ -300,16 +321,25 @@ public partial class Main : Node2D
         }
     }
 
-    /// <summary>Tab order: each body by id, then "no target" (brake stops relative to the sector).</summary>
+    /// <summary>
+    /// Tab order: each body by id, then every other craft by id, then "no target" (brake stops
+    /// relative to the sector). Fine for a few craft; a fleet-scale picker comes with the fleet UI.
+    /// </summary>
     private void CycleTarget()
     {
-        var bodies = _sector.Bodies;
-        var index = -1;
-        for (var i = 0; i < bodies.Count; i++)
-            if (bodies[i].Id == _player!.TargetBodyId) index = i;
-
-        var next = index + 1;
-        _sector.SetTarget(_player!.Id, next < bodies.Count ? bodies[next].Id : BodyId.None);
+        var p = _player!;
+        var options = _sector.Bodies.Select(b => (Body: b.Id, Craft: CraftId.None))
+            .Concat(_sector.Crafts.Where(c => c.Id != p.Id).Select(c => (Body: BodyId.None, Craft: c.Id)))
+            .Append((Body: BodyId.None, Craft: CraftId.None))
+            .ToList();
+        var current = options.FindIndex(o => o.Body == p.TargetBodyId && o.Craft == p.TargetCraftId);
+        var (body, craft) = options[(current + 1) % options.Count];
+        if (!craft.IsNone) _sector.SetTargetCraft(p.Id, craft);
+        else
+        {
+            _sector.SetTargetCraft(p.Id, CraftId.None);
+            _sector.SetTarget(p.Id, body);
+        }
     }
 
     public override void _Process(double delta)
@@ -348,10 +378,14 @@ public partial class Main : Node2D
         var (nearest, nearestSurface) = _sector.NearestBody(p.Position);
         var headingDeg = Mathf.PosMod(Mathf.RadToDeg((float)p.HeadingRad), 360f);
         text += $"Piloting {p.Name} ({p.Id}) - {p.Design.Name}: {p.Stats.TotalMassKg / 1000:0.0} t, {p.Stats.TotalThrustN / 1000:0} kN, "
-                + $"{p.Stats.MaxAccelerationMps2:0.0} m/s²   cargo cap {p.Stats.CargoCapacityKg / 1000:0} t\n"
+                + $"{p.Stats.TotalThrustN / p.MassKg:0.0} m/s²   "
+                + (p.HasCargoLimit ? $"cargo {p.Inventory.TotalKg / 1000.0:0.0} / {p.CargoCapacityKg / 1000.0:0} t\n" : $"stores {p.Inventory.TotalKg / 1000.0:0.0} t\n")
                 + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
                 + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
                 + (p.IsLanded ? LandedLine(p) : "")
+                + (p.IsDocked
+                    ? $"DOCKED at {_sector.GetCraft(p.DockedToCraftId).Name}, port {p.DockPortIndex + 1} - C cargo, K or thrust to undock\n"
+                    : "")
                 + (p.RailOrbit is { } rail
                     ? (p.Stats.TotalThrustN > 0
                         ? $"PARKED in orbit around {_sector.GetBody(rail.Parent).Name} - thrust to leave the parking orbit\n"
@@ -359,7 +393,18 @@ public partial class Main : Node2D
                     : "")
                 + ShipyardSummary();
 
-        if (p.TargetBodyId.IsNone)
+        if (!p.TargetCraftId.IsNone)
+        {
+            var target = _sector.GetCraft(p.TargetCraftId);
+            var rel = _sector.GetRelativeMotionToCraft(p.Id, target.Id);
+            var ports = target.Stats.DockingPorts.Count;
+            text += $"target: {target.Name} ({target.Id}{(ports > 0 ? $", {_sector.FreePorts(target).Count}/{ports} ports free" : "")})   "
+                    + $"gap {FormatDistance(rel.SurfaceDistanceM)}   rel speed {rel.RelativeSpeedMps:0.0} m/s   "
+                    + $"{(rel.ClosingSpeedMps >= 0 ? "closing" : "opening")} {System.Math.Abs(rel.ClosingSpeedMps):0.0} m/s"
+                    + (rel.RelativeSpeedMps < SectorState.DockMaxRelativeSpeedMps && ports > 0 && !p.IsDocked ? "   [K to dock if within 100 m]" : "")
+                    + "\n";
+        }
+        else if (p.TargetBodyId.IsNone)
         {
             text += "target: none - brake stops relative to the sector\n";
         }
@@ -375,8 +420,8 @@ public partial class Main : Node2D
 
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
-               + "W/Up thrust   A/D turn   S/Space brake (matches target)   G anchor   Tab cycle target   T target nearest   wheel zoom\n"
-               + "B blueprint editor   Y shipyard   F fleet   F6 save   F9 load   F7 new game   (closing the window autosaves)";
+               + "W/Up thrust   A/D turn   S/Space brake (matches target)   G anchor   K dock   Tab cycle target   T target nearest   wheel zoom\n"
+               + "B blueprint editor   Y shipyard   F fleet   C cargo   F6 save   F9 load   F7 new game   (closing the window autosaves)";
     }
 
     private string LandedLine(CraftState p)
@@ -413,7 +458,7 @@ public partial class Main : Node2D
         // Interpolated time: smooth motion between 20 Hz ticks without touching the state.
         var renderTimeS = (_sector.Tick + _clock.Alpha) * FixedStepClock.TickSeconds;
         foreach (var body in _sector.Bodies) DrawBody(body, renderTimeS);
-        if (_player is { TargetBodyId.IsNone: false }) DrawTargetMarker(_player, renderTimeS);
+        if (_player is { TargetBodyId.IsNone: false } || _player is { TargetCraftId.IsNone: false }) DrawTargetMarker(_player, renderTimeS);
         foreach (var craft in _sector.Crafts.Where(c => c.IsShipyard && c.RailOrbit != null))
         {
             var orbit = craft.RailOrbit!;
@@ -432,9 +477,20 @@ public partial class Main : Node2D
     // Bracket ring around the target plus a faint line from the ship, so it can be found off-screen.
     private void DrawTargetMarker(CraftState craft, double renderTimeS)
     {
-        var target = _sector.GetBody(craft.TargetBodyId);
-        var centre = ToPixels(_sector.GetPositionAt(target.Id, renderTimeS));
-        var radiusPx = Mathf.Max(2f, (float)target.RadiusM * _pixelsPerMetre) + 6f;
+        Vector2 centre;
+        float radiusPx;
+        if (!craft.TargetCraftId.IsNone)
+        {
+            var other = _sector.GetCraft(craft.TargetCraftId);
+            centre = ToPixels(InterpolatedPosition(other));
+            radiusPx = Mathf.Max(8f, (float)other.CollisionRadiusM * _pixelsPerMetre) + 6f;
+        }
+        else
+        {
+            var target = _sector.GetBody(craft.TargetBodyId);
+            centre = ToPixels(_sector.GetPositionAt(target.Id, renderTimeS));
+            radiusPx = Mathf.Max(2f, (float)target.RadiusM * _pixelsPerMetre) + 6f;
+        }
 
         DrawLine(ToPixels(InterpolatedPosition(craft)), centre, TargetLineColor, 1f);
         for (var i = 0; i < 4; i++) // four corner arcs
@@ -487,7 +543,8 @@ public partial class Main : Node2D
                 new Vector2(cellPx - gap, cellPx - gap));
             DrawRect(rect, _partColors.GetValueOrDefault(cell.PartId, Colors.Magenta));
 
-            if (cell.PartId == "thruster" && craft.Controls.Throttle > 0 && !craft.Controls.Brake)
+            // Only rear-facing thrusters fire on throttle (docs/06); others stay dark for now.
+            if (cell.PartId == "thruster" && cell.Rotation == 0 && craft.Controls.Throttle > 0 && !craft.Controls.Brake)
             {
                 var flameTop = local + new Vector2(0, cellPx / 2);
                 DrawColoredPolygon(new[]

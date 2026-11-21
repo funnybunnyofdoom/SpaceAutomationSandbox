@@ -91,15 +91,29 @@ public class FabricationTests
         Assert.Equal($"{design.Name} #{result.OrderId!.Value.Value}", built.Name);
     }
 
+    /// <summary>Builds three ships at a yard with two docking ports: two dock, the third parks. Returns the third.</summary>
+    private static CraftState BuildUntilOneParks(NewGameResult game)
+    {
+        var sector = game.Sector;
+        var yard = sector.GetCraft(game.ShipyardId);
+        yard.Inventory.Add(NewGame.StartingStockKg); // enough for three or more
+        var design = TestData.StarterShip();
+        for (var i = 0; i < 3; i++) Assert.True(sector.OrderBuild(yard.Id, design, Catalog).Accepted);
+        RunSeconds(sector, 3 * design.ComputeStats(Catalog).TotalMassKg / yard.Stats.FabricationRateKgPerS + 2);
+
+        var built = sector.Crafts.Where(c => c.Id != game.PlayerCraftId && c.Id != game.ShipyardId).ToList();
+        Assert.Equal(3, built.Count);
+        Assert.Equal(2, built.Count(c => c.DockedToCraftId == yard.Id)); // the yard's two ports
+        return built.Single(c => !c.IsDocked);
+    }
+
     [Fact]
-    public void BuiltShip_IsParkedAlongsideTheYard_OnItsOrbit_AndStaysThere()
+    public void BuiltShip_IsParkedAlongsideTheYard_OnItsOrbit_WhenEveryPortIsTaken()
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
         var yard = sector.GetCraft(game.ShipyardId);
-        sector.OrderBuild(yard.Id, TestData.StarterShip(), Catalog);
-        RunSeconds(sector, 40);
-        var ship = sector.Crafts.Single(c => c.Id != game.PlayerCraftId && c.Id != game.ShipyardId);
+        var ship = BuildUntilOneParks(game);
 
         Assert.True(ship.IsOnRails);
         Assert.Equal(yard.RailOrbit!.RadiusM, ship.RailOrbit!.RadiusM);
@@ -117,9 +131,7 @@ public class FabricationTests
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
-        sector.OrderBuild(game.ShipyardId, TestData.StarterShip(), Catalog);
-        RunSeconds(sector, 40);
-        var ship = sector.Crafts.Single(c => c.Id != game.PlayerCraftId && c.Id != game.ShipyardId);
+        var ship = BuildUntilOneParks(game);
 
         ship.Controls = new ShipControls(0, 0.5, true);
         RunSeconds(sector, 5);
@@ -293,7 +305,10 @@ public class FabricationTests
 
         Assert.Empty(yard.Validate(Catalog, DesignRole.Station));
         Assert.NotEmpty(yard.Validate(Catalog, DesignRole.Ship));
-        Assert.Contains(TestData.StarterShip().Validate(Catalog, DesignRole.Station), e => e.Contains("fabricator"));
+        Assert.Equal(DesignRole.Station, yard.SuggestedRole(Catalog));
+        Assert.Equal(DesignRole.Ship, TestData.StarterShip().SuggestedRole(Catalog));
+        var hullOnly = new ShipDesign("h", "h", new[] { new DesignCell(new GridPos(0, 0), "hull") });
+        Assert.Contains(hullOnly.Validate(Catalog, DesignRole.Station), e => e.Contains("fabricator, docking port or cargo bay"));
     }
 
     [Fact]

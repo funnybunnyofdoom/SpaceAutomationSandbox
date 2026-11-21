@@ -24,6 +24,9 @@ public sealed record PartDefinition
     /// <summary>Permanently anchors the structure when it lands; it can never be released (fixed structures).</summary>
     public bool IsFoundation { get; init; }
 
+    /// <summary>One berth where a ship can dock; it opens in the direction the part faces.</summary>
+    public bool IsDockingPort { get; init; }
+
     /// <summary>How many kg of finished craft this part assembles per second (shipyards).</summary>
     public double FabricationRateKgPerS { get; init; }
 

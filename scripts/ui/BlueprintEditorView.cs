@@ -34,6 +34,7 @@ public partial class BlueprintEditorView : Control
     private OptionButton _loadList = null!;
     private List<BlueprintEntry> _entries = new();
     private string? _selectedPart;
+    private int _rotation; // quarter turns clockwise applied to newly placed parts (R)
     private string? _loadedFromId; // user design this edit started from (overwriting it needs no confirm)
     private string? _pendingConfirm; // second click on the same action confirms it
 
@@ -123,7 +124,7 @@ public partial class BlueprintEditorView : Control
         }
         left.AddChild(new Label
         {
-            Text = "\nLeft drag: place\nRight drag: erase\nCtrl+Z: undo   Ctrl+S: save\nB or Esc: close editor",
+            Text = "\nLeft drag: place\nRight drag: erase\nR: rotate the part to place\nCtrl+Z: undo   Ctrl+S: save\nB or Esc: close editor",
             Modulate = new Color(1, 1, 1, 0.7f),
         });
 
@@ -131,7 +132,7 @@ public partial class BlueprintEditorView : Control
         var centre = new VBoxContainer();
         columns.AddChild(centre);
         centre.AddChild(new Control { CustomMinimumSize = new Vector2(0, 18) }); // room for the FORWARD label
-        _grid = new BlueprintGridCanvas(_model, _colors, () => _selectedPart);
+        _grid = new BlueprintGridCanvas(_model, _colors, () => _selectedPart, () => _rotation);
         _grid.Edited += () => { _pendingConfirm = null; Refresh(); };
         centre.AddChild(_grid);
 
@@ -202,6 +203,7 @@ public partial class BlueprintEditorView : Control
         if (!Visible || @event is not InputEventKey { Pressed: true, Echo: false } key) return;
 
         if (key.CtrlPressed && key.PhysicalKeycode == Key.Z) { if (_model.Undo()) Refresh(); }
+        else if (key.PhysicalKeycode == Key.R && !key.CtrlPressed) { _rotation = (_rotation + 1) % 4; _grid.QueueRedraw(); }
         else if (key.CtrlPressed && key.PhysicalKeycode == Key.S) Save();
         else if (key.PhysicalKeycode is >= Key.Key1 and <= Key.Key9 && !key.CtrlPressed)
         {
@@ -224,7 +226,8 @@ public partial class BlueprintEditorView : Control
             ? "Empty design."
             : $"Id: {_model.Id}{(_model.IsDirty ? "   (unsaved)" : "")}\n"
               + $"Cells {s.CellCount}    Mass {s.TotalMassKg / 1000:0.0} t\n"
-              + $"Thrust {s.TotalThrustN / 1000:0} kN    Accel {s.MaxAccelerationMps2:0.0} m/s²\n"
+              + $"Thrust {s.TotalThrustN / 1000:0} kN forward{(s.NonForwardThrustN > 0 ? $" (+{s.NonForwardThrustN / 1000:0} kN other)" : "")}    Accel {s.MaxAccelerationMps2:0.0} m/s²\n"
+              + (s.DockingPorts.Count > 0 || s.FabricationRateKgPerS > 0 ? $"Docking ports {s.DockingPorts.Count}    Fabrication {s.FabricationRateKgPerS:0} kg/s\n" : "")
               + $"Cargo {s.CargoCapacityKg / 1000:0} t    Battery {s.EnergyCapacityKJ / 1000:0} MJ\n"
               + $"Collision radius {s.BoundingRadiusM:0.0} m";
 
@@ -234,12 +237,16 @@ public partial class BlueprintEditorView : Control
         var warnings = _model.Warnings;
         if (errors.Count == 0 && warnings.Count == 0)
         {
-            _problems.Text = "Valid: this design can fly.";
+            _problems.Text = _model.Role == DesignRole.Ship
+                ? "Valid ship: this design can fly."
+                : $"Valid station{(_model.Stats?.IsFixedStructure == true ? " (fixed structure: foundation)" : "")}: it can be built at a shipyard but can't fly.";
             _problems.AddThemeColorOverride("font_color", OkColor);
         }
         else
         {
-            _problems.Text = string.Join("\n", errors.Select(e => "Error: " + e).Concat(warnings.Select(w => "Warning: " + w)));
+            var role = _model.Role == DesignRole.Ship ? "As a ship" : "As a station";
+            _problems.Text = (errors.Count > 0 ? role + ":\n" : "")
+                             + string.Join("\n", errors.Select(e => "Error: " + e).Concat(warnings.Select(w => "Warning: " + w)));
             _problems.AddThemeColorOverride("font_color", errors.Count > 0 ? ErrorColor : WarningColor);
         }
         _grid.QueueRedraw();

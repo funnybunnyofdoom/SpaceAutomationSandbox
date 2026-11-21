@@ -18,6 +18,8 @@
     { "id": "anchor_clamp", "name": "Anchor clamp", "massKg": 800, "placeholderColor": "#c4573a", "isAnchorClamp": true,
       "materialsKg": { "metal": 600, "electronics": 200 } },
     { "id": "foundation", "name": "Foundation", "massKg": 500, "placeholderColor": "#6e6253", "isFoundation": true,
-      "materialsKg": { "metal": 400, "composites": 100 } }
+      "materialsKg": { "metal": 400, "composites": 100 } },
+    { "id": "docking_port", "name": "Docking port", "massKg": 600, "placeholderColor": "#4fd1c5", "isDockingPort": true,
+      "materialsKg": { "metal": 450, "electronics": 150 } }
   ]
 }

@@ -91,16 +91,23 @@ public sealed partial class SectorState
         // to "TimeS of the next tick" (matters for exact save/load equivalence).
         var midTickS = (Tick + 0.5) * FixedStepClock.TickSeconds;
         var endS = (Tick + 1) * FixedStepClock.TickSeconds;
+        List<(CraftState, Vector2D)>? docked = null;
         foreach (var craft in _crafts)
         {
-            var reference = craft.TargetBodyId.IsNone ? Vector2D.Zero : GetVelocityAt(craft.TargetBodyId, midTickS);
+            var reference = !craft.TargetCraftId.IsNone ? CraftVelocityAt(GetCraft(craft.TargetCraftId), midTickS)
+                : !craft.TargetBodyId.IsNone ? GetVelocityAt(craft.TargetBodyId, midTickS)
+                : Vector2D.Zero;
             var velocityBefore = craft.Velocity;
             FlightModel.Step(craft, FixedStepClock.TickSeconds, reference);
 
-            if (craft.IsOnRails) UpdateOnRails(craft, craft.Velocity - velocityBefore, endS);
+            // Docked ships follow their station, which may move later in this loop: settled below.
+            if (craft.IsDocked) (docked ??= new()).Add((craft, craft.Velocity - velocityBefore));
+            else if (craft.IsOnRails) UpdateOnRails(craft, craft.Velocity - velocityBefore, endS);
             else if (craft.IsLanded) UpdateLanded(craft, craft.Velocity - velocityBefore, endS);
             else ResolveContact(craft, endS);
         }
+
+        if (docked != null) UpdateDocked(docked);
 
         // Shipyards advance after movement, so a finished craft is placed against the yard's new position.
         StepFabrication(endS);
@@ -163,7 +170,9 @@ public sealed partial class SectorState
     public void SetTarget(CraftId craftId, BodyId target)
     {
         if (!target.IsNone) GetBody(target); // throws for unknown ids
-        GetCraft(craftId).TargetBodyId = target;
+        var craft = GetCraft(craftId);
+        craft.TargetBodyId = target;
+        if (!target.IsNone) craft.TargetCraftId = CraftId.None;
     }
 
     /// <summary>Body velocity in the sector frame (sum along its parent chain).</summary>

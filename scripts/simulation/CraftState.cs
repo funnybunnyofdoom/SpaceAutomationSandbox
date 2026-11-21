@@ -62,6 +62,17 @@ public sealed class CraftState
     /// <summary>Body the brake matches velocity with. Set via <see cref="SectorState.SetTarget"/> so it's validated.</summary>
     public BodyId TargetBodyId { get; internal set; } = BodyId.None;
 
+    /// <summary>Craft the brake matches velocity with (exclusive with <see cref="TargetBodyId"/>).</summary>
+    public CraftId TargetCraftId { get; internal set; } = CraftId.None;
+
+    /// <summary>Station this ship is docked at, or None. See SectorState.TryDock/TryUndock.</summary>
+    public CraftId DockedToCraftId { get; internal set; } = CraftId.None;
+
+    /// <summary>Which of the station's docking ports (index into its stats) this ship occupies.</summary>
+    public int DockPortIndex { get; internal set; }
+
+    public bool IsDocked => !DockedToCraftId.IsNone;
+
     /// <summary>Body the craft rests on, or None while flying. See <see cref="SectorState.Step"/>.</summary>
     public BodyId LandedOnBodyId { get; internal set; } = BodyId.None;
 
@@ -83,6 +94,19 @@ public sealed class CraftState
 
     /// <summary>Materials carried or stored here (whole kg).</summary>
     public Inventory Inventory { get; } = new();
+
+    /// <summary>
+    /// Craft that can fly (forward thrust) carry cargo up to their cargo bays' capacity. Others
+    /// (stations) have no limit yet. PLACEHOLDER until storage parts exist.
+    /// </summary>
+    public bool HasCargoLimit => Stats.TotalThrustN > 0;
+
+    public long CargoCapacityKg => HasCargoLimit ? (long)Stats.CargoCapacityKg : long.MaxValue;
+
+    public long FreeCargoKg => HasCargoLimit ? Math.Max(0, CargoCapacityKg - Inventory.TotalKg) : long.MaxValue;
+
+    /// <summary>Dry mass plus cargo: what thrust has to push.</summary>
+    public double MassKg => Stats.TotalMassKg + Inventory.TotalKg;
 
     internal List<BuildOrder> BuildQueueList { get; } = new();
 
