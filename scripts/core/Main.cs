@@ -3,6 +3,7 @@ using Godot;
 using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Save;
 using SpaceAutomationSandbox.Simulation;
+using SpaceAutomationSandbox.UI;
 
 namespace SpaceAutomationSandbox.Core;
 
@@ -52,6 +53,9 @@ public partial class Main : Node2D
     private ulong _statusUntilMs;
     private Camera2D _camera = null!;
     private Label _hud = null!;
+    private BlueprintEditorView? _editor;
+
+    private bool EditorOpen => _editor is { Visible: true };
 
     public override void _Ready()
     {
@@ -64,6 +68,12 @@ public partial class Main : Node2D
         hudLayer.AddChild(_hud);
 
         LoadDefinitions();
+        if (_catalog != null)
+        {
+            _editor = new BlueprintEditorView(_catalog, _partColors, () => _player?.Design) { Visible = false };
+            _editor.CloseRequested += CloseEditor;
+            hudLayer.AddChild(_editor);
+        }
         // Continue where the player left off; a new game only if there's no usable save.
         if (_catalog != null && System.IO.File.Exists(SaveFilePath)) LoadGame(isStartup: true);
         else StartNewGame();
@@ -73,6 +83,22 @@ public partial class Main : Node2D
         if (_player is { } p)
             GD.Print($"[Craft] {p.Id} '{p.Design.Name}' cells={p.Stats.CellCount} mass={p.Stats.TotalMassKg}kg thrust={p.Stats.TotalThrustN}N");
         GD.Print($"[Save] {SaveFilePath} {(_status.Length > 0 ? "- " + _status : "")}");
+
+        // Dev/test hook: `godot --path . -- --open-editor` starts with the editor open.
+        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--open-editor") >= 0) OpenEditor();
+    }
+
+    private void OpenEditor()
+    {
+        if (_editor == null) { ShowStatus("Editor unavailable: part data failed to load."); return; }
+        _editor.Open();
+        _hud.Visible = false;
+    }
+
+    private void CloseEditor()
+    {
+        if (_editor != null) _editor.Visible = false;
+        _hud.Visible = true;
     }
 
     private static string SaveFilePath => ProjectSettings.GlobalizePath(SavePath);
@@ -174,6 +200,17 @@ public partial class Main : Node2D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (EditorOpen)
+        {
+            // The editor owns input while open; only its close keys reach here.
+            if (@event is InputEventKey { Pressed: true, Echo: false, PhysicalKeycode: Key.B or Key.Escape })
+            {
+                CloseEditor();
+                GetViewport().SetInputAsHandled();
+            }
+            return;
+        }
+
         if (@event is InputEventMouseButton { Pressed: true } mouse)
         {
             if (mouse.ButtonIndex == MouseButton.WheelUp) _pixelsPerMetre *= ZoomStep;
@@ -187,6 +224,7 @@ public partial class Main : Node2D
         {
             case Key.F6: SaveGame(); break;
             case Key.F9: LoadGame(isStartup: false); break;
+            case Key.B: OpenEditor(); break;
             case Key.F7: StartNewGame(); ShowStatus("New game. The save file is unchanged until you save or quit."); break;
             case Key.Tab when _player != null: CycleTarget(); break;
             case Key.T when _player != null:
@@ -210,7 +248,8 @@ public partial class Main : Node2D
     public override void _Process(double delta)
     {
         // Input is sampled once per frame and held for every tick run this frame.
-        if (_player != null) _player.Controls = ReadControls();
+        // No flying while the editor is open (typing a name must not fire thrusters).
+        if (_player != null) _player.Controls = EditorOpen ? ShipControls.Idle : ReadControls();
 
         var ticks = _clock.Advance(delta);
         for (var i = 0; i < ticks; i++) _sector.Step();
@@ -266,7 +305,7 @@ public partial class Main : Node2D
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
                + "W/Up thrust   A/D turn   S/Space brake (matches target)   Tab cycle target   T target nearest   wheel zoom\n"
-               + "F6 save   F9 load   F7 new game   (closing the window autosaves)";
+               + "B blueprint editor   F6 save   F9 load   F7 new game   (closing the window autosaves)";
     }
 
     private static string Describe(CelestialBodyState body) =>

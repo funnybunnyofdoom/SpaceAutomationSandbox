@@ -52,6 +52,8 @@ Work:
 - Fabrication: one simple shipyard or construction node turns correct materials into a finished craft; progress queue and insufficient-material errors.
 - Landing/anchoring state proof: player or prototype extractor can attach to the mineable body using suitable anchor components.
 
+**Status (2026-11-20):** the grid editor is in (key **B**). It places and erases parts by drag with undo, shows live mass, thrust, acceleration, cargo, battery and collision radius, shows errors and warnings, and saves and loads designs in the schema-1 format. Rotation, the bill of materials, fabrication and anchoring are not started.
+
 **Acceptance:** a saved miner blueprint can be loaded and manufactured again; missing materials prevent fabrication; changing layout updates stats; deployment/undocking cannot duplicate modules or resources.
 
 ## Phase 3 — Complete autonomous miner loop (**first fun gate**)

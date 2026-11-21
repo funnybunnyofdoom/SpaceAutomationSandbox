@@ -20,6 +20,8 @@ Units are kilograms, metres, seconds, newtons and kilojoules.
 
 ## `blueprints/*.json` ship designs (schema 1)
 
+The files here are **built-in** designs and are read-only from the game. Designs made in the in-game editor (key B) use the same format but are saved to `user://blueprints/<id>.json` (`%APPDATA%\Godot\app_userdata\SpaceAutomationSandbox\blueprints`). `ShipDesign.ToJson()` writes the format, and the output is byte-stable.
+
 `cells` is a list of `{ "x", "y", "part" }` on a square grid. Each cell is `ShipDesign.CellSizeM` (4 m) across. **Forward is −y**: the nose sits at the smallest y. Each cell holds one part, and parts have no rotation yet.
 
 Validation (`ShipDesign.Validate`) reports, rather than throws: unknown part IDs, a count of control sources other than one, and zero total thrust. Cells don't yet need to be connected, because the connectivity rules are still an open question (docs/06, question 4).

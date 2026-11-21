@@ -125,6 +125,21 @@ public sealed class ShipDesign
         return new ShipDesign(file.Id ?? "", file.Name ?? file.Id ?? "", cells);
     }
 
+    private static readonly JsonSerializerOptions WriteOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
+    /// <summary>Same format as data/blueprints (schema 1). Deterministic: cells in row, then column order.</summary>
+    public string ToJson() => JsonSerializer.Serialize(new DesignFile
+    {
+        SchemaVersion = SchemaVersion,
+        Id = Id,
+        Name = Name,
+        Cells = Cells.Select(c => new CellDto { X = c.Pos.X, Y = c.Pos.Y, Part = c.PartId }).ToList(),
+    }, WriteOptions);
+
     private sealed class DesignFile
     {
         public int SchemaVersion { get; set; }
