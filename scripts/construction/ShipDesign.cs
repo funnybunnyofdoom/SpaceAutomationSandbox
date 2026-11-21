@@ -31,8 +31,16 @@ public sealed record ShipStats(
     double CenterOfMassX,
     double CenterOfMassY,
     double BoundingRadiusM,
-    double FabricationRateKgPerS)
+    double FabricationRateKgPerS,
+    int AnchorClampCount,
+    int FoundationCount)
 {
+    /// <summary>Can lock onto a body once landed (clamps release again; foundations never do).</summary>
+    public bool CanAnchor => AnchorClampCount > 0 || FoundationCount > 0;
+
+    /// <summary>A foundation makes the structure fixed: anchored for good as soon as it lands.</summary>
+    public bool IsFixedStructure => FoundationCount > 0;
+
     /// <summary>Full-thrust acceleration in m/s².</summary>
     public double MaxAccelerationMps2 => TotalMassKg > 0 ? TotalThrustN / TotalMassKg : 0;
 }
@@ -77,6 +85,7 @@ public sealed class ShipDesign
         if (Cells.Count == 0) { errors.Add("Design has no parts."); return errors; }
 
         var controlSources = 0;
+        var foundations = 0;
         double thrust = 0, fabrication = 0;
         foreach (var cell in Cells)
         {
@@ -88,6 +97,7 @@ public sealed class ShipDesign
             if (part.IsControlSource) controlSources++;
             thrust += part.ThrustN;
             fabrication += part.FabricationRateKgPerS;
+            if (part.IsFoundation) foundations++;
         }
 
         switch (role)
@@ -95,6 +105,8 @@ public sealed class ShipDesign
             case DesignRole.Ship:
                 if (controlSources != 1) errors.Add($"Needs exactly one control source (cockpit); found {controlSources}.");
                 if (thrust <= 0) errors.Add("Needs at least one thruster.");
+                // A foundation would lock the ship down for good the first time it lands.
+                if (foundations > 0) errors.Add("Foundations make a fixed structure; a ship can't have one (use an anchor clamp).");
                 break;
             case DesignRole.Station:
                 if (fabrication <= 0) errors.Add("A station needs at least one fabricator.");
@@ -107,6 +119,7 @@ public sealed class ShipDesign
     public ShipStats ComputeStats(PartCatalog catalog)
     {
         double mass = 0, thrust = 0, cargo = 0, energy = 0, fabrication = 0, momentX = 0, momentY = 0;
+        int clamps = 0, foundations = 0;
         foreach (var cell in Cells)
         {
             var part = catalog.Get(cell.PartId);
@@ -115,6 +128,8 @@ public sealed class ShipDesign
             cargo += part.CargoCapacityKg;
             energy += part.EnergyCapacityKJ;
             fabrication += part.FabricationRateKgPerS;
+            if (part.IsAnchorClamp) clamps++;
+            if (part.IsFoundation) foundations++;
             momentX += part.MassKg * cell.Pos.X;
             momentY += part.MassKg * cell.Pos.Y;
         }
@@ -132,7 +147,7 @@ public sealed class ShipDesign
         }
 
         return new ShipStats(Cells.Count, mass, thrust, cargo, energy, comX, comY,
-            Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication);
+            Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

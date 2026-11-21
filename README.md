@@ -4,7 +4,7 @@ A 2D top-down pixel-art space construction and automation sandbox: build ships a
 
 This is a **separate project** from Agrigeddon. It shares the toolchain (Godot .NET/C#, Pixelorama, VS Code, Git) but no code, assets, settings or repository.
 
-**Status:** Phase 1 in progress. A fixed-step simulation runs a seeded two-body sector and a player ship built from the grid design in `data/blueprints/starter_ship.json`. Controls: **W/Up** thrust, **A/D** turn, **S/Space** brake (matches the target's velocity), **Tab** cycle target, **T** target the nearest body, **mouse wheel** zoom, **B** blueprint editor, **Y** shipyard (order ships), **F** fleet list (pick which ship to fly), **F6** save, **F9** load, **F7** new game. Closing the window autosaves, and the game resumes the save at startup (see `docs/08_SAVE_FORMAT.md`). Bodies are solid: touching one lands the ship, and thrusting away lifts it off. There's no mining yet. See `docs/04_PHASES_AND_ACCEPTANCE.md`.
+**Status:** Phase 1 in progress. A fixed-step simulation runs a seeded two-body sector and a player ship built from the grid design in `data/blueprints/starter_ship.json`. Controls: **W/Up** thrust, **A/D** turn, **S/Space** brake (matches the target's velocity), **G** anchor/release while landed, **Tab** cycle target, **T** target the nearest body, **mouse wheel** zoom, **B** blueprint editor, **Y** shipyard (order ships), **F** fleet list (pick which ship to fly), **F6** save, **F9** load, **F7** new game. Closing the window autosaves, and the game resumes the save at startup (see `docs/08_SAVE_FORMAT.md`). Bodies are solid: touching one lands the ship, and thrusting away lifts it off. There's no mining yet. See `docs/04_PHASES_AND_ACCEPTANCE.md`.
 
 ## Toolchain (found on this PC during Phase 0)
 

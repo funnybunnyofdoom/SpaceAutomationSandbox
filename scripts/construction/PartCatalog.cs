@@ -18,6 +18,12 @@ public sealed record PartDefinition
     public double CargoCapacityKg { get; init; }
     public double MiningRateKgPerS { get; init; }
 
+    /// <summary>Lets a landed craft lock itself to the body it's on, and release again (mobile structures).</summary>
+    public bool IsAnchorClamp { get; init; }
+
+    /// <summary>Permanently anchors the structure when it lands; it can never be released (fixed structures).</summary>
+    public bool IsFoundation { get; init; }
+
     /// <summary>How many kg of finished craft this part assembles per second (shipyards).</summary>
     public double FabricationRateKgPerS { get; init; }
 

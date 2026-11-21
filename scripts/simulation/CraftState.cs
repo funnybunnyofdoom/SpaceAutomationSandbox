@@ -70,6 +70,9 @@ public sealed class CraftState
 
     public bool IsLanded => !LandedOnBodyId.IsNone;
 
+    /// <summary>Locked to the body it's landed on; thrust can't lift it. See SectorState.TryAnchor/TryRelease.</summary>
+    public bool IsAnchored { get; internal set; }
+
     /// <summary>
     /// Fixed circular orbit the craft is held on ("on rails"): stations, and ships parked next to
     /// an orbiting yard. Null while flying freely or landed. A ship leaves it by thrusting.

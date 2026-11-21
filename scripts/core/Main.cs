@@ -101,6 +101,15 @@ public partial class Main : Node2D
         var args = OS.GetCmdlineUserArgs();
         if (System.Array.IndexOf(args, "--new-game") >= 0) StartNewGame(); // ignores the save; nothing is written
         if (System.Array.IndexOf(args, "--demo-build") >= 0) DemoBuild();
+        if (System.Array.IndexOf(args, "--demo-anchor") >= 0 && _player != null)
+        {
+            // Dev/test hook: fly straight down onto the primary, then anchor.
+            _player.HeadingRad = System.Math.PI;
+            _player.Controls = new ShipControls(1, 0, false);
+            for (var i = 0; i < 200 && !_player.IsLanded; i++) _sector.Step();
+            _player.Controls = ShipControls.Idle;
+            ShowStatus(_sector.TryAnchor(_player.Id).Message);
+        }
         if (System.Array.IndexOf(args, "--open-editor") >= 0) OpenEditor();
         if (System.Array.IndexOf(args, "--open-shipyard") >= 0) _shipyardPanel?.Open();
         if (System.Array.IndexOf(args, "--open-fleet") >= 0) _fleetPanel?.Open();
@@ -282,6 +291,9 @@ public partial class Main : Node2D
                 break;
             case Key.F7: StartNewGame(); ShowStatus("New game. The save file is unchanged until you save or quit."); break;
             case Key.Tab when _player != null: CycleTarget(); break;
+            case Key.G when _player != null:
+                ShowStatus((_player.IsAnchored ? _sector.TryRelease(_player.Id) : _sector.TryAnchor(_player.Id)).Message);
+                break;
             case Key.T when _player != null:
                 _sector.SetTarget(_player.Id, _sector.NearestBody(_player.Position).Body.Id);
                 break;
@@ -339,9 +351,7 @@ public partial class Main : Node2D
                 + $"{p.Stats.MaxAccelerationMps2:0.0} m/s²   cargo cap {p.Stats.CargoCapacityKg / 1000:0} t\n"
                 + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
                 + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
-                + (p.IsLanded
-                    ? $"LANDED on {_sector.GetBody(p.LandedOnBodyId).Name} - thrust away from the surface to lift off\n"
-                    : "")
+                + (p.IsLanded ? LandedLine(p) : "")
                 + (p.RailOrbit is { } rail
                     ? (p.Stats.TotalThrustN > 0
                         ? $"PARKED in orbit around {_sector.GetBody(rail.Parent).Name} - thrust to leave the parking orbit\n"
@@ -365,8 +375,19 @@ public partial class Main : Node2D
 
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
-               + "W/Up thrust   A/D turn   S/Space brake (matches target)   Tab cycle target   T target nearest   wheel zoom\n"
+               + "W/Up thrust   A/D turn   S/Space brake (matches target)   G anchor   Tab cycle target   T target nearest   wheel zoom\n"
                + "B blueprint editor   Y shipyard   F fleet   F6 save   F9 load   F7 new game   (closing the window autosaves)";
+    }
+
+    private string LandedLine(CraftState p)
+    {
+        var body = _sector.GetBody(p.LandedOnBodyId).Name;
+        if (p.IsAnchored)
+            return p.Stats.IsFixedStructure
+                ? $"ANCHORED to {body} permanently (foundation)\n"
+                : $"ANCHORED to {body} - G to release\n";
+        return $"LANDED on {body} - thrust away from the surface to lift off"
+               + (p.Stats.CanAnchor ? ", G to anchor\n" : " (no anchor clamp)\n");
     }
 
     private string ShipyardSummary()

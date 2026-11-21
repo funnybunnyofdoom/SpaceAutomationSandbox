@@ -130,6 +130,7 @@ public sealed partial class SectorState
                 craft.LandedOffset = offset;
                 craft.Position = craft.PreviousPosition = position;
                 craft.Velocity = GetVelocityAt(body.Id, timeS);
+                OnLanded(craft);
                 return;
             }
 

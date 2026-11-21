@@ -151,10 +151,11 @@ public class FabricationTests
         var expected = bill.Where(kv => kv.Value > stockBefore.GetValueOrDefault(kv.Key))
             .ToDictionary(kv => kv.Key, kv => kv.Value - stockBefore.GetValueOrDefault(kv.Key));
         Assert.Equal(expected, third.ShortfallKg);
-        Assert.Contains(third.Errors, e => e.Contains("electronics short by 1500 kg"));
+        Assert.Contains(third.Errors, e => e.Contains($"electronics short by {expected["electronics"]} kg"));
         Assert.Equal(stockBefore, yard.Inventory.Kg); // a refused order takes nothing
 
-        RunSeconds(sector, 70); // both built, one after the other
+        // Both built, one after the other.
+        RunSeconds(sector, 2 * design.ComputeStats(Catalog).TotalMassKg / yard.Stats.FabricationRateKgPerS + 2);
         var built = sector.Crafts.Where(c => c.Id != game.PlayerCraftId && c.Id != game.ShipyardId).ToList();
         Assert.Equal(2, built.Count);
         Assert.True(built[0].Position.DistanceTo(built[1].Position) >= built[0].CollisionRadiusM + built[1].CollisionRadiusM);

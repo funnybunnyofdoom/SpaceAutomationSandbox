@@ -27,6 +27,8 @@ File order is display order. The three current materials (metal, electronics, co
 | `energyCapacityKJ` | no | Battery capacity. Shown in stats only; nothing uses power yet. |
 | `cargoCapacityKg` | no | Cargo capacity by mass. Shown in stats only. |
 | `miningRateKgPerS` | no | Drill rate. Not used until mining (Phase 3). |
+| `isAnchorClamp` | no | Lets a landed craft anchor to the body it's on (G) and release again. |
+| `isFoundation` | no | Makes the design a fixed structure: it anchors permanently when it lands. Not allowed in ship designs. |
 | `fabricationRateKgPerS` | no | Shipyard build rate: kg of finished craft assembled per second. A design with any of these is a valid station. |
 | `materialsKg` | yes (v2) | What one part is built from, as `{ "materialId": kg }`. Every material must exist and be > 0, and the amounts **must add up to `massKg`** (checked on load), so building never creates or destroys mass. |
 

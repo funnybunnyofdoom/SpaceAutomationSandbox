@@ -14,6 +14,10 @@
     { "id": "drill",    "name": "Mining drill", "massKg": 2500, "placeholderColor": "#b0b6bf", "miningRateKgPerS": 25,
       "materialsKg": { "metal": 2100, "electronics": 400 } },
     { "id": "fabricator", "name": "Fabricator", "massKg": 6000, "placeholderColor": "#8f6fe0", "fabricationRateKgPerS": 500,
-      "materialsKg": { "metal": 4000, "electronics": 1500, "composites": 500 } }
+      "materialsKg": { "metal": 4000, "electronics": 1500, "composites": 500 } },
+    { "id": "anchor_clamp", "name": "Anchor clamp", "massKg": 800, "placeholderColor": "#c4573a", "isAnchorClamp": true,
+      "materialsKg": { "metal": 600, "electronics": 200 } },
+    { "id": "foundation", "name": "Foundation", "massKg": 500, "placeholderColor": "#6e6253", "isFoundation": true,
+      "materialsKg": { "metal": 400, "composites": 100 } }
   ]
 }

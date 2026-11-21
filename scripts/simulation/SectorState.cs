@@ -115,8 +115,8 @@ public sealed partial class SectorState
         var outward = craft.LandedOffset * (1.0 / craft.LandedOffset.Length);
 
         // Only throttle can lift it. The body's motion never does, and neither does brake, whose
-        // "match the reference velocity" change could otherwise point slightly outward.
-        if (!craft.Controls.Clamped().Brake && ownDeltaV.X * outward.X + ownDeltaV.Y * outward.Y > 0)
+        // "match the reference velocity" change could otherwise point slightly outward. Anchored: never.
+        if (!craft.IsAnchored && !craft.Controls.Clamped().Brake && ownDeltaV.X * outward.X + ownDeltaV.Y * outward.Y > 0)
         {
             craft.LandedOnBodyId = BodyId.None;
             craft.Velocity = bodyVel + ownDeltaV;
@@ -143,6 +143,7 @@ public sealed partial class SectorState
             craft.LandedOffset = normal * contactDistance;
             craft.Position = bodyPos + craft.LandedOffset;
             craft.Velocity = GetVelocityAt(body.Id, endS);
+            OnLanded(craft);
             return;
         }
     }

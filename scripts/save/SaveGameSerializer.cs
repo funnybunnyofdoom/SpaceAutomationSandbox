@@ -22,9 +22,10 @@ public static class SaveGameSerializer
 {
     /// <summary>
     /// Version written. v2 added the landed state; v3 added rail orbits, inventories, build queues
-    /// and the order counter. Older files still load (missing parts read as empty).
+    /// and the order counter; v4 added the anchored flag. Older files still load (missing parts read
+    /// as empty / not anchored).
     /// </summary>
-    public const int SchemaVersion = 3;
+    public const int SchemaVersion = 4;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -70,6 +71,7 @@ public static class SaveGameSerializer
                     TargetBodyId = c.TargetBodyId.Value,
                     LandedOnBodyId = c.LandedOnBodyId.Value,
                     LandedOffset = c.IsLanded ? Vec(c.LandedOffset) : null,
+                    Anchored = c.IsAnchored,
                     RailOrbit = c.RailOrbit is { } r ? OrbitToDto(r) : null,
                     InventoryKg = c.Inventory.Kg.Count > 0 ? new SortedDictionary<string, long>(c.Inventory.Kg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal) : null,
                     BuildQueue = c.BuildQueue.Count > 0
@@ -126,6 +128,8 @@ public static class SaveGameSerializer
                 // v1 has no landed fields: they read as 0/null, i.e. flying. That is the whole v1 -> v2 migration.
                 if (c.LandedOnBodyId != 0)
                     sector.RestoreLanding(craft.Id, new BodyId(c.LandedOnBodyId), ToVec(c.LandedOffset, "landedOffset"));
+                // Before v4 nothing could be anchored, except that a landed foundation always is.
+                sector.RestoreAnchored(craft.Id, file.SchemaVersion >= 4 ? c.Anchored : craft.IsLanded && craft.Stats.IsFixedStructure);
                 // v1/v2 have none of the following; null reads as "not on rails, empty, nothing queued".
                 if (c.RailOrbit is { } rail) sector.RestoreRails(craft.Id, OrbitFromDto(rail));
                 foreach (var (material, kg) in c.InventoryKg ?? new SortedDictionary<string, long>())
@@ -204,7 +208,7 @@ public static class SaveGameSerializer
     private static Vector2D ToVec(VecDto? v, string what) =>
         v is null ? throw new FormatException($"Craft is missing {what}.") : new Vector2D(v.X, v.Y);
 
-    // --- File shape (schema 3). Change only together with SchemaVersion and docs/08. ---
+    // --- File shape (schema 4). Change only together with SchemaVersion and docs/08. ---
 
     private sealed class SaveFile
     {
@@ -254,6 +258,7 @@ public static class SaveGameSerializer
         public uint TargetBodyId { get; set; }
         public uint LandedOnBodyId { get; set; }
         public VecDto? LandedOffset { get; set; }
+        public bool Anchored { get; set; }
         public OrbitDto? RailOrbit { get; set; }
         public SortedDictionary<string, long>? InventoryKg { get; set; }
         public List<OrderDto>? BuildQueue { get; set; }

@@ -95,7 +95,7 @@ public partial class FleetPanel : PanelContainer
     }
 
     public static string Where(SectorState sector, CraftState craft) =>
-        craft.IsLanded ? $"landed on {sector.GetBody(craft.LandedOnBodyId).Name}"
+        craft.IsLanded ? $"{(craft.IsAnchored ? "anchored to" : "landed on")} {sector.GetBody(craft.LandedOnBodyId).Name}"
         : craft.RailOrbit is { } rail ? $"{(craft.IsShipyard ? "orbiting" : "parked in orbit around")} {sector.GetBody(rail.Parent).Name}"
         : $"flying, {craft.SpeedMps:0} m/s";
 
