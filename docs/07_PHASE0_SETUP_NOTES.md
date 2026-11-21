@@ -21,7 +21,7 @@ What the agent actually found and decided while bootstrapping. PC-side checks we
 
 ## Decisions taken in Phase 0 (reversible)
 
-- Project folder `C:\dev\Games\SpaceAutomationSandbox`, sibling of Agrigeddon, own git repo, branch `master`, no remote.
+- Project folder `C:\dev\Games\SpaceAutomationSandbox`, sibling of Agrigeddon, own git repo, branch `master`, no remote. *(2026-11-21: the creator approved publishing; `origin` is now `https://github.com/funnybunnyofdoom/SpaceAutomationSandbox.git`, with `master` pushed and tracking `origin/master`.)*
 - `Godot.NET.Sdk/4.7.2`, `net8.0`, Compatibility renderer, nearest texture filter, 1280×720 viewport with `canvas_items` stretch.
 - The `.csproj` was written by hand from the installed SDK version and runtime config, because the editor couldn't be run remotely. If Godot regenerates it or creates a `.sln`, keep the editor's version.
 - Selected `.vscode/` files are tracked (tasks, launch, settings, extensions), and everything else in `.vscode/` is ignored. Tool paths come from `GODOT4` / `PIXELORAMA` environment variables.
