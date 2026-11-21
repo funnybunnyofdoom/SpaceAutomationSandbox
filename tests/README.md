@@ -1,5 +1,13 @@
 # tests
 
-Empty in Phase 0 by design.
+`Simulation.Tests/` is a plain .NET 8 xUnit project with no Godot runtime. It links the sources in `scripts/simulation/` directly, so if that code ever references Godot, this build fails.
 
-Planned (from `docs/02_TECHNICAL_ARCHITECTURE.md`): a plain C# test project (no Godot runtime needed) covering mass-ledger conservation, deterministic tick progression, save/load round trips, depleted deposits, and offscreen/foreground equivalence. It should be added together with the first simulation code in `scripts/simulation/`, so that the core rules stay testable without running a scene.
+```powershell
+dotnet test tests/Simulation.Tests
+```
+
+Current coverage: deterministic sector generation, stable body IDs, tick counts that don't depend on frame rate, the per-frame tick cap, on-rails orbits and radius derived from mass.
+
+Planned, from `docs/02_TECHNICAL_ARCHITECTURE.md`: mass-ledger conservation, save/load round trips, depleted deposits, and offscreen/foreground equivalence.
+
+`tests/.gdignore` keeps the Godot editor from scanning this folder. The main `SpaceAutomationSandbox.csproj` excludes `tests/**` from compilation.

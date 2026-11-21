@@ -20,6 +20,13 @@ This document keeps an implementation agent from accidentally transforming brain
 | Megastructures | **Confirmed:** planet-sized mobile structures, giant planet-consumers, and swarms of tiny ships are desired endgame paths. |
 | Development | **Confirmed:** wants separate new project using established Agrigeddon-related Godot/Pixelorama/VS Code workflow. |
 
+## Approved placeholders (may be replaced later)
+
+| Date | Topic | Decision |
+| --- | --- | --- |
+| 2026-11-20 | Body motion (Phase 1) | **Approved as a placeholder:** celestial bodies follow fixed circular orbits ("on rails"), and position is a pure function of simulation time. The period is set directly and not derived from gravity. Ship physics is still undecided (open question 1). |
+| 2026-11-20 | Simulation tick | Provisional: fixed 20 ticks/s (`FixedStepClock.TicksPerSecond`), the top of the 5–20 range proposed in docs/02, with render interpolation. Revisit when ship movement needs it. |
+
 ## Recommended defaults, not yet approved
 
 | Topic | Proposal | Why |

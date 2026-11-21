@@ -4,7 +4,7 @@ A 2D top-down pixel-art space construction and automation sandbox: build ships a
 
 This is a **separate project** from Agrigeddon. It shares the toolchain (Godot .NET/C#, Pixelorama, VS Code, Git) but no code, assets, settings or repository.
 
-**Status:** Phase 0 (project bootstrap). No gameplay yet. See `docs/04_PHASES_AND_ACCEPTANCE.md`.
+**Status:** Phase 1 in progress. The simulation core (a fixed-step clock and a seeded two-body sector) is drawn over the starfield. There's no ship yet. See `docs/04_PHASES_AND_ACCEPTANCE.md`.
 
 ## Toolchain (found on this PC during Phase 0)
 
@@ -33,11 +33,12 @@ This is a **separate project** from Agrigeddon. It shares the toolchain (Godot .
 
 ```powershell
 dotnet build          # or Ctrl+Shift+B in VS Code
+dotnet test tests/Simulation.Tests   # pure C# simulation tests (VS Code task: test)
 # Godot: F5 to test
 git status --short    # review, then commit/push only when you decide to
 ```
 
-VS Code: open **this folder only**. Tasks: `build`, `godot: open editor`, `godot: run main scene`. Launch config "Play main scene (debug C#)" attaches the C# debugger. Recommended extensions are listed in `.vscode/extensions.json`.
+VS Code: open **this folder only**. Tasks: `build`, `test`, `godot: open editor`, `godot: run main scene`. Launch config "Play main scene (debug C#)" attaches the C# debugger. Recommended extensions are listed in `.vscode/extensions.json`.
 
 ## Layout
 
@@ -48,7 +49,7 @@ data/          parts, materials, recipes, blueprints (data-driven definitions)
 art_source/pixelorama/   editable .pxo sources
 assets/art/              exported .png used by the game (+ assets/ASSET_MANIFEST.md)
 tools/         setup, art and VS Code template (tools/vscode -> .vscode) scripts
-tests/         pure C# tests (added with the first simulation code)
+tests/         pure C# xUnit tests for scripts/simulation (no Godot runtime)
 docs/          vision, architecture, setup, phases, decision log
 ```
 

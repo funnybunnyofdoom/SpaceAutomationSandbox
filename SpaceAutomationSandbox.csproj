@@ -12,4 +12,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- tests/ is a separate plain .NET project (with its own obj/ files); Godot must not compile it. -->
+    <Compile Remove="tests/**" />
+  </ItemGroup>
 </Project>
