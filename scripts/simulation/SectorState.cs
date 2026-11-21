@@ -22,7 +22,13 @@ public sealed class SectorState
     private readonly Dictionary<CraftId, CraftState> _craftsById = new();
     private uint _nextCraftId = 1;
 
-    public SectorState(ulong seed) => Seed = seed;
+    /// <param name="tick">Non-zero only when restoring a save.</param>
+    public SectorState(ulong seed, long tick = 0)
+    {
+        if (tick < 0) throw new ArgumentOutOfRangeException(nameof(tick));
+        Seed = seed;
+        Tick = tick;
+    }
 
     public ulong Seed { get; }
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using SpaceAutomationSandbox.Construction;
+using SpaceAutomationSandbox.Save;
 using SpaceAutomationSandbox.Simulation;
 
 namespace SpaceAutomationSandbox.Core;
@@ -36,11 +37,19 @@ public partial class Main : Node2D
     private static readonly Color MarkerColor = new(0.4f, 1f, 0.6f);
     private static readonly Color TargetLineColor = new(0.4f, 1f, 0.6f, 0.25f);
 
+    // Single quicksave slot in Godot's per-user data folder (%APPDATA%\Godot\app_userdata\<project>).
+    private const string SavePath = "user://savegame.json";
+    private const ulong StatusShowMs = 4000;
+
     private readonly FixedStepClock _clock = new();
     private readonly Dictionary<string, Color> _partColors = new();
+    private PartCatalog? _catalog;
+    private ShipDesign? _starterDesign;
     private SectorState _sector = null!;
     private CraftState? _player;
     private string _setupError = "";
+    private string _status = "";
+    private ulong _statusUntilMs;
     private Camera2D _camera = null!;
     private Label _hud = null!;
 
@@ -54,16 +63,21 @@ public partial class Main : Node2D
         _hud = new Label { Position = new Vector2(20, 16) };
         hudLayer.AddChild(_hud);
 
-        _sector = SectorGenerator.Generate(SectorSeed);
-        SpawnPlayer();
+        LoadDefinitions();
+        // Continue where the player left off; a new game only if there's no usable save.
+        if (_catalog != null && System.IO.File.Exists(SaveFilePath)) LoadGame(isStartup: true);
+        else StartNewGame();
 
         GD.Print($"[Bootstrap] Main scene ready. C# assembly loaded. Godot {Engine.GetVersionInfo()["string"].AsString()}");
-        GD.Print($"[Sector] seed={_sector.Seed} bodies={_sector.Bodies.Count} tickRate={FixedStepClock.TicksPerSecond}/s");
+        GD.Print($"[Sector] seed={_sector.Seed} tick={_sector.Tick} bodies={_sector.Bodies.Count} tickRate={FixedStepClock.TicksPerSecond}/s");
         if (_player is { } p)
             GD.Print($"[Craft] {p.Id} '{p.Design.Name}' cells={p.Stats.CellCount} mass={p.Stats.TotalMassKg}kg thrust={p.Stats.TotalThrustN}N");
+        GD.Print($"[Save] {SaveFilePath} {(_status.Length > 0 ? "- " + _status : "")}");
     }
 
-    private void SpawnPlayer()
+    private static string SaveFilePath => ProjectSettings.GlobalizePath(SavePath);
+
+    private void LoadDefinitions()
     {
         try
         {
@@ -79,17 +93,83 @@ public partial class Main : Node2D
 
             foreach (var part in catalog.Parts)
                 _partColors[part.Id] = part.PlaceholderColor is { } hex ? Color.FromHtml(hex) : Colors.Magenta;
-
-            _player = new CraftState(_sector.AllocateCraftId(), "Player", design, design.ComputeStats(catalog),
-                SectorGenerator.PlayerSpawnPoint(_sector), headingRad: 0);
-            _sector.AddCraft(_player);
-            _sector.SetTarget(_player.Id, _sector.NearestBody(_player.Position).Body.Id);
+            _catalog = catalog;
+            _starterDesign = design;
         }
         catch (System.Exception e) // bad or missing data file: show it instead of crashing
         {
             _setupError = $"Could not load ship data: {e.Message}";
             GD.PushError(_setupError);
         }
+    }
+
+    private void StartNewGame()
+    {
+        _sector = SectorGenerator.Generate(SectorSeed);
+        _player = null;
+        if (_catalog == null || _starterDesign == null) return;
+
+        _player = new CraftState(_sector.AllocateCraftId(), "Player", _starterDesign, _starterDesign.ComputeStats(_catalog),
+            SectorGenerator.PlayerSpawnPoint(_sector), headingRad: 0);
+        _sector.AddCraft(_player);
+        _sector.SetTarget(_player.Id, _sector.NearestBody(_player.Position).Body.Id);
+    }
+
+    private void SaveGame()
+    {
+        if (_player == null) return;
+        try
+        {
+            var json = SaveGameSerializer.ToJson(_sector, _player.Id);
+            // Write-then-rename, so a crash mid-write can't destroy the previous save.
+            var tmp = SaveFilePath + ".tmp";
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(SaveFilePath)!);
+            System.IO.File.WriteAllText(tmp, json);
+            System.IO.File.Move(tmp, SaveFilePath, overwrite: true);
+            ShowStatus($"Saved at tick {_sector.Tick}.");
+        }
+        catch (System.Exception e)
+        {
+            ShowStatus($"SAVE FAILED: {e.Message}");
+            GD.PushError(_status);
+        }
+    }
+
+    private void LoadGame(bool isStartup)
+    {
+        if (_catalog == null) return;
+        if (!System.IO.File.Exists(SaveFilePath)) { ShowStatus("No save to load."); return; }
+        try
+        {
+            var loaded = SaveGameSerializer.FromJson(System.IO.File.ReadAllText(SaveFilePath), _catalog);
+            _sector = loaded.Sector;
+            _player = loaded.PlayerCraftId.IsNone ? null : _sector.GetCraft(loaded.PlayerCraftId);
+            ShowStatus($"Loaded save at tick {_sector.Tick}.");
+        }
+        catch (System.Exception e)
+        {
+            if (!isStartup) { ShowStatus($"LOAD FAILED (game unchanged): {e.Message}"); GD.PushError(_status); return; }
+
+            // Keep the unreadable file for inspection instead of overwriting it on the next save.
+            var badPath = SaveFilePath + ".bad";
+            System.IO.File.Move(SaveFilePath, badPath, overwrite: true);
+            StartNewGame();
+            ShowStatus($"Save could not be loaded ({e.Message}). Moved it to {badPath}; started a new game.");
+            GD.PushError(_status);
+        }
+    }
+
+    private void ShowStatus(string message)
+    {
+        _status = message;
+        _statusUntilMs = Time.GetTicksMsec() + StatusShowMs;
+    }
+
+    // Autosave when the window is closed normally. (Stopping from the editor kills the
+    // process without this notification; use F6 first if you need that state.)
+    public override void _Notification(int what)
+    {
+        if (what == NotificationWMCloseRequest) SaveGame();
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -99,12 +179,19 @@ public partial class Main : Node2D
             if (mouse.ButtonIndex == MouseButton.WheelUp) _pixelsPerMetre *= ZoomStep;
             else if (mouse.ButtonIndex == MouseButton.WheelDown) _pixelsPerMetre /= ZoomStep;
             _pixelsPerMetre = Mathf.Clamp(_pixelsPerMetre, MinPixelsPerMetre, MaxPixelsPerMetre);
+            return;
         }
-        else if (@event is InputEventKey { Pressed: true, Echo: false } key && _player != null)
+        if (@event is not InputEventKey { Pressed: true, Echo: false } key) return;
+
+        switch (key.PhysicalKeycode)
         {
-            if (key.PhysicalKeycode == Key.Tab) CycleTarget();
-            else if (key.PhysicalKeycode == Key.T)
+            case Key.F6: SaveGame(); break;
+            case Key.F9: LoadGame(isStartup: false); break;
+            case Key.F7: StartNewGame(); ShowStatus("New game. The save file is unchanged until you save or quit."); break;
+            case Key.Tab when _player != null: CycleTarget(); break;
+            case Key.T when _player != null:
                 _sector.SetTarget(_player.Id, _sector.NearestBody(_player.Position).Body.Id);
+                break;
         }
     }
 
@@ -149,6 +236,7 @@ public partial class Main : Node2D
                    + (_clock.DroppedTicks > 0 ? $"   dropped {_clock.DroppedTicks}" : "")
                    + $"   zoom {_pixelsPerMetre:0.###} px/m\n";
 
+        if (Time.GetTicksMsec() < _statusUntilMs) text += $">> {_status}\n";
         if (_player is not { } p) return text + _setupError;
 
         var (nearest, nearestSurface) = _sector.NearestBody(p.Position);
@@ -174,7 +262,8 @@ public partial class Main : Node2D
 
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
-               + "W/Up thrust   A/D turn   S/Space brake (matches target)   Tab cycle target   T target nearest   wheel zoom";
+               + "W/Up thrust   A/D turn   S/Space brake (matches target)   Tab cycle target   T target nearest   wheel zoom\n"
+               + "F6 save   F9 load   F7 new game   (closing the window autosaves)";
     }
 
     private static string Describe(CelestialBodyState body) =>

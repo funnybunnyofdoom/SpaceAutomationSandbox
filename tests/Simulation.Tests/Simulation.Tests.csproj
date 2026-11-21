@@ -15,6 +15,7 @@
   <ItemGroup>
     <Compile Include="../../scripts/simulation/**/*.cs" Link="Simulation/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../scripts/construction/**/*.cs" Link="Construction/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../scripts/save/**/*.cs" Link="Save/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
