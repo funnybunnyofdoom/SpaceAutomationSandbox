@@ -20,7 +20,8 @@ public class ProductionNetworkTests
     private static long TotalMass(SectorState sector) =>
         sector.Bodies.Sum(b => b.DepositsKg.Values.Sum())
         + sector.Crafts.Sum(c => c.Inventory.TotalKg + c.BuildQueue.Sum(o => o.MaterialsKg.Values.Sum())
-                                 + (c.RefiningBatch?.InputsKg.Values.Sum() ?? 0));
+                                 + (c.RefiningBatch?.InputsKg.Values.Sum() ?? 0))
+        + sector.EjectedKg.Values.Sum();
 
     private static void Run(SectorState sector, int ticks, Action? everyTick = null)
     {
@@ -55,6 +56,7 @@ public class ProductionNetworkTests
         var game = TestData.NewGame();
         var yard = game.Sector.GetCraft(game.ShipyardId);
         var metal = yard.Inventory["metal"];
+        var slag = yard.Inventory["slag"];
         yard.Inventory.Add("iron_ore", 2_000);
         var mass = TotalMass(game.Sector);
 
@@ -63,7 +65,7 @@ public class ProductionNetworkTests
 
         Assert.Equal(0, yard.Inventory["iron_ore"]);
         Assert.Equal(metal + 1_400, yard.Inventory["metal"]);
-        Assert.Equal(600, yard.Inventory["slag"]);
+        Assert.Equal(slag + 600, yard.Inventory["slag"]);
         Assert.Null(yard.RefiningBatch);
     }
 
@@ -81,7 +83,7 @@ public class ProductionNetworkTests
         Run(loaded, 30 * FixedStepClock.TicksPerSecond);
 
         Assert.Equal(SaveGameSerializer.ToJson(game.Sector, game.PlayerCraftId), SaveGameSerializer.ToJson(loaded, game.PlayerCraftId));
-        Assert.Equal(500, loaded.GetCraft(game.ShipyardId).Inventory["slag"]);
+        Assert.Equal(NewGame.StartingStockKg["slag"] + 500, loaded.GetCraft(game.ShipyardId).Inventory["slag"]);
     }
 
     // --- Survey -------------------------------------------------------------------------------

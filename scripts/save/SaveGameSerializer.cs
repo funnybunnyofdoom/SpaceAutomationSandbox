@@ -26,10 +26,10 @@ public static class SaveGameSerializer
     /// and the order counter; v4 added the anchored flag; v5 added part rotation, craft targets,
     /// docking, and order landing sites; v6 added body deposits, the drill remainder and mining jobs;
     /// v7 added survey flags, refinery batches and freight jobs; v8 added debug tuning and job retry
-    /// times; v9 limited storage to storage parts. Older files are upgraded step by step by
+    /// times; v9 limited storage to storage parts; v10 added power and slag ejection. Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 9;
+    public const int SchemaVersion = 10;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -53,6 +53,9 @@ public static class SaveGameSerializer
                 Seed = sector.Seed,
                 Tick = sector.Tick,
                 NextOrderId = sector.NextOrderId,
+                EjectedKg = sector.EjectedKg.Count > 0
+                    ? new SortedDictionary<string, long>(sector.EjectedKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal)
+                    : null,
                 Tuning = sector.Tuning.IsDefault ? null : new TuningDto
                 {
                     DrillRateMultiplier = sector.Tuning.DrillRateMultiplier,
@@ -90,6 +93,9 @@ public static class SaveGameSerializer
                     LandedOffset = c.IsLanded ? Vec(c.LandedOffset) : null,
                     Anchored = c.IsAnchored,
                     LegacyUnlimitedStorage = c.LegacyUnlimitedStorage,
+                    StoredEnergyKJ = c.StoredEnergyKJ,
+                    LegacyFreePower = c.LegacyFreePower,
+                    EjectionRemainderKg = c.EjectionRemainderKg,
                     MiningRemainderKg = c.MiningRemainderKg,
                     RefiningBatch = c.RefiningBatch is { } rb
                         ? new BatchDto
@@ -187,6 +193,12 @@ public static class SaveGameSerializer
                     sector.RestoreLanding(craft.Id, new BodyId(c.LandedOnBodyId), ToVec(c.LandedOffset, "landedOffset"));
                 sector.RestoreAnchored(craft.Id, c.Anchored);
                 craft.LegacyUnlimitedStorage = c.LegacyUnlimitedStorage;
+                craft.LegacyFreePower = c.LegacyFreePower;
+                if (c.StoredEnergyKJ < 0 || c.StoredEnergyKJ > craft.Stats.EnergyCapacityKJ + 1e-6)
+                    throw new FormatException($"Craft {c.Id} holds {c.StoredEnergyKJ} kJ but its batteries take {craft.Stats.EnergyCapacityKJ} kJ.");
+                craft.StoredEnergyKJ = c.StoredEnergyKJ;
+                if (c.EjectionRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has an ejection remainder of {c.EjectionRemainderKg} kg.");
+                craft.EjectionRemainderKg = c.EjectionRemainderKg;
                 if (c.RailOrbit is { } rail) sector.RestoreRails(craft.Id, OrbitFromDto(rail));
                 foreach (var (material, kg) in c.InventoryKg ?? new SortedDictionary<string, long>())
                 {
@@ -209,6 +221,11 @@ public static class SaveGameSerializer
                 }
             }
             if (dto.NextOrderId > 0) sector.RestoreNextOrderId(dto.NextOrderId);
+            foreach (var (material, kg) in dto.EjectedKg ?? new SortedDictionary<string, long>())
+            {
+                if (!catalog.Materials.Contains(material)) throw new FormatException($"Unknown ejected material '{material}'.");
+                sector.RestoreEjected(material, kg);
+            }
 
             // Links between crafts, after every craft exists.
             foreach (var c in dto.Crafts ?? new List<CraftDto>())
@@ -308,7 +325,7 @@ public static class SaveGameSerializer
     private static Vector2D ToVec(VecDto? v, string what) =>
         v is null ? throw new FormatException($"Craft is missing {what}.") : new Vector2D(v.X, v.Y);
 
-    // --- File shape (schema 9). Change only together with SchemaVersion and docs/08. ---
+    // --- File shape (schema 10). Change only together with SchemaVersion and docs/08. ---
 
     private sealed class SaveFile
     {
@@ -323,6 +340,7 @@ public static class SaveGameSerializer
         public ulong Seed { get; set; }
         public long Tick { get; set; }
         public long NextOrderId { get; set; }
+        public SortedDictionary<string, long>? EjectedKg { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] // omitted while every multiplier is 1
         public TuningDto? Tuning { get; set; }
         public List<BodyDto>? Bodies { get; set; }
@@ -369,6 +387,14 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] // only on stations from pre-v9 saves
         public bool LegacyUnlimitedStorage { get; set; }
+
+        public double StoredEnergyKJ { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] // only on craft from pre-v10 saves
+        public bool LegacyFreePower { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double EjectionRemainderKg { get; set; }
         public double MiningRemainderKg { get; set; }
         public BatchDto? RefiningBatch { get; set; }
         public JobDto? Job { get; set; }

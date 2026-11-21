@@ -27,6 +27,15 @@ public sealed record PartDefinition
     /// <summary>One berth where a ship can dock; it opens in the direction the part faces.</summary>
     public bool IsDockingPort { get; init; }
 
+    /// <summary>Power drawn while working, kW (thrusters at full throttle, drills, refineries, fabricators, ejectors).</summary>
+    public double PowerUseKW { get; init; }
+
+    /// <summary>Power produced, kW (solar panels; constant for now, no day/night).</summary>
+    public double PowerGenerationKW { get; init; }
+
+    /// <summary>Slag thrown away per second (slag ejector).</summary>
+    public double EjectionRateKgPerS { get; init; }
+
     /// <summary>How many kg of recipe input this part refines per second (refineries).</summary>
     public double RefiningRateKgPerS { get; init; }
 
@@ -71,7 +80,8 @@ public sealed class PartCatalog
             if (string.IsNullOrWhiteSpace(part.Id)) throw new FormatException("Part with empty id.");
             if (!(part.MassKg > 0)) throw new FormatException($"Part '{part.Id}' needs massKg > 0.");
             if (part.ThrustN < 0 || part.CargoCapacityKg < 0 || part.EnergyCapacityKJ < 0 || part.MiningRateKgPerS < 0
-                || part.FabricationRateKgPerS < 0 || part.RefiningRateKgPerS < 0)
+                || part.FabricationRateKgPerS < 0 || part.RefiningRateKgPerS < 0
+                || part.PowerUseKW < 0 || part.PowerGenerationKW < 0 || part.EjectionRateKgPerS < 0)
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
             ValidateMaterials(part, materials);
             if (!_parts.TryAdd(part.Id, part)) throw new FormatException($"Duplicate part id '{part.Id}'.");

@@ -34,7 +34,8 @@ public class MiningJobTests
         sector.Bodies.Sum(b => b.DepositsKg.Values.Sum())
         + sector.Crafts.Sum(c => c.Inventory.TotalKg
                                  + c.BuildQueue.Sum(o => o.MaterialsKg.Values.Sum())
-                                 + (c.RefiningBatch?.InputsKg.Values.Sum() ?? 0));
+                                 + (c.RefiningBatch?.InputsKg.Values.Sum() ?? 0))
+        + sector.EjectedKg.Values.Sum(); // thrown out of the sector by ejectors (#7)
 
     /// <summary>A station's stock plus what its refinery holds: grows by exactly what is delivered.</summary>
     private static long Holdings(CraftState craft) => craft.Inventory.TotalKg + (craft.RefiningBatch?.InputsKg.Values.Sum() ?? 0);
@@ -65,7 +66,7 @@ public class MiningJobTests
         Assert.True(done, $"only {job.CompletedCycles} cycles; now {job.Status}");
         var mined = deposit - rock.Deposit("iron_ore");
         Assert.Equal(rockMass - mined, rock.MassKg);              // body mass drops by exactly what was mined
-        Assert.Equal(job.DeliveredKg, Holdings(yard) - yardHoldings); // everything delivered arrived (some already refined)
+        Assert.Equal(job.DeliveredKg, Holdings(yard) + sector.EjectedKg.Values.Sum() - yardHoldings); // everything delivered arrived (some refined, some slag ejected)
         Assert.Equal(mined, job.DeliveredKg + miner.Inventory["iron_ore"]);
         Assert.InRange(job.DeliveredKg, 10 * (long)(0.25 * miner.CargoCapacityKg), 11 * (long)(0.25 * miner.CargoCapacityKg));
     }

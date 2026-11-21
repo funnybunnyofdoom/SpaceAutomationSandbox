@@ -27,6 +27,7 @@ public static class SaveMigrations
         [6] = ("v7 added survey: older games had no survey, so every body counts as surveyed; jobs were all mining", MarkAllSurveyedAndJobsMining),
         [7] = ("v8 added debug tuning and job retry ticks: absent means default", (_, _) => { }),
         [8] = ("v9 limited storage to storage parts: stations that held stock without any keep unlimited storage", KeepLegacyStationsUnlimited),
+        [9] = ("v10 added power: craft from older games have no solar panels, so they get free power and full batteries", GiveLegacyCraftFreePower),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>
@@ -76,6 +77,15 @@ public static class SaveMigrations
         foreach (var body in Bodies(root)) body["surveyed"] = true;
         foreach (var craft in Crafts(root))
             if (craft["job"] is JsonObject job && job["kind"] is null) job["kind"] = "mining";
+    }
+
+    private static void GiveLegacyCraftFreePower(JsonObject root, PartCatalog catalog)
+    {
+        foreach (var craft in Crafts(root))
+        {
+            craft["legacyFreePower"] = true;
+            craft["storedEnergyKJ"] = Parts(craft, catalog).Sum(p => p.EnergyCapacityKJ);
+        }
     }
 
     private static void KeepLegacyStationsUnlimited(JsonObject root, PartCatalog catalog)

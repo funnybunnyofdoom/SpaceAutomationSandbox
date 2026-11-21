@@ -76,7 +76,8 @@ public class ShipLoopTests
         long Mass() => sector.Bodies.Sum(b => b.DepositsKg.Values.Sum())
                        + sector.Crafts.Sum(c => c.Inventory.TotalKg + c.BuildQueue.Sum(o => o.MaterialsKg.Values.Sum())
                                                 + (c.RefiningBatch?.InputsKg.Values.Sum() ?? 0))
-                       + sector.Crafts.Where(c => !start.Contains(c.Id)).Sum(c => (long)c.Design.ComputeBillOfMaterials(Catalog).TotalKg);
+                       + sector.Crafts.Where(c => !start.Contains(c.Id)).Sum(c => (long)c.Design.ComputeBillOfMaterials(Catalog).TotalKg)
+                       + sector.EjectedKg.Values.Sum();
         var mass = Mass();
 
         var ordered = false;

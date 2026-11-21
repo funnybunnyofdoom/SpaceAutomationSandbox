@@ -56,8 +56,18 @@ public sealed record ShipStats(
     double NonForwardThrustN,
     IReadOnlyList<DockingPortInfo> DockingPorts,
     double MiningRateKgPerS,
-    double RefiningRateKgPerS)
+    double RefiningRateKgPerS,
+    double PowerGenerationKW = 0,
+    double ThrustPowerKW = 0,
+    double DrillPowerKW = 0,
+    double RefineryPowerKW = 0,
+    double FabricatorPowerKW = 0,
+    double EjectorPowerKW = 0,
+    double EjectionRateKgPerS = 0)
 {
+    /// <summary>Everything running at once (full throttle, drilling, refining, building, ejecting), kW.</summary>
+    public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW;
+
     /// <summary>Can lock onto a body once landed (clamps release again; foundations never do).</summary>
     public bool CanAnchor => AnchorClampCount > 0 || FoundationCount > 0;
 
@@ -166,6 +176,7 @@ public sealed class ShipDesign
     public ShipStats ComputeStats(PartCatalog catalog)
     {
         double mass = 0, thrust = 0, otherThrust = 0, cargo = 0, energy = 0, fabrication = 0, mining = 0, refining = 0, momentX = 0, momentY = 0;
+        double generation = 0, thrustPower = 0, drillPower = 0, refineryPower = 0, fabricatorPower = 0, ejectorPower = 0, ejection = 0;
         int clamps = 0, foundations = 0;
         var ports = new List<DockingPortInfo>();
         foreach (var cell in Cells)
@@ -179,6 +190,14 @@ public sealed class ShipDesign
             fabrication += part.FabricationRateKgPerS;
             mining += part.MiningRateKgPerS;
             refining += part.RefiningRateKgPerS;
+            generation += part.PowerGenerationKW;
+            ejection += part.EjectionRateKgPerS;
+            // Each part's power use goes to the activity it powers (only rear-facing thrusters fire).
+            if (part.ThrustN > 0) { if (cell.Rotation == 0) thrustPower += part.PowerUseKW; }
+            else if (part.MiningRateKgPerS > 0) drillPower += part.PowerUseKW;
+            else if (part.RefiningRateKgPerS > 0) refineryPower += part.PowerUseKW;
+            else if (part.FabricationRateKgPerS > 0) fabricatorPower += part.PowerUseKW;
+            else if (part.EjectionRateKgPerS > 0) ejectorPower += part.PowerUseKW;
             if (part.IsAnchorClamp) clamps++;
             if (part.IsFoundation) foundations++;
             if (part.IsDockingPort) ports.Add(new DockingPortInfo(cell.Pos, cell.Rotation));
@@ -199,7 +218,8 @@ public sealed class ShipDesign
         }
 
         return new ShipStats(Cells.Count, mass, thrust, cargo, energy, comX, comY,
-            Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations, otherThrust, ports, mining, refining);
+            Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations, otherThrust, ports, mining, refining,
+            generation, thrustPower, drillPower, refineryPower, fabricatorPower, ejectorPower, ejection);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

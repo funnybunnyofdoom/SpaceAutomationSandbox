@@ -28,8 +28,9 @@ public static class NewGame
     public static readonly IReadOnlyDictionary<string, long> StartingStockKg = new SortedDictionary<string, long>(StringComparer.Ordinal)
     {
         ["metal"] = 30_000,
-        ["electronics"] = 6_000,
+        ["electronics"] = 7_000,
         ["composites"] = 5_000,
+        ["slag"] = 5_000, // hull plates contain slag now (#7)
     };
 
     public static NewGameResult Create(ulong seed, PartCatalog catalog, ShipDesign starterShip, ShipDesign starterShipyard)

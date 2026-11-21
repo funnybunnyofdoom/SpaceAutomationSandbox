@@ -4,7 +4,9 @@
   "name": "Starter prospector",
   "cells": [
     { "x":  0, "y": -3, "part": "drill" },
+    { "x": -1, "y": -2, "part": "solar_panel" },
     { "x":  0, "y": -2, "part": "cockpit" },
+    { "x":  1, "y": -2, "part": "solar_panel" },
     { "x": -1, "y": -1, "part": "hull" },
     { "x":  0, "y": -1, "part": "battery" },
     { "x":  1, "y": -1, "part": "hull" },

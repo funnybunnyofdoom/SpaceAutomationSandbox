@@ -185,6 +185,7 @@ public partial class FleetPanel : PanelContainer
         var distance = pilot is null || pilot == craft ? "" : $", {FormatDistance(pilot.Position.DistanceTo(craft.Position))} away";
         var second = Where(sector, craft);
         if (craft.BuildQueue.Count > 0) second += $"   building {craft.BuildQueue[0].Fraction * 100:0}%";
+        if (craft.PowerShort && !craft.LegacyFreePower) second += "   NO POWER";
         if (craft.Job is { Active: true } job) second += $"\n   {job.Kind}: {job.Status} ({job.CompletedCycles} cycles)";
         else if (IsShip(craft) && pilot != craft) second += "   (idle)";
         return $"{craft.Name}  ({craft.Id}, {role}{distance})\n   {second}";

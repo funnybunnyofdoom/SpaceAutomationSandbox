@@ -55,9 +55,10 @@ public class MaterialTests
 
         var bill = design.ComputeBillOfMaterials(catalog);
 
-        Assert.Equal(13_200, bill["metal"]);
-        Assert.Equal(2_700, bill["electronics"]);
-        Assert.Equal(1_900, bill["composites"]);
+        Assert.Equal(13_000, bill["metal"]);
+        Assert.Equal(3_100, bill["electronics"]);
+        Assert.Equal(2_100, bill["composites"]);
+        Assert.Equal(800, bill["slag"]); // four hull plates (#7)
         Assert.Equal(design.ComputeStats(catalog).TotalMassKg, bill.TotalKg); // conservation
     }
 

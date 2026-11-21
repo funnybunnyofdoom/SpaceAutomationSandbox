@@ -48,22 +48,31 @@ public class StorageAndMigrationTests
     [Fact]
     public void Refinery_WaitsWhenStorageIsFull_ThenFinishesOnceThereIsRoom()
     {
+        // A small refinery station (20 t storage, solar power, no slag ejector) on the yard's orbit.
         var game = TestData.NewGame();
         var sector = game.Sector;
         var yard = sector.GetCraft(game.ShipyardId);
-        yard.Inventory.Add("slag", yard.FreeCargoKg - 500); // 500 kg free
-        yard.Inventory.Add("iron_ore", 1_000);              // setup only: the batch takes it out again, leaving 500 kg free
+        var design = new ShipDesign("refinery_station", "Refinery", new[]
+        {
+            new DesignCell(new GridPos(0, 0), "refinery"), new DesignCell(new GridPos(1, 0), "cargo"),
+            new DesignCell(new GridPos(-1, 0), "solar_panel"),
+        });
+        var station = new CraftState(sector.AllocateCraftId(), "Refinery", design, design.ComputeStats(Catalog), yard.Position, 0);
+        sector.AddCraft(station);
+        sector.PutOnRails(station.Id, yard.RailOrbit! with { PhaseAtZeroRad = yard.RailOrbit!.PhaseAtZeroRad + 0.3 });
+        station.Inventory.Add("slag", station.FreeCargoKg - 500); // 500 kg free
+        station.Inventory.Add("iron_ore", 1_000);                 // setup only: the batch takes it out again, leaving 500 kg free
 
         for (var i = 0; i < 30 * FixedStepClock.TicksPerSecond; i++) sector.Step();
-        Assert.NotNull(yard.RefiningBatch);               // finished, but its 1 t of output doesn't fit in 500 kg
-        Assert.Contains("waiting for storage room", sector.RefiningStatus(yard));
-        var slag = yard.Inventory["slag"];
+        Assert.NotNull(station.RefiningBatch);                    // finished, but its 1 t of output doesn't fit in 500 kg
+        Assert.Contains("waiting for storage room", sector.RefiningStatus(station));
+        var slag = station.Inventory["slag"];
 
-        yard.Inventory.TryRemove(new System.Collections.Generic.Dictionary<string, long> { ["slag"] = 2_000 });
+        station.Inventory.TryRemove(new System.Collections.Generic.Dictionary<string, long> { ["slag"] = 2_000 });
         sector.Step();
-        Assert.Null(yard.RefiningBatch);
-        Assert.Equal(slag - 2_000 + 300, yard.Inventory["slag"]);
-        Assert.Equal(700, yard.Inventory["metal"] - NewGame.StartingStockKg["metal"]);
+        Assert.Null(station.RefiningBatch);
+        Assert.Equal(slag - 2_000 + 300, station.Inventory["slag"]);
+        Assert.Equal(700, station.Inventory["metal"]);
     }
 
     [Fact]
@@ -84,7 +93,7 @@ public class StorageAndMigrationTests
         yardNode["inventoryKg"]!["metal"] = 500_000;
 
         var steps = SaveMigrations.Migrate(root, Catalog);
-        Assert.Single(steps);
+        Assert.Equal(SaveGameSerializer.SchemaVersion - 8, steps.Count); // v8 → current
         var loaded = SaveGameSerializer.FromJson(root.ToJsonString(), Catalog).Sector;
         var yard = loaded.GetCraft(game.ShipyardId);
 

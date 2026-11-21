@@ -55,6 +55,7 @@ public sealed partial class SectorState
 
             var batch = craft.RefiningBatch;
             if (!Recipes.TryGet(batch.RecipeId, out var running)) continue; // unknown after a data change: hold it untouched
+            if (batch.ProgressKg < running.BatchKg && !TryUsePower(craft, craft.Stats.RefineryPowerKW * FixedStepClock.TickSeconds)) continue;
             batch.ProgressKg = Math.Min(running.BatchKg,
                 batch.ProgressKg + craft.Stats.RefiningRateKgPerS * Tuning.RefiningRateMultiplier * FixedStepClock.TickSeconds);
             if (batch.ProgressKg < running.BatchKg) continue;
@@ -74,6 +75,7 @@ public sealed partial class SectorState
         if (craft.RefiningBatch is not { } batch) return "refinery idle (no recipe inputs in stock)";
         var name = Recipes.TryGet(batch.RecipeId, out var r) ? r.Name : batch.RecipeId;
         var total = r?.BatchKg ?? 1;
-        return batch.ProgressKg >= total ? $"{name}: done, waiting for storage room" : $"{name} {batch.ProgressKg / total * 100:0}%";
+        if (batch.ProgressKg >= total) return $"{name}: done, waiting for storage room";
+        return $"{name} {batch.ProgressKg / total * 100:0}%" + (craft.PowerShort && !craft.LegacyFreePower ? " (no power)" : "");
     }
 }

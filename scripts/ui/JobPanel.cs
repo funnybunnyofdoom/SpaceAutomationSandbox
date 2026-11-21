@@ -236,7 +236,7 @@ public partial class JobPanel : PanelContainer
                          + (h.KeepStockedKg > 0 ? $", keep {h.KeepStockedKg / 1000} t there" : ""),
             _ => job.Kind,
         };
-        _state.Text = $"{what}\nState: {job.Status}\n"
+        _state.Text = $"{what}\nState: {job.Status}{(craft.PowerShort && !craft.LegacyFreePower ? "  (NO POWER)" : "")}\n"
                       + $"Cycles: {job.CompletedCycles}    Delivered: {job.DeliveredKg / 1000.0:0.0} t    "
                       + $"Hold: {craft.Inventory.TotalKg / 1000.0:0.0} / {craft.CargoCapacityKg / 1000.0:0} t";
         _state.AddThemeColorOverride("font_color", job.Status.StartsWith("waiting") ? ErrorColor : new Color(1, 1, 1));

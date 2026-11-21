@@ -28,7 +28,10 @@ Each recipe has an `id`, a `name`, and whole-kg `inputsKg` and `outputsKg` keyed
 | `placeholderColor` | no | `#rrggbb` used to draw the part until sprites exist. |
 | `isControlSource` | no | Can pilot the craft (cockpit). A design needs exactly one. |
 | `thrustN` | no | Thrust in newtons. Phase 1: all thrust pushes along the ship's forward axis. |
-| `energyCapacityKJ` | no | Battery capacity. Shown in stats only; nothing uses power yet. |
+| `energyCapacityKJ` | no | Battery capacity in kJ. Stores spare power for later ticks. |
+| `powerGenerationKW` | no | Power the part makes every second (solar panel). Constant for now. |
+| `powerUseKW` | no | Power the part draws while working: thrusters at full throttle, drills while drilling, refineries while refining, fabricators while building, ejectors while ejecting. Without enough power it doesn't run that tick. |
+| `ejectionRateKgPerS` | no | Slag ejector: kg of slag thrown out of the sector per second, above a 20 t reserve. |
 | `cargoCapacityKg` | no | Cargo capacity by mass (cargo bays, storage silos). A craft holds at most the sum of its parts' capacity. |
 | `miningRateKgPerS` | no | Drill rate. Not used until mining (Phase 3). |
 | `isAnchorClamp` | no | Lets a landed craft anchor to the body it's on (G) and release again. |

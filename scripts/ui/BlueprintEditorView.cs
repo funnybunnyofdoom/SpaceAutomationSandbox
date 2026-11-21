@@ -195,6 +195,8 @@ public partial class BlueprintEditorView : Control
         : p.CargoCapacityKg > 0 ? $", {p.CargoCapacityKg / 1000:0} t cargo"
         : p.EnergyCapacityKJ > 0 ? $", {p.EnergyCapacityKJ / 1000:0} MJ"
         : p.MiningRateKgPerS > 0 ? $", {p.MiningRateKgPerS:0} kg/s"
+        : p.PowerGenerationKW > 0 ? $", +{p.PowerGenerationKW:0} kW"
+        : p.EjectionRateKgPerS > 0 ? $", ejects {p.EjectionRateKgPerS:0} kg/s"
         : p.IsControlSource ? ", control" : "";
 
     private static Label Heading(string text)
@@ -244,6 +246,10 @@ public partial class BlueprintEditorView : Control
               + $"Thrust {s.TotalThrustN / 1000:0} kN forward{(s.NonForwardThrustN > 0 ? $" (+{s.NonForwardThrustN / 1000:0} kN other)" : "")}    Accel {s.MaxAccelerationMps2:0.0} m/s²\n"
               + (s.DockingPorts.Count > 0 || s.FabricationRateKgPerS > 0 ? $"Docking ports {s.DockingPorts.Count}    Fabrication {s.FabricationRateKgPerS:0} kg/s\n" : "")
               + $"Cargo {s.CargoCapacityKg / 1000:0} t    Battery {s.EnergyCapacityKJ / 1000:0} MJ\n"
+              + $"Power: solar {s.PowerGenerationKW:0} kW, use up to {s.TotalPowerUseKW:0} kW\n(thrust {s.ThrustPowerKW:0} kW)"
+              + (s.TotalPowerUseKW <= s.PowerGenerationKW ? "\n"
+                  : s.EnergyCapacityKJ > 0 ? $"  battery: {s.EnergyCapacityKJ / (s.TotalPowerUseKW - s.PowerGenerationKW):0} s at max\n"
+                  : "  NO BATTERY\n")
               + $"Collision radius {s.BoundingRadiusM:0.0} m";
 
         _bill.Text = BillText();

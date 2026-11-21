@@ -20,12 +20,14 @@ public static class FlightModel
     /// <param name="brakeReferenceVelocity">
     /// Velocity the brake matches: the target body's velocity, or zero to stop relative to the sector.
     /// </param>
-    public static void Step(CraftState craft, double dt, Vector2D brakeReferenceVelocity = default)
+    /// <param name="thrustAvailable">False when the craft has no power for its thrusters this tick: it can still turn.</param>
+    public static void Step(CraftState craft, double dt, Vector2D brakeReferenceVelocity = default, bool thrustAvailable = true)
     {
         craft.PreviousPosition = craft.Position;
         craft.PreviousHeadingRad = craft.HeadingRad;
 
         var controls = craft.Controls.Clamped();
+        if (!thrustAvailable) controls = controls with { Throttle = 0, Brake = false };
         craft.HeadingRad = WrapAngle(craft.HeadingRad + controls.Turn * TurnRateRadPerS * dt);
 
         // Cargo counts: a loaded ship accelerates and brakes more slowly.

@@ -5,14 +5,18 @@
   "cells": [
     { "x": -1, "y": -1, "part": "storage_silo" },
     { "x":  0, "y": -1, "part": "hull" },
-    { "x":  1, "y": -1, "part": "hull" },
+    { "x":  1, "y": -1, "part": "slag_ejector" },
     { "x": -1, "y":  0, "part": "hull" },
     { "x":  0, "y":  0, "part": "fabricator" },
     { "x":  1, "y":  0, "part": "refinery" },
     { "x": -1, "y":  1, "part": "storage_silo" },
     { "x":  0, "y":  1, "part": "hull" },
-    { "x":  1, "y":  1, "part": "hull" },
+    { "x":  1, "y":  1, "part": "battery" },
     { "x":  0, "y": -2, "part": "docking_port" },
-    { "x":  0, "y":  2, "part": "docking_port", "rot": 2 }
+    { "x":  0, "y":  2, "part": "docking_port", "rot": 2 },
+    { "x": -2, "y":  0, "part": "solar_panel" },
+    { "x":  2, "y": -1, "part": "solar_panel" },
+    { "x":  2, "y":  0, "part": "solar_panel" },
+    { "x":  2, "y":  1, "part": "solar_panel" }
   ]
 }

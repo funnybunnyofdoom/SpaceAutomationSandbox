@@ -42,7 +42,23 @@ public sealed class CraftState
         Stats = stats;
         Position = PreviousPosition = position;
         HeadingRad = PreviousHeadingRad = headingRad;
+        StoredEnergyKJ = stats.EnergyCapacityKJ; // new craft start fully charged
     }
+
+    /// <summary>Battery charge, kJ (0..Stats.EnergyCapacityKJ).</summary>
+    public double StoredEnergyKJ { get; internal set; }
+
+    /// <summary>This tick's available energy (battery + solar), spent by machines in order. Not saved.</summary>
+    internal double EnergyPoolKJ { get; set; }
+
+    /// <summary>True if something on this craft couldn't run this tick for lack of power.</summary>
+    public bool PowerShort { get; internal set; }
+
+    /// <summary>Set only by the save migration for craft from before power existed: they never run short.</summary>
+    public bool LegacyFreePower { get; internal set; }
+
+    /// <summary>Ejected slag not yet whole kg (0..1).</summary>
+    public double EjectionRemainderKg { get; internal set; }
 
     public CraftId Id { get; }
     public string Name { get; }

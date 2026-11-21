@@ -422,6 +422,7 @@ public partial class Main : Node2D
                 + (p.HasCargoLimit ? $"cargo {p.Inventory.TotalKg / 1000.0:0.0} / {p.CargoCapacityKg / 1000.0:0} t\n" : $"stores {p.Inventory.TotalKg / 1000.0:0.0} t\n")
                 + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
                 + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
+                + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
                 + (p.Job is { Active: true } job
                     ? $"AUTOPILOT ({job.Kind} job): {job.Status}   cycles {job.CompletedCycles}, delivered {job.DeliveredKg / 1000.0:0.0} t - J to view/stop\n"
                     : "")
@@ -490,7 +491,9 @@ public partial class Main : Node2D
             : $"{y.Name}: building {y.BuildQueue[0].ShipName} {y.BuildQueue[0].Fraction * 100:0}%"
               + (y.BuildQueue.Count > 1 ? $" (+{y.BuildQueue.Count - 1} queued)" : ""))
             + (_sector.RefiningStatus(y) is { Length: > 0 } refining ? $"   {refining}" : "")
-            + (y.HasCargoLimit ? $"   storage {y.Inventory.TotalKg / 1000.0:0.0}/{y.CargoCapacityKg / 1000.0:0} t" : "") + "\n"));
+            + (y.HasCargoLimit ? $"   storage {y.Inventory.TotalKg / 1000.0:0.0}/{y.CargoCapacityKg / 1000.0:0} t" : "")
+            + (y.PowerShort && !y.LegacyFreePower ? "   NO POWER" : "")
+            + (y.Stats.EjectionRateKgPerS > 0 && _sector.EjectedKg.TryGetValue("slag", out var ejected) ? $"   slag ejected {ejected / 1000.0:0.0} t" : "") + "\n"));
     }
 
     private static string Describe(CelestialBodyState body) =>

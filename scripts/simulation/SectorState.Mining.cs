@@ -26,6 +26,7 @@ public sealed partial class SectorState
         {
             var material = MiningMaterial(craft);
             if (material is null || craft.FreeCargoKg <= 0) continue;
+            if (!TryUsePower(craft, craft.Stats.DrillPowerKW * FixedStepClock.TickSeconds)) continue; // drill idle without power
 
             var drilled = craft.MiningRemainderKg + craft.Stats.MiningRateKgPerS * Tuning.DrillRateMultiplier * FixedStepClock.TickSeconds;
             var whole = (long)Math.Floor(drilled);

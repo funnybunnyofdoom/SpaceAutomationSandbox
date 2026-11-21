@@ -92,6 +92,7 @@ public sealed partial class SectorState
         var midTickS = (Tick + 0.5) * FixedStepClock.TickSeconds;
         var endS = (Tick + 1) * FixedStepClock.TickSeconds;
         StepJobs(); // automated craft set their controls first, from this tick's state
+        BeginPowerTick();
         List<(CraftState, Vector2D)>? docked = null;
         foreach (var craft in _crafts)
         {
@@ -99,7 +100,8 @@ public sealed partial class SectorState
                 : !craft.TargetBodyId.IsNone ? GetVelocityAt(craft.TargetBodyId, midTickS)
                 : Vector2D.Zero;
             var velocityBefore = craft.Velocity;
-            FlightModel.Step(craft, FixedStepClock.TickSeconds, reference);
+            var thrustPowered = TryUsePower(craft, ThrustEnergyKJ(craft, reference));
+            FlightModel.Step(craft, FixedStepClock.TickSeconds, reference, thrustPowered);
 
             // Docked ships follow their station, which may move later in this loop: settled below.
             if (craft.IsDocked) (docked ??= new()).Add((craft, craft.Velocity - velocityBefore));
@@ -115,6 +117,8 @@ public sealed partial class SectorState
 
         // Shipyards advance after movement, so a finished craft is placed against the yard's new position.
         StepFabrication(endS);
+        StepEjection();
+        EndPowerTick();
         Tick++;
     }
 
