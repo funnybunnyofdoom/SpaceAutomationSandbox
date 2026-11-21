@@ -105,6 +105,7 @@ public partial class FleetPanel : PanelContainer
         var role = craft.IsShipyard ? "shipyard" : craft.Stats.TotalThrustN > 0 ? "ship" : "craft";
         var you = _piloted() == craft.Id ? "  [piloting]" : "";
         var building = craft.BuildQueue.Count > 0 ? $"  building {craft.BuildQueue[0].Fraction * 100:0}%" : "";
+        if (craft.Job is { Active: true } job) building += $"\n   job: {job.Status} ({job.CompletedCycles} cycles)";
         return $"{craft.Name}  ({craft.Id}, {role})\n   {Where(sector, craft)}{building}{you}";
     }
 }

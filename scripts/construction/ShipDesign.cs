@@ -54,7 +54,8 @@ public sealed record ShipStats(
     int AnchorClampCount,
     int FoundationCount,
     double NonForwardThrustN,
-    IReadOnlyList<DockingPortInfo> DockingPorts)
+    IReadOnlyList<DockingPortInfo> DockingPorts,
+    double MiningRateKgPerS)
 {
     /// <summary>Can lock onto a body once landed (clamps release again; foundations never do).</summary>
     public bool CanAnchor => AnchorClampCount > 0 || FoundationCount > 0;
@@ -162,7 +163,7 @@ public sealed class ShipDesign
     /// <summary>Totals and centre of mass (in cell units). Call only on a design whose parts are all known.</summary>
     public ShipStats ComputeStats(PartCatalog catalog)
     {
-        double mass = 0, thrust = 0, otherThrust = 0, cargo = 0, energy = 0, fabrication = 0, momentX = 0, momentY = 0;
+        double mass = 0, thrust = 0, otherThrust = 0, cargo = 0, energy = 0, fabrication = 0, mining = 0, momentX = 0, momentY = 0;
         int clamps = 0, foundations = 0;
         var ports = new List<DockingPortInfo>();
         foreach (var cell in Cells)
@@ -174,6 +175,7 @@ public sealed class ShipDesign
             cargo += part.CargoCapacityKg;
             energy += part.EnergyCapacityKJ;
             fabrication += part.FabricationRateKgPerS;
+            mining += part.MiningRateKgPerS;
             if (part.IsAnchorClamp) clamps++;
             if (part.IsFoundation) foundations++;
             if (part.IsDockingPort) ports.Add(new DockingPortInfo(cell.Pos, cell.Rotation));
@@ -194,7 +196,7 @@ public sealed class ShipDesign
         }
 
         return new ShipStats(Cells.Count, mass, thrust, cargo, energy, comX, comY,
-            Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations, otherThrust, ports);
+            Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations, otherThrust, ports, mining);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

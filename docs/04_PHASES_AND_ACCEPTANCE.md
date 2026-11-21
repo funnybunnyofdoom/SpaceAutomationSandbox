@@ -69,6 +69,8 @@ Work:
 - Save/load while miner is traveling, mining, and unloading.
 - Test failure states: empty source, full destination, insufficient fuel/power, target missing.
 
+**Status (2026-11-21): acceptance met in tests** (`tests/Simulation.Tests/MiningJobTests.cs`, headless, so no visual scene exists): 10 autonomous cycles with total metal checked unchanged at every tick; the asteroid's mass dropping by exactly the mined kg and its radius following; save, load and continue identical in all six job states; empty source, full destination and no free port each waiting with a plain reason; refused job starts naming the missing part; two miners sharing a yard. Not applicable yet: fuel/power (power deferred). "Target missing" is guarded with a reason but can't happen yet, since nothing can be destroyed.
+
 **Acceptance:** 10 complete autonomous cycles without duplication/loss, clear status messages for blocked tasks, and mass invariants pass tests. Background operation must continue when the miner's visual scene is not instantiated.
 
 ## Phase 4 — Production networks and remote sites

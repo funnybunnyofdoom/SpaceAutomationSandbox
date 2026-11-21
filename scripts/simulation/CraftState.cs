@@ -96,14 +96,22 @@ public sealed class CraftState
     public Inventory Inventory { get; } = new();
 
     /// <summary>
-    /// Craft that can fly (forward thrust) carry cargo up to their cargo bays' capacity. Others
-    /// (stations) have no limit yet. PLACEHOLDER until storage parts exist.
+    /// Craft that can fly, and stations with cargo bays, hold up to their cargo bays' capacity.
+    /// Stations without cargo bays (e.g. the starter shipyard) have no limit yet. PLACEHOLDER.
     /// </summary>
-    public bool HasCargoLimit => Stats.TotalThrustN > 0;
+    public bool HasCargoLimit => Stats.TotalThrustN > 0 || Stats.CargoCapacityKg > 0;
 
     public long CargoCapacityKg => HasCargoLimit ? (long)Stats.CargoCapacityKg : long.MaxValue;
 
     public long FreeCargoKg => HasCargoLimit ? Math.Max(0, CargoCapacityKg - Inventory.TotalKg) : long.MaxValue;
+
+    /// <summary>Automation: a mining job that drives this craft's controls while active. Null = none.</summary>
+    public MiningJob? Job { get; internal set; }
+
+    public bool IsAutomated => Job is { Active: true };
+
+    /// <summary>Drilled material not yet whole kg (0..1), carried between ticks so no fraction is lost.</summary>
+    public double MiningRemainderKg { get; internal set; }
 
     /// <summary>Dry mass plus cargo: what thrust has to push.</summary>
     public double MassKg => Stats.TotalMassKg + Inventory.TotalKg;

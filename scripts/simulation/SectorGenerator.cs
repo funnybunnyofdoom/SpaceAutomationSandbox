@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace SpaceAutomationSandbox.Simulation;
 
@@ -12,6 +13,9 @@ public static class SectorGenerator
     public const double PlanetDensityKgPerM3 = 5500;
     public const double AsteroidDensityKgPerM3 = 2500;
 
+    /// <summary>Placeholder: the asteroid's minable metal (docs/06, Phase 3). Finite, so it can run out.</summary>
+    public const long AsteroidMetalDepositKg = 500_000;
+
     public static SectorState Generate(ulong seed)
     {
         var rng = new DeterministicRandom(seed);
@@ -20,7 +24,7 @@ public static class SectorGenerator
         var planetRadiusM = rng.Range(5_000, 7_000);
         var planet = new CelestialBodyState(
             sector.AllocateBodyId(), "Primary", BodyKind.Planet,
-            CelestialBodyState.MassFromRadius(planetRadiusM, PlanetDensityKgPerM3),
+            Math.Round(CelestialBodyState.MassFromRadius(planetRadiusM, PlanetDensityKgPerM3)), // whole kg: exact ledger
             PlanetDensityKgPerM3, isMineable: false, orbit: null);
         sector.AddBody(planet);
 
@@ -34,8 +38,9 @@ public static class SectorGenerator
             PhaseAtZeroRad: rng.Range(0, 2 * Math.PI));
         sector.AddBody(new CelestialBodyState(
             sector.AllocateBodyId(), "Rock-1", BodyKind.Asteroid,
-            CelestialBodyState.MassFromRadius(asteroidRadiusM, AsteroidDensityKgPerM3),
-            AsteroidDensityKgPerM3, isMineable: true, orbit));
+            Math.Round(CelestialBodyState.MassFromRadius(asteroidRadiusM, AsteroidDensityKgPerM3)),
+            AsteroidDensityKgPerM3, isMineable: true, orbit,
+            new Dictionary<string, long> { ["metal"] = AsteroidMetalDepositKg }));
 
         return sector;
     }

@@ -91,6 +91,7 @@ public sealed partial class SectorState
         // to "TimeS of the next tick" (matters for exact save/load equivalence).
         var midTickS = (Tick + 0.5) * FixedStepClock.TickSeconds;
         var endS = (Tick + 1) * FixedStepClock.TickSeconds;
+        StepJobs(); // automated craft set their controls first, from this tick's state
         List<(CraftState, Vector2D)>? docked = null;
         foreach (var craft in _crafts)
         {
@@ -108,6 +109,7 @@ public sealed partial class SectorState
         }
 
         if (docked != null) UpdateDocked(docked);
+        StepMining();
 
         // Shipyards advance after movement, so a finished craft is placed against the yard's new position.
         StepFabrication(endS);

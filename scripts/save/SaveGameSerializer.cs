@@ -23,9 +23,10 @@ public static class SaveGameSerializer
     /// <summary>
     /// Version written. v2 added the landed state; v3 added rail orbits, inventories, build queues
     /// and the order counter; v4 added the anchored flag; v5 added part rotation, craft targets,
-    /// docking, and order landing sites. Older files still load (missing parts read as empty / none).
+    /// docking, and order landing sites; v6 added body deposits, the drill remainder and mining jobs.
+    /// Older files still load (missing parts read as empty / none).
     /// </summary>
-    public const int SchemaVersion = 5;
+    public const int SchemaVersion = 6;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -57,6 +58,9 @@ public static class SaveGameSerializer
                     MassKg = b.MassKg,
                     DensityKgPerM3 = b.DensityKgPerM3,
                     IsMineable = b.IsMineable,
+                    DepositsKg = b.DepositsKg.Count > 0
+                        ? new SortedDictionary<string, long>(b.DepositsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal)
+                        : null,
                     Orbit = b.Orbit is { } o ? OrbitToDto(o) : null,
                 }).ToList(),
                 Crafts = sector.Crafts.Select(c => new CraftDto
@@ -75,6 +79,15 @@ public static class SaveGameSerializer
                     LandedOnBodyId = c.LandedOnBodyId.Value,
                     LandedOffset = c.IsLanded ? Vec(c.LandedOffset) : null,
                     Anchored = c.IsAnchored,
+                    MiningRemainderKg = c.MiningRemainderKg,
+                    Job = c.Job is { } j
+                        ? new JobDto
+                        {
+                            SourceBodyId = j.SourceBodyId.Value, MaterialId = j.MaterialId, DestinationId = j.DestinationId.Value,
+                            ReturnFraction = j.ReturnFraction, Active = j.Active, State = j.State, ResumeState = j.ResumeState,
+                            WaitReason = j.WaitReason, CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg,
+                        }
+                        : null,
                     RailOrbit = c.RailOrbit is { } r ? OrbitToDto(r) : null,
                     InventoryKg = c.Inventory.Kg.Count > 0 ? new SortedDictionary<string, long>(c.Inventory.Kg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal) : null,
                     BuildQueue = c.BuildQueue.Count > 0
@@ -163,6 +176,20 @@ public static class SaveGameSerializer
             {
                 if (c.TargetCraftId != 0) sector.SetTargetCraft(new CraftId(c.Id), new CraftId(c.TargetCraftId));
                 if (c.DockedToCraftId != 0) sector.RestoreDock(new CraftId(c.Id), new CraftId(c.DockedToCraftId), c.DockPort);
+                var restored = sector.GetCraft(new CraftId(c.Id));
+                if (c.MiningRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has a drill remainder of {c.MiningRemainderKg} kg.");
+                restored.MiningRemainderKg = c.MiningRemainderKg;
+                if (c.Job is { } j)
+                {
+                    if (!catalog.Materials.Contains(j.MaterialId ?? "")) throw new FormatException($"Craft {c.Id} job mines unknown material '{j.MaterialId}'.");
+                    sector.GetBody(new BodyId(j.SourceBodyId));
+                    sector.GetCraft(new CraftId(j.DestinationId));
+                    sector.RestoreJob(restored.Id, new MiningJob(new BodyId(j.SourceBodyId), j.MaterialId!, new CraftId(j.DestinationId), j.ReturnFraction)
+                    {
+                        Active = j.Active, State = j.State, ResumeState = j.ResumeState, WaitReason = j.WaitReason,
+                        CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg,
+                    });
+                }
             }
 
             var player = new CraftId(file.PlayerCraftId);
@@ -188,7 +215,8 @@ public static class SaveGameSerializer
             foreach (var b in ready)
             {
                 var orbit = b.Orbit is { } o ? new CircularOrbit(new BodyId(o.ParentId), o.RadiusM, o.PeriodS, o.PhaseAtZeroRad) : null;
-                sector.AddBody(new CelestialBodyState(new BodyId(b.Id), b.Name ?? "", b.Kind, b.MassKg, b.DensityKgPerM3, b.IsMineable, orbit));
+                sector.AddBody(new CelestialBodyState(new BodyId(b.Id), b.Name ?? "", b.Kind, b.MassKg, b.DensityKgPerM3, b.IsMineable, orbit,
+                    b.DepositsKg));
                 added.Add(b.Id);
                 pending.Remove(b);
             }
@@ -220,7 +248,7 @@ public static class SaveGameSerializer
     private static Vector2D ToVec(VecDto? v, string what) =>
         v is null ? throw new FormatException($"Craft is missing {what}.") : new Vector2D(v.X, v.Y);
 
-    // --- File shape (schema 5). Change only together with SchemaVersion and docs/08. ---
+    // --- File shape (schema 6). Change only together with SchemaVersion and docs/08. ---
 
     private sealed class SaveFile
     {
@@ -248,6 +276,7 @@ public static class SaveGameSerializer
         public double DensityKgPerM3 { get; set; }
         public bool IsMineable { get; set; }
         public OrbitDto? Orbit { get; set; }
+        public SortedDictionary<string, long>? DepositsKg { get; set; }
     }
 
     private sealed class OrbitDto
@@ -274,9 +303,25 @@ public static class SaveGameSerializer
         public uint LandedOnBodyId { get; set; }
         public VecDto? LandedOffset { get; set; }
         public bool Anchored { get; set; }
+        public double MiningRemainderKg { get; set; }
+        public JobDto? Job { get; set; }
         public OrbitDto? RailOrbit { get; set; }
         public SortedDictionary<string, long>? InventoryKg { get; set; }
         public List<OrderDto>? BuildQueue { get; set; }
+    }
+
+    private sealed class JobDto
+    {
+        public uint SourceBodyId { get; set; }
+        public string? MaterialId { get; set; }
+        public uint DestinationId { get; set; }
+        public double ReturnFraction { get; set; }
+        public bool Active { get; set; }
+        public MiningJobState State { get; set; }
+        public MiningJobState ResumeState { get; set; }
+        public string? WaitReason { get; set; }
+        public int CompletedCycles { get; set; }
+        public long DeliveredKg { get; set; }
     }
 
     private sealed class OrderDto

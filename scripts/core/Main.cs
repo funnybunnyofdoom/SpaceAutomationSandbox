@@ -62,6 +62,7 @@ public partial class Main : Node2D
     private ShipyardPanel? _shipyardPanel;
     private FleetPanel? _fleetPanel;
     private CargoPanel? _cargoPanel;
+    private JobPanel? _jobPanel;
 
     private bool EditorOpen => _editor is { Visible: true };
 
@@ -89,6 +90,8 @@ public partial class Main : Node2D
             hudLayer.AddChild(_fleetPanel);
             _cargoPanel = new CargoPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
             hudLayer.AddChild(_cargoPanel);
+            _jobPanel = new JobPanel(() => _sector, () => _player) { Visible = false };
+            hudLayer.AddChild(_jobPanel);
         }
         // Continue where the player left off; a new game only if there's no usable save.
         if (_catalog != null && System.IO.File.Exists(SaveFilePath)) LoadGame(isStartup: true);
@@ -123,6 +126,15 @@ public partial class Main : Node2D
             ShowStatus(_sector.TryDock(_player.Id).Message);
             _sector.TryTransfer(dockYard.Id, _player.Id, "metal", 5_000);
         }
+        if (System.Array.IndexOf(args, "--demo-mine") >= 0 && _player != null
+            && _sector.Bodies.FirstOrDefault(b => b.IsMineable) is { } demoRock
+            && _sector.Crafts.FirstOrDefault(c => c.Stats.DockingPorts.Count > 0) is { } demoYard)
+        {
+            // Dev/test hook: start a metal job on the player's ship and fast-forward ~5 minutes (mid-mining).
+            ShowStatus(_sector.StartJob(_player.Id, new MiningJob(demoRock.Id, "metal", demoYard.Id, 0.25)).Message);
+            for (var i = 0; i < 300 * FixedStepClock.TicksPerSecond; i++) _sector.Step();
+        }
+        if (System.Array.IndexOf(args, "--open-job") >= 0) _jobPanel?.Open();
         if (System.Array.IndexOf(args, "--open-editor") >= 0) OpenEditor();
         if (System.Array.IndexOf(args, "--open-cargo") >= 0) _cargoPanel?.Open();
         if (System.Array.IndexOf(args, "--open-shipyard") >= 0) _shipyardPanel?.Open();
@@ -299,6 +311,9 @@ public partial class Main : Node2D
             case Key.F when _fleetPanel != null:
                 if (_fleetPanel.Visible) _fleetPanel.Visible = false; else _fleetPanel.Open();
                 break;
+            case Key.J when _jobPanel != null:
+                if (_jobPanel.Visible) _jobPanel.Visible = false; else _jobPanel.Open();
+                break;
             case Key.C when _cargoPanel != null:
                 if (_cargoPanel.Visible) _cargoPanel.Visible = false; else _cargoPanel.Open();
                 break;
@@ -309,6 +324,7 @@ public partial class Main : Node2D
                 if (_shipyardPanel != null) _shipyardPanel.Visible = false;
                 if (_fleetPanel != null) _fleetPanel.Visible = false;
                 if (_cargoPanel != null) _cargoPanel.Visible = false;
+                if (_jobPanel != null) _jobPanel.Visible = false;
                 break;
             case Key.F7: StartNewGame(); ShowStatus("New game. The save file is unchanged until you save or quit."); break;
             case Key.Tab when _player != null: CycleTarget(); break;
@@ -346,7 +362,8 @@ public partial class Main : Node2D
     {
         // Input is sampled once per frame and held for every tick run this frame.
         // No flying while the editor is open (typing a name must not fire thrusters).
-        if (_player != null) _player.Controls = EditorOpen ? ShipControls.Idle : ReadControls();
+        // A ship running a job is flown by it; the keyboard only flies ships without one.
+        if (_player is { IsAutomated: false }) _player.Controls = EditorOpen ? ShipControls.Idle : ReadControls();
 
         var ticks = _clock.Advance(delta);
         for (var i = 0; i < ticks; i++) _sector.Step();
@@ -367,7 +384,7 @@ public partial class Main : Node2D
 
     private string BuildHud()
     {
-        var text = "SpaceAutomationSandbox (working title) - Phase 2\n"
+        var text = "SpaceAutomationSandbox (working title) - Phase 3\n"
                    + $"seed {_sector.Seed}   tick {_sector.Tick} ({FixedStepClock.TicksPerSecond}/s)   t={_sector.TimeS:0.0}s"
                    + (_clock.DroppedTicks > 0 ? $"   dropped {_clock.DroppedTicks}" : "")
                    + $"   zoom {_pixelsPerMetre:0.###} px/m\n";
@@ -382,6 +399,12 @@ public partial class Main : Node2D
                 + (p.HasCargoLimit ? $"cargo {p.Inventory.TotalKg / 1000.0:0.0} / {p.CargoCapacityKg / 1000.0:0} t\n" : $"stores {p.Inventory.TotalKg / 1000.0:0.0} t\n")
                 + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
                 + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
+                + (p.Job is { Active: true } job
+                    ? $"AUTOPILOT (mining job): {job.Status}   cycles {job.CompletedCycles}, delivered {job.DeliveredKg / 1000.0:0.0} t - J to view/stop\n"
+                    : "")
+                + (_sector.MiningMaterial(p) is { } mining && p.FreeCargoKg > 0
+                    ? $"MINING {mining}: {p.Stats.MiningRateKgPerS:0} kg/s, {_sector.GetBody(p.LandedOnBodyId).Deposit(mining) / 1000.0:0.0} t left in {_sector.GetBody(p.LandedOnBodyId).Name}\n"
+                    : "")
                 + (p.IsLanded ? LandedLine(p) : "")
                 + (p.IsDocked
                     ? $"DOCKED at {_sector.GetCraft(p.DockedToCraftId).Name}, port {p.DockPortIndex + 1} - C cargo, K or thrust to undock\n"
@@ -421,7 +444,7 @@ public partial class Main : Node2D
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
                + "W/Up thrust   A/D turn   S/Space brake (matches target)   G anchor   K dock   Tab cycle target   T target nearest   wheel zoom\n"
-               + "B blueprint editor   Y shipyard   F fleet   C cargo   F6 save   F9 load   F7 new game   (closing the window autosaves)";
+               + "B blueprint editor   Y shipyard   F fleet   C cargo   J mining job   F6 save   F9 load   F7 new game   (closing the window autosaves)";
     }
 
     private string LandedLine(CraftState p)
