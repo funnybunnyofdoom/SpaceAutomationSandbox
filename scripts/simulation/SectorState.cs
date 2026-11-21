@@ -4,6 +4,12 @@ using System.Collections.Generic;
 namespace SpaceAutomationSandbox.Simulation;
 
 /// <summary>
+/// Craft-to-body relation. Surface distance is negative inside the body. Closing speed is
+/// positive while approaching. Relative speed is the full speed difference (0 = matched).
+/// </summary>
+public readonly record struct RelativeMotion(double SurfaceDistanceM, double RelativeSpeedMps, double ClosingSpeedMps);
+
+/// <summary>
 /// Authoritative state of one sector: its seed, the current tick and its bodies.
 /// No Godot types. Views read from this; they never own or mutate it directly.
 /// </summary>
@@ -63,11 +69,51 @@ public sealed class SectorState
     public CraftState GetCraft(CraftId id) =>
         _craftsById.TryGetValue(id, out var craft) ? craft : throw new KeyNotFoundException($"No {id} in sector.");
 
-    /// <summary>Advances the sector by exactly one fixed tick.</summary>
+    /// <summary>
+    /// Advances the sector by exactly one fixed tick. A craft's brake matches its target body's
+    /// velocity, sampled mid-tick so a held brake tracks a curving orbit closely.
+    /// </summary>
     public void Step()
     {
-        foreach (var craft in _crafts) FlightModel.Step(craft, FixedStepClock.TickSeconds);
+        var midTickS = TimeS + FixedStepClock.TickSeconds / 2;
+        foreach (var craft in _crafts)
+        {
+            var reference = craft.TargetBodyId.IsNone ? Vector2D.Zero : GetVelocityAt(craft.TargetBodyId, midTickS);
+            FlightModel.Step(craft, FixedStepClock.TickSeconds, reference);
+        }
         Tick++;
+    }
+
+    /// <summary>Sets what the craft's brake matches; <see cref="BodyId.None"/> means "stop relative to the sector".</summary>
+    public void SetTarget(CraftId craftId, BodyId target)
+    {
+        if (!target.IsNone) GetBody(target); // throws for unknown ids
+        GetCraft(craftId).TargetBodyId = target;
+    }
+
+    /// <summary>Body velocity in the sector frame (sum along its parent chain).</summary>
+    public Vector2D GetVelocityAt(BodyId id, double timeS)
+    {
+        var velocity = Vector2D.Zero;
+        var body = GetBody(id);
+        while (body.Orbit is { } orbit)
+        {
+            velocity += orbit.VelocityAt(timeS);
+            body = GetBody(orbit.Parent);
+        }
+        return velocity;
+    }
+
+    /// <summary>Craft motion relative to a body, at the current tick. For HUDs now, and for autopilots and jobs later.</summary>
+    public RelativeMotion GetRelativeMotion(CraftId craftId, BodyId bodyId)
+    {
+        var craft = GetCraft(craftId);
+        var body = GetBody(bodyId);
+        var offset = GetPosition(bodyId) - craft.Position;
+        var distance = offset.Length;
+        var relativeVelocity = craft.Velocity - GetVelocityAt(bodyId, TimeS);
+        var closing = distance > 0 ? (relativeVelocity.X * offset.X + relativeVelocity.Y * offset.Y) / distance : 0;
+        return new RelativeMotion(distance - body.RadiusM, relativeVelocity.Length, closing);
     }
 
     /// <summary>Body whose surface is closest to <paramref name="point"/>, with that surface distance (negative = inside).</summary>

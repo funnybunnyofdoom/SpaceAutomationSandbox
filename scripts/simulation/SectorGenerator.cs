@@ -28,7 +28,9 @@ public static class SectorGenerator
         var orbit = new CircularOrbit(
             planet.Id,
             RadiusM: rng.Range(22_000, 30_000),
-            PeriodS: rng.Range(180, 300),
+            // 20–40 min per orbit gives ~60–150 m/s and under 1 m/s² of curvature, so a starter
+            // ship (≈17 m/s²) can catch it and hold position with the brake. Was 3–5 min (too fast).
+            PeriodS: rng.Range(1_200, 2_400),
             PhaseAtZeroRad: rng.Range(0, 2 * Math.PI));
         sector.AddBody(new CelestialBodyState(
             sector.AllocateBodyId(), "Rock-1", BodyKind.Asteroid,

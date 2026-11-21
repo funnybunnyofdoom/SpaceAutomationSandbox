@@ -6,7 +6,8 @@ namespace SpaceAutomationSandbox.Simulation;
 /// PLACEHOLDER flight model for Phase 1 (docs/06): Newtonian inertia with no gravity, drag or
 /// collisions. Acceleration = total thrust / total mass along the nose. "Brake" is a flight assist
 /// that spends the same thrust directly against velocity, so the ship can stop without turning
-/// around. Turning is a fixed rate. No fuel or power is used yet. Stepped only by whole fixed ticks.
+/// around. With a target body set, braking matches the target's velocity instead (rendezvous assist).
+/// Turning is a fixed rate. No fuel or power is used yet. Stepped only by whole fixed ticks.
 /// </summary>
 public static class FlightModel
 {
@@ -16,7 +17,10 @@ public static class FlightModel
     public static Vector2D ForwardFromHeading(double headingRad) =>
         new(Math.Sin(headingRad), -Math.Cos(headingRad));
 
-    public static void Step(CraftState craft, double dt)
+    /// <param name="brakeReferenceVelocity">
+    /// Velocity the brake matches: the target body's velocity, or zero to stop relative to the sector.
+    /// </param>
+    public static void Step(CraftState craft, double dt, Vector2D brakeReferenceVelocity = default)
     {
         craft.PreviousPosition = craft.Position;
         craft.PreviousHeadingRad = craft.HeadingRad;
@@ -28,9 +32,12 @@ public static class FlightModel
         var velocity = craft.Velocity;
         if (controls.Brake)
         {
-            var speed = velocity.Length;
-            // Never overshoot into reverse: stop exactly when the remaining speed is below one tick of thrust.
-            velocity = speed <= maxDeltaV ? Vector2D.Zero : velocity * ((speed - maxDeltaV) / speed);
+            var relative = velocity - brakeReferenceVelocity;
+            var speed = relative.Length;
+            // Never overshoot: match exactly once the remaining difference is within one tick of thrust.
+            velocity = speed <= maxDeltaV
+                ? brakeReferenceVelocity
+                : brakeReferenceVelocity + relative * ((speed - maxDeltaV) / speed);
         }
         else if (controls.Throttle > 0)
         {

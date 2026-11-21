@@ -58,6 +58,9 @@ public sealed class CraftState
 
     public ShipControls Controls { get; set; } = ShipControls.Idle;
 
+    /// <summary>Body the brake matches velocity with. Set via <see cref="SectorState.SetTarget"/> so it's validated.</summary>
+    public BodyId TargetBodyId { get; internal set; } = BodyId.None;
+
     public double SpeedMps => Velocity.Length;
 
     public Vector2D Forward => FlightModel.ForwardFromHeading(HeadingRad);

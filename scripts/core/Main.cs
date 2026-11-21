@@ -34,6 +34,7 @@ public partial class Main : Node2D
     private static readonly Color NameColor = new(0.8f, 0.8f, 0.85f);
     private static readonly Color FlameColor = new(1f, 0.75f, 0.3f, 0.9f);
     private static readonly Color MarkerColor = new(0.4f, 1f, 0.6f);
+    private static readonly Color TargetLineColor = new(0.4f, 1f, 0.6f, 0.25f);
 
     private readonly FixedStepClock _clock = new();
     private readonly Dictionary<string, Color> _partColors = new();
@@ -82,6 +83,7 @@ public partial class Main : Node2D
             _player = new CraftState(_sector.AllocateCraftId(), "Player", design, design.ComputeStats(catalog),
                 SectorGenerator.PlayerSpawnPoint(_sector), headingRad: 0);
             _sector.AddCraft(_player);
+            _sector.SetTarget(_player.Id, _sector.NearestBody(_player.Position).Body.Id);
         }
         catch (System.Exception e) // bad or missing data file: show it instead of crashing
         {
@@ -98,6 +100,24 @@ public partial class Main : Node2D
             else if (mouse.ButtonIndex == MouseButton.WheelDown) _pixelsPerMetre /= ZoomStep;
             _pixelsPerMetre = Mathf.Clamp(_pixelsPerMetre, MinPixelsPerMetre, MaxPixelsPerMetre);
         }
+        else if (@event is InputEventKey { Pressed: true, Echo: false } key && _player != null)
+        {
+            if (key.PhysicalKeycode == Key.Tab) CycleTarget();
+            else if (key.PhysicalKeycode == Key.T)
+                _sector.SetTarget(_player.Id, _sector.NearestBody(_player.Position).Body.Id);
+        }
+    }
+
+    /// <summary>Tab order: each body by id, then "no target" (brake stops relative to the sector).</summary>
+    private void CycleTarget()
+    {
+        var bodies = _sector.Bodies;
+        var index = -1;
+        for (var i = 0; i < bodies.Count; i++)
+            if (bodies[i].Id == _player!.TargetBodyId) index = i;
+
+        var next = index + 1;
+        _sector.SetTarget(_player!.Id, next < bodies.Count ? bodies[next].Id : BodyId.None);
     }
 
     public override void _Process(double delta)
@@ -131,17 +151,34 @@ public partial class Main : Node2D
 
         if (_player is not { } p) return text + _setupError;
 
-        var (body, surface) = _sector.NearestBody(p.Position);
+        var (nearest, nearestSurface) = _sector.NearestBody(p.Position);
         var headingDeg = Mathf.PosMod(Mathf.RadToDeg((float)p.HeadingRad), 360f);
+        text += $"{p.Design.Name}: {p.Stats.TotalMassKg / 1000:0.0} t, {p.Stats.TotalThrustN / 1000:0} kN, "
+                + $"{p.Stats.MaxAccelerationMps2:0.0} m/s²   cargo cap {p.Stats.CargoCapacityKg / 1000:0} t\n"
+                + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
+                + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n";
+
+        if (p.TargetBodyId.IsNone)
+        {
+            text += "target: none - brake stops relative to the sector\n";
+        }
+        else
+        {
+            var target = _sector.GetBody(p.TargetBodyId);
+            var rel = _sector.GetRelativeMotion(p.Id, target.Id);
+            text += $"target: {Describe(target)}   surface {FormatDistance(rel.SurfaceDistanceM)}   "
+                    + $"rel speed {rel.RelativeSpeedMps:0.0} m/s   "
+                    + $"{(rel.ClosingSpeedMps >= 0 ? "closing" : "opening")} {System.Math.Abs(rel.ClosingSpeedMps):0.0} m/s"
+                    + (rel.RelativeSpeedMps < 0.5 ? "   [MATCHED]" : "") + "\n";
+        }
+
         return text
-               + $"{p.Design.Name}: {p.Stats.TotalMassKg / 1000:0.0} t, {p.Stats.TotalThrustN / 1000:0} kN, "
-               + $"{p.Stats.MaxAccelerationMps2:0.0} m/s²   cargo cap {p.Stats.CargoCapacityKg / 1000:0} t\n"
-               + $"speed {p.SpeedMps:0.0} m/s   heading {headingDeg:000}°   "
-               + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
-               + $"nearest: {body.Name} ({body.Kind}{(body.IsMineable ? ", mineable" : "")})   "
-               + $"surface {FormatDistance(surface)}\n"
-               + "W/Up thrust   A/D turn   S/Space brake   mouse wheel zoom";
+               + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
+               + "W/Up thrust   A/D turn   S/Space brake (matches target)   Tab cycle target   T target nearest   wheel zoom";
     }
+
+    private static string Describe(CelestialBodyState body) =>
+        $"{body.Name} ({body.Kind}{(body.IsMineable ? ", mineable" : "")})";
 
     private static string FormatDistance(double metres) =>
         System.Math.Abs(metres) >= 1000 ? $"{metres / 1000:0.00} km" : $"{metres:0} m";
@@ -153,7 +190,23 @@ public partial class Main : Node2D
         // Interpolated time: smooth motion between 20 Hz ticks without touching the state.
         var renderTimeS = (_sector.Tick + _clock.Alpha) * FixedStepClock.TickSeconds;
         foreach (var body in _sector.Bodies) DrawBody(body, renderTimeS);
+        if (_player is { TargetBodyId.IsNone: false }) DrawTargetMarker(_player, renderTimeS);
         foreach (var craft in _sector.Crafts) DrawCraft(craft);
+    }
+
+    // Bracket ring around the target plus a faint line from the ship, so it can be found off-screen.
+    private void DrawTargetMarker(CraftState craft, double renderTimeS)
+    {
+        var target = _sector.GetBody(craft.TargetBodyId);
+        var centre = ToPixels(_sector.GetPositionAt(target.Id, renderTimeS));
+        var radiusPx = Mathf.Max(2f, (float)target.RadiusM * _pixelsPerMetre) + 6f;
+
+        DrawLine(ToPixels(InterpolatedPosition(craft)), centre, TargetLineColor, 1f);
+        for (var i = 0; i < 4; i++) // four corner arcs
+        {
+            var start = Mathf.Tau * i / 4 + Mathf.Pi / 8;
+            DrawArc(centre, radiusPx, start, start + Mathf.Pi / 4, 16, MarkerColor, 2f);
+        }
     }
 
     private void DrawBody(CelestialBodyState body, double renderTimeS)
