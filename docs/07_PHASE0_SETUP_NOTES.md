@@ -13,7 +13,7 @@ What the agent actually found and decided while bootstrapping. PC-side checks we
 | Godot C# SDK | `Godot.NET.Sdk.4.7.2.nupkg`; runtime config `tfm: net8.0` | `GodotSharp\Tools\nupkgs`, `GodotSharp\Api\Release\GodotPlugins.runtimeconfig.json` |
 | Godot version | `4.7.2.stable.mono.official.ed1daf0bf` | `Godot_v4.7.2-stable_mono_win64_console.exe --version` |
 | Pixelorama | `C:\dev\Tools\Pixelorama\Pixelorama.exe`, file version `1.2.3.0` | exe `VersionInfo.ProductVersion` |
-| .NET SDKs | `C:\Program Files\dotnet\dotnet.exe`; SDKs 5.0.301, 6.0.402, 7.0.407, 8.0.203, 9.0.305, 10.0.401. No `global.json`, so `dotnet build` uses **10.0.401** to build the `net8.0` target | `dotnet --list-sdks`, `dotnet --version` |
+| .NET SDKs | `C:\Program Files\dotnet\dotnet.exe`; SDKs 5.0.301, 6.0.402, 7.0.407, 8.0.203, 9.0.305, 10.0.401. No `global.json` at the time, so `dotnet build` used **10.0.401** to build the `net8.0` target. *(2026-11-21: `global.json` now pins 10.0.401 with `rollForward: latestFeature`, #48.)* | `dotnet --list-sdks`, `dotnet --version` |
 | Git | `git version 2.56.0.windows.4` | `git --version` |
 | VS Code | `1.142.0` (`code` on PATH) | `code --version` |
 | Shell used by the script | Windows PowerShell 5.1.22621.6133 | transcript header |

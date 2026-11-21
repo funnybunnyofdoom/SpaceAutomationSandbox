@@ -152,7 +152,9 @@ public class BlueprintEditorTests
     [InlineData("My Ship", "my_ship")]
     [InlineData("  Ore--Hauler  #3 ", "ore_hauler_3")]
     [InlineData("!!!", "design")]
-    [InlineData("ÜberMiner", "berminer")] // non-ASCII letters are dropped for now: simple and file-system safe
+    [InlineData("ÜberMiner", "uberminer")] // accents are removed, not the letters
+    [InlineData("Straße Æther Ørn", "strasse_aether_orn")]
+    [InlineData("日本", "design")] // scripts without a Latin transliteration still fall back
     public void SlugFromName_IsFileSafe(string name, string expected)
     {
         Assert.Equal(expected, BlueprintEditor.SlugFromName(name));

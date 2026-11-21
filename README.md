@@ -4,7 +4,7 @@ A 2D top-down pixel-art space construction and automation sandbox: build ships a
 
 This is a **separate project** from Agrigeddon. It shares the toolchain (Godot .NET/C#, Pixelorama, VS Code, Git) but no code, assets, settings or repository.
 
-**Status:** Phase 1 in progress. A fixed-step simulation runs a seeded two-body sector and a player ship built from the grid design in `data/blueprints/starter_ship.json`. Controls: **W/Up** thrust, **A/D** turn, **S/Space** brake (matches the target's velocity), **G** anchor/release while landed, **K** dock/undock (Tab can target stations), **C** cargo while docked, **J** job: mining or freight (automates the ship you're flying), **F3** debug menu (game speed, rate multipliers, cheats), **Tab** cycle target, **T** target the nearest body, **mouse wheel** zoom, **B** blueprint editor, **Y** shipyard (order ships), **F** fleet list (pick which ship to fly), **F6** save, **F9** load, **F7** new game. Closing the window autosaves, and the game resumes the save at startup (see `docs/08_SAVE_FORMAT.md`). Bodies are solid: touching one lands the ship, and thrusting away lifts it off. Three asteroids hold iron ore, silicate and copper ore; fly a ship within 2 km of one to survey it. Mining jobs deliver ore, freight jobs move goods between stations, and station refineries turn ore into metal, composites and electronics (plus slag), so every ship material can be produced. See `docs/04_PHASES_AND_ACCEPTANCE.md`.
+**Status:** Phase 1 in progress. A fixed-step simulation runs a seeded two-body sector and a player ship built from the grid design in `data/blueprints/starter_ship.json`. Controls: **W/Up** thrust, **A/D** turn, **S/Space** brake (matches the target's velocity), **G** anchor/release while landed, **K** dock/undock (Tab can target stations), **C** cargo while docked, **J** job: mining or freight (automates the ship you're flying), **F3** debug menu (game speed, rate multipliers, cheats), **F** fleet manager (search, filter, sort, Fly/Target), **Tab** cycle target, **T** target the nearest body, **mouse wheel** zoom, **B** blueprint editor, **Y** shipyard (order ships), **F** fleet list (pick which ship to fly), **F6** save, **F9** load, **F7** new game. Closing the window autosaves, and the game resumes the save at startup (see `docs/08_SAVE_FORMAT.md`). Bodies are solid: touching one lands the ship, and thrusting away lifts it off. Three asteroids hold iron ore, silicate and copper ore; fly a ship within 2 km of one to survey it. Mining jobs deliver ore, freight jobs move goods between stations, and station refineries turn ore into metal, composites and electronics (plus slag), so every ship material can be produced. See `docs/04_PHASES_AND_ACCEPTANCE.md`.
 
 ## Toolchain (found on this PC during Phase 0)
 
@@ -29,10 +29,16 @@ This is a **separate project** from Agrigeddon. It shares the toolchain (Godot .
    Add `-Commit` to also make the local baseline commit. No remote is created or pushed.
 3. Open the project in the Godot editor (Project Manager > Import > this folder's `project.godot`) and press **F5**. You should see a dark starfield with a "Phase 0 bootstrap OK" label.
 
+Controls are Godot input actions (see `scripts/core/InputActions.cs`): rebind them by defining the same action names in Project Settings → Input Map. A gamepad works too (right trigger thrust, left stick turn, left trigger brake).
+
+## Export
+
+`export_presets.cfg` has a Windows Desktop preset that packs the `data/*.json` files. Export from the Godot editor (Project → Export) or with `godot --headless --path . --export-release "Windows Desktop" builds/windows/SpaceAutomationSandbox.exe`. The `builds/` folder is git-ignored. This needs Godot's export templates (4.7.2 mono).
+
 ## Daily loop
 
 ```powershell
-dotnet build          # or Ctrl+Shift+B in VS Code
+dotnet build SpaceAutomationSandbox.csproj   # or Ctrl+Shift+B in VS Code (the root also holds a .sln, so name the project)
 dotnet test tests/Simulation.Tests   # pure C# simulation tests (VS Code task: test)
 # Godot: F5 to test
 git status --short    # review, then commit/push only when you decide to

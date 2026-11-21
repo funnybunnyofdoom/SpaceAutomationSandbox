@@ -212,35 +212,77 @@ public sealed partial class SectorState
         return centre + unit * (body.RadiusM + craft.CollisionRadiusM + altitudeM);
     }
 
+    /// <summary>Seconds ahead the autopilot looks for an impact along its current velocity.</summary>
+    public const double JobImpactHorizonS = 6;
+
     /// <summary>
-    /// Approach a goal, detouring around the first body (other than <paramref name="ignore"/>) whose
-    /// surface the straight path would pass too close to: circle the body high above its surface in
-    /// steps of at most 45° towards the goal's side, until the straight line is clear (re-checked
-    /// every tick). Goals hugging a body (a low station) are reached from directly above.
+    /// Approach a goal safely:
+    /// 1. If the ship's current velocity would hit a body other than <paramref name="ignore"/> within
+    ///    <see cref="JobImpactHorizonS"/>, thrust straight away from that body first (#41).
+    /// 2. If the straight path to the goal passes too close to a body, circle it high above its surface:
+    ///    aim for a waypoint up to 45° further round, choosing the biggest step whose own path is clear
+    ///    (down to straight up, which always is), re-checked every tick.
+    /// 3. Otherwise fly straight at the goal.
     /// </summary>
     private ShipControls NavigateTo(CraftState craft, Vector2D goal, Vector2D goalVelocity, BodyId ignore, double maxSpeed, double arrivalSpeed)
     {
-        var path = goal - craft.Position;
-        var length = path.Length;
-        if (length > 1e-6)
+        foreach (var body in _bodies.Where(b => b.Id != ignore))
         {
-            var dir = path * (1 / length);
-            foreach (var body in _bodies.Where(b => b.Id != ignore))
+            var centre = GetPosition(body.Id);
+            var relative = craft.Velocity - GetVelocityAt(body.Id, TimeS);
+            if (WillHit(craft.Position, relative, centre, body.RadiusM + craft.CollisionRadiusM + 20, JobImpactHorizonS))
             {
-                var centre = GetPosition(body.Id);
-                var along = Math.Clamp((centre.X - craft.Position.X) * dir.X + (centre.Y - craft.Position.Y) * dir.Y, 0, length);
-                var closest = craft.Position + dir * along;
-                if (closest.DistanceTo(centre) >= body.RadiusM + craft.CollisionRadiusM + JobAvoidClearanceM) continue;
-
-                var fromAngle = Math.Atan2(craft.Position.Y - centre.Y, craft.Position.X - centre.X);
-                var toAngle = Math.Atan2(goal.Y - centre.Y, goal.X - centre.X);
-                var turn = FlightModel.WrapAngle(toAngle - fromAngle);
-                var step = Math.Sign(turn) * Math.Min(Math.Abs(turn), Math.PI / 4);
-                var radius = body.RadiusM + JobDetourAltitudeM;
-                var waypoint = centre + new Vector2D(Math.Cos(fromAngle + step) * radius, Math.Sin(fromAngle + step) * radius);
-                return Autopilot.Approach(craft, waypoint, GetVelocityAt(body.Id, TimeS), maxSpeed, arrivalSpeed: 40);
+                var away = craft.Position - centre;
+                return Autopilot.ThrustAlong(craft, away * (1 / Math.Max(away.Length, 1e-9)));
             }
         }
+
+        foreach (var body in _bodies.Where(b => b.Id != ignore))
+        {
+            var centre = GetPosition(body.Id);
+            var clearance = body.RadiusM + craft.CollisionRadiusM + JobAvoidClearanceM;
+            if (SegmentClears(craft.Position, goal, centre, clearance)) continue;
+
+            var fromAngle = Math.Atan2(craft.Position.Y - centre.Y, craft.Position.X - centre.X);
+            var toAngle = Math.Atan2(goal.Y - centre.Y, goal.X - centre.X);
+            var turn = FlightModel.WrapAngle(toAngle - fromAngle);
+            var radius = body.RadiusM + JobDetourAltitudeM;
+            var waypoint = centre + new Vector2D(Math.Cos(fromAngle) * radius, Math.Sin(fromAngle) * radius); // straight up: always clear
+            foreach (var maxStep in new[] { Math.PI / 4, Math.PI / 6, Math.PI / 9, Math.PI / 18 })
+            {
+                var step = Math.Sign(turn) * Math.Min(Math.Abs(turn), maxStep);
+                var candidate = centre + new Vector2D(Math.Cos(fromAngle + step) * radius, Math.Sin(fromAngle + step) * radius);
+                if (!SegmentClears(craft.Position, candidate, centre, body.RadiusM + craft.CollisionRadiusM + 100)) continue;
+                waypoint = candidate;
+                break;
+            }
+            // Brake against the body being circled (the waypoint moves with it), not the far-off goal:
+            // matching the goal's velocity here could point the ship straight into this body (#41).
+            // The job sets its real target again on the next tick.
+            SetTarget(craft.Id, body.Id);
+            return Autopilot.Approach(craft, waypoint, GetVelocityAt(body.Id, TimeS), maxSpeed, arrivalSpeed: 40);
+        }
         return Autopilot.Approach(craft, goal, goalVelocity, maxSpeed, arrivalSpeed);
+    }
+
+    /// <summary>Does the segment a→b stay at least <paramref name="minDistance"/> from <paramref name="centre"/>?</summary>
+    private static bool SegmentClears(Vector2D a, Vector2D b, Vector2D centre, double minDistance)
+    {
+        var ab = b - a;
+        var lengthSq = ab.X * ab.X + ab.Y * ab.Y;
+        var t = lengthSq > 1e-12 ? Math.Clamp(((centre.X - a.X) * ab.X + (centre.Y - a.Y) * ab.Y) / lengthSq, 0, 1) : 0;
+        return (a + ab * t).DistanceTo(centre) >= minDistance;
+    }
+
+    /// <summary>Moving at <paramref name="relativeVelocity"/>, does the ship come within <paramref name="radius"/> of the centre in the next <paramref name="horizonS"/>?</summary>
+    private static bool WillHit(Vector2D position, Vector2D relativeVelocity, Vector2D centre, double radius, double horizonS)
+    {
+        var toCentre = centre - position;
+        var speedSq = relativeVelocity.X * relativeVelocity.X + relativeVelocity.Y * relativeVelocity.Y;
+        if (speedSq < 1e-9) return false;
+        var tClosest = (toCentre.X * relativeVelocity.X + toCentre.Y * relativeVelocity.Y) / speedSq;
+        if (tClosest <= 0) return false; // moving away
+        var t = Math.Min(tClosest, horizonS);
+        return (position + relativeVelocity * t).DistanceTo(centre) < radius;
     }
 }

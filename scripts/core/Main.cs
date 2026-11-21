@@ -74,6 +74,7 @@ public partial class Main : Node2D
 
     public override void _Ready()
     {
+        InputActions.EnsureDefaults(); // before any input is read
         RenderingServer.SetDefaultClearColor(SpaceColor);
         _camera = GetNode<Camera2D>("Camera2D");
 
@@ -93,6 +94,12 @@ public partial class Main : Node2D
             hudLayer.AddChild(_shipyardPanel);
             _fleetPanel = new FleetPanel(() => _sector, () => _player?.Id) { Visible = false };
             _fleetPanel.CraftChosen += Pilot;
+            _fleetPanel.CraftTargeted += target =>
+            {
+                if (_player == null || target == _player.Id) return;
+                _sector.SetTargetCraft(_player.Id, target);
+                ShowStatus($"Target: {_sector.GetCraft(target).Name}.");
+            };
             hudLayer.AddChild(_fleetPanel);
             _cargoPanel = new CargoPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
             hudLayer.AddChild(_cargoPanel);
@@ -299,10 +306,13 @@ public partial class Main : Node2D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        // Named actions (InputActions), so bindings can change; Echo is ignored for one-shot actions.
+        bool Pressed(string action) => @event.IsActionPressed(action, allowEcho: false);
+
         if (EditorOpen)
         {
-            // The editor owns input while open; only its close keys reach here.
-            if (@event is InputEventKey { Pressed: true, Echo: false, PhysicalKeycode: Key.B or Key.Escape })
+            // The editor owns input while open; only its close actions reach here.
+            if (Pressed(InputActions.Editor) || Pressed(InputActions.ClosePanels))
             {
                 CloseEditor();
                 GetViewport().SetInputAsHandled();
@@ -311,54 +321,41 @@ public partial class Main : Node2D
         }
         // The side panels don't take keyboard focus, so flying continues while they're open.
 
-        if (@event is InputEventMouseButton { Pressed: true } mouse)
+        if (Pressed(InputActions.ZoomIn) || Pressed(InputActions.ZoomOut))
         {
-            if (mouse.ButtonIndex == MouseButton.WheelUp) _pixelsPerMetre *= ZoomStep;
-            else if (mouse.ButtonIndex == MouseButton.WheelDown) _pixelsPerMetre /= ZoomStep;
-            _pixelsPerMetre = Mathf.Clamp(_pixelsPerMetre, MinPixelsPerMetre, MaxPixelsPerMetre);
-            return;
+            _pixelsPerMetre = Mathf.Clamp(Pressed(InputActions.ZoomIn) ? _pixelsPerMetre * ZoomStep : _pixelsPerMetre / ZoomStep,
+                MinPixelsPerMetre, MaxPixelsPerMetre);
         }
-        if (@event is not InputEventKey { Pressed: true, Echo: false } key) return;
+        else if (Pressed(InputActions.QuickSave)) SaveGame();
+        else if (Pressed(InputActions.QuickLoad)) LoadGame(isStartup: false);
+        else if (Pressed(InputActions.NewGame)) { StartNewGame(); ShowStatus("New game. The save file is unchanged until you save or quit."); }
+        else if (Pressed(InputActions.Editor)) OpenEditor();
+        else if (Pressed(InputActions.Shipyard)) Toggle(_shipyardPanel, () => _shipyardPanel!.Open());
+        else if (Pressed(InputActions.Fleet)) Toggle(_fleetPanel, () => _fleetPanel!.Open());
+        else if (Pressed(InputActions.Debug)) Toggle(_debugPanel, () => _debugPanel!.Open());
+        else if (Pressed(InputActions.Job)) Toggle(_jobPanel, () => _jobPanel!.Open());
+        else if (Pressed(InputActions.Cargo)) Toggle(_cargoPanel, () => _cargoPanel!.Open());
+        else if (Pressed(InputActions.ClosePanels))
+        {
+            foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel })
+                if (panel != null) panel.Visible = false;
+        }
+        else if (_player == null) return;
+        else if (Pressed(InputActions.Dock))
+            ShowStatus((_player.IsDocked ? _sector.TryUndock(_player.Id) : _sector.TryDock(_player.Id)).Message);
+        else if (Pressed(InputActions.Anchor))
+            ShowStatus((_player.IsAnchored ? _sector.TryRelease(_player.Id) : _sector.TryAnchor(_player.Id)).Message);
+        else if (Pressed(InputActions.TargetCycle)) CycleTarget();
+        else if (Pressed(InputActions.TargetNearest)) _sector.SetTarget(_player.Id, _sector.NearestBody(_player.Position).Body.Id);
+        else return;
+        GetViewport().SetInputAsHandled();
+    }
 
-        switch (key.PhysicalKeycode)
-        {
-            case Key.F6: SaveGame(); break;
-            case Key.F9: LoadGame(isStartup: false); break;
-            case Key.B: OpenEditor(); break;
-            case Key.Y when _shipyardPanel != null:
-                if (_shipyardPanel.Visible) _shipyardPanel.Visible = false; else _shipyardPanel.Open();
-                break;
-            case Key.F when _fleetPanel != null:
-                if (_fleetPanel.Visible) _fleetPanel.Visible = false; else _fleetPanel.Open();
-                break;
-            case Key.F3 when _debugPanel != null:
-                if (_debugPanel.Visible) _debugPanel.Visible = false; else _debugPanel.Open();
-                break;
-            case Key.J when _jobPanel != null:
-                if (_jobPanel.Visible) _jobPanel.Visible = false; else _jobPanel.Open();
-                break;
-            case Key.C when _cargoPanel != null:
-                if (_cargoPanel.Visible) _cargoPanel.Visible = false; else _cargoPanel.Open();
-                break;
-            case Key.K when _player != null:
-                ShowStatus((_player.IsDocked ? _sector.TryUndock(_player.Id) : _sector.TryDock(_player.Id)).Message);
-                break;
-            case Key.Escape:
-                if (_shipyardPanel != null) _shipyardPanel.Visible = false;
-                if (_fleetPanel != null) _fleetPanel.Visible = false;
-                if (_cargoPanel != null) _cargoPanel.Visible = false;
-                if (_jobPanel != null) _jobPanel.Visible = false;
-                if (_debugPanel != null) _debugPanel.Visible = false;
-                break;
-            case Key.F7: StartNewGame(); ShowStatus("New game. The save file is unchanged until you save or quit."); break;
-            case Key.Tab when _player != null: CycleTarget(); break;
-            case Key.G when _player != null:
-                ShowStatus((_player.IsAnchored ? _sector.TryRelease(_player.Id) : _sector.TryAnchor(_player.Id)).Message);
-                break;
-            case Key.T when _player != null:
-                _sector.SetTarget(_player.Id, _sector.NearestBody(_player.Position).Body.Id);
-                break;
-        }
+    private static void Toggle(Control? panel, System.Action open)
+    {
+        if (panel == null) return;
+        if (panel.Visible) panel.Visible = false;
+        else open();
     }
 
     /// <summary>
@@ -399,13 +396,11 @@ public partial class Main : Node2D
         QueueRedraw();
     }
 
-    // Raw keys for now; move to InputMap actions when rebinding or gamepads are needed.
+    // Input actions (keyboard or gamepad; trigger and stick are analog).
     private static ShipControls ReadControls()
     {
-        static bool Down(Key a, Key b) => Input.IsPhysicalKeyPressed(a) || Input.IsPhysicalKeyPressed(b);
-        var throttle = Down(Key.W, Key.Up) ? 1.0 : 0.0;
-        var turn = (Down(Key.D, Key.Right) ? 1.0 : 0.0) - (Down(Key.A, Key.Left) ? 1.0 : 0.0);
-        return new ShipControls(throttle, turn, Down(Key.S, Key.Down) || Input.IsPhysicalKeyPressed(Key.Space));
+        var (throttle, turn, brake) = InputActions.ReadFlight();
+        return new ShipControls(throttle, turn, brake);
     }
 
     private string BuildHud()

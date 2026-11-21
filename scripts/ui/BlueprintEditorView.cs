@@ -46,11 +46,7 @@ public partial class BlueprintEditorView : Control
         _colors = colors;
         _currentShipDesign = currentShipDesign;
         _model = new BlueprintEditor(catalog);
-        // Stable palette order: the order parts appear in parts.json would be nicer, but the catalog is a set.
-        _palette = new[] { "hull", "cockpit", "thruster", "battery", "cargo", "drill" }
-            .Where(id => catalog.TryGet(id, out _)).Select(catalog.Get)
-            .Concat(catalog.Parts.Where(p => p.Id is not ("hull" or "cockpit" or "thruster" or "battery" or "cargo" or "drill")).OrderBy(p => p.Id))
-            .ToList();
+        _palette = catalog.Parts.ToList(); // the order of data/parts/parts.json
         _selectedPart = _palette.FirstOrDefault()?.Id;
         Build();
     }
@@ -94,7 +90,14 @@ public partial class BlueprintEditorView : Control
         var left = new VBoxContainer { CustomMinimumSize = new Vector2(230, 0) };
         columns.AddChild(left);
         left.AddChild(Heading("BLUEPRINT EDITOR"));
-        left.AddChild(new Label { Text = "Parts (keys 1-9)" });
+        left.AddChild(new Label { Text = "Parts (1-9, 0; Shift for 11+)" });
+        var paletteScroll = new ScrollContainer
+        {
+            SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+        };
+        left.AddChild(paletteScroll);
+        var paletteList = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        paletteScroll.AddChild(paletteList);
         var group = new ButtonGroup();
         for (var i = 0; i < _palette.Count; i++)
         {
@@ -108,7 +111,7 @@ public partial class BlueprintEditorView : Control
             });
             var button = new Button
             {
-                Text = $"{i + 1}  {part.Name}  {part.MassKg / 1000:0.#} t{PartSummary(part)}",
+                Text = $"{KeyLabel(i)}  {part.Name}  {part.MassKg / 1000:0.#} t{PartSummary(part)}",
                 ToggleMode = true,
                 ButtonGroup = group,
                 ButtonPressed = part.Id == _selectedPart,
@@ -120,7 +123,7 @@ public partial class BlueprintEditorView : Control
             button.Pressed += () => _selectedPart = id;
             _paletteButtons.Add(button);
             row.AddChild(button);
-            left.AddChild(row);
+            paletteList.AddChild(row);
         }
         left.AddChild(new Label
         {
@@ -177,6 +180,16 @@ public partial class BlueprintEditorView : Control
         });
     }
 
+    /// <summary>Key hint for palette slot <paramref name="index"/>: 1–9, 0, then ⇧1–⇧0, then none.</summary>
+    private static string KeyLabel(int index) => index switch
+    {
+        < 9 => $"{index + 1}",
+        9 => "0",
+        < 19 => $"⇧{index - 9}",
+        19 => "⇧0",
+        _ => " ",
+    };
+
     private static string PartSummary(PartDefinition p) =>
         p.ThrustN > 0 ? $", {p.ThrustN / 1000:0} kN"
         : p.CargoCapacityKg > 0 ? $", {p.CargoCapacityKg / 1000:0} t cargo"
@@ -205,9 +218,11 @@ public partial class BlueprintEditorView : Control
         if (key.CtrlPressed && key.PhysicalKeycode == Key.Z) { if (_model.Undo()) Refresh(); }
         else if (key.PhysicalKeycode == Key.R && !key.CtrlPressed) { _rotation = (_rotation + 1) % 4; _grid.QueueRedraw(); }
         else if (key.CtrlPressed && key.PhysicalKeycode == Key.S) Save();
-        else if (key.PhysicalKeycode is >= Key.Key1 and <= Key.Key9 && !key.CtrlPressed)
+        else if (key.PhysicalKeycode is >= Key.Key0 and <= Key.Key9 && !key.CtrlPressed)
         {
-            var index = (int)(key.PhysicalKeycode - Key.Key1);
+            // 1..9 then 0 pick parts 1–10; with Shift, parts 11–20.
+            var digit = key.PhysicalKeycode == Key.Key0 ? 10 : (int)(key.PhysicalKeycode - Key.Key0);
+            var index = digit - 1 + (key.ShiftPressed ? 10 : 0);
             if (index >= _palette.Count) return;
             _selectedPart = _palette[index].Id;
             _paletteButtons[index].ButtonPressed = true;

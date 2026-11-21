@@ -12,8 +12,8 @@ namespace SpaceAutomationSandbox.Construction;
 /// </summary>
 public sealed class BlueprintEditor
 {
-    /// <summary>Editable area is (2*HalfExtent+1) cells square around the origin. Placeholder limit.</summary>
-    public const int HalfExtent = 7;
+    /// <summary>Editable area is (2*HalfExtent+1) cells square around the origin (21×21). Placeholder limit.</summary>
+    public const int HalfExtent = 10;
 
     private const int MaxUndo = 200;
 
@@ -183,11 +183,14 @@ public sealed class BlueprintEditor
         return groups;
     }
 
-    /// <summary>Lower-case letters, digits and underscores, max 40 chars; "design" if nothing is left.</summary>
+    /// <summary>
+    /// Lower-case letters, digits and underscores, max 40 chars; "design" if nothing is left.
+    /// Accented letters become plain ones (Ü → u, é → e, ß → ss) instead of being dropped.
+    /// </summary>
     public static string SlugFromName(string name)
     {
         var sb = new StringBuilder();
-        foreach (var ch in (name ?? "").Trim().ToLowerInvariant())
+        foreach (var ch in Transliterate((name ?? "").Trim().ToLowerInvariant()))
         {
             if (ch is >= 'a' and <= 'z' or >= '0' and <= '9') sb.Append(ch);
             else if (sb.Length > 0 && sb[^1] != '_') sb.Append('_');
@@ -195,6 +198,18 @@ public sealed class BlueprintEditor
         var slug = sb.ToString().Trim('_');
         if (slug.Length > 40) slug = slug[..40].TrimEnd('_');
         return slug.Length == 0 ? "design" : slug;
+    }
+
+    private static string Transliterate(string text)
+    {
+        var sb = new StringBuilder();
+        // Decompose (é → e + ´) and drop the accent marks; a few letters have no decomposition.
+        foreach (var ch in text.Normalize(System.Text.NormalizationForm.FormD))
+        {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
+            sb.Append(ch switch { 'ß' => "ss", 'æ' => "ae", 'œ' => "oe", 'ø' => "o", 'đ' => "d", 'ł' => "l", 'þ' => "th", _ => ch.ToString() });
+        }
+        return sb.ToString();
     }
 
     private void Change(Action apply)

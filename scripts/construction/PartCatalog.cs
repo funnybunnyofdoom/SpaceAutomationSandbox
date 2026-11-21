@@ -59,6 +59,7 @@ public sealed class PartCatalog
     };
 
     private readonly Dictionary<string, PartDefinition> _parts;
+    private readonly List<PartDefinition> _ordered = new();
 
     public PartCatalog(IEnumerable<PartDefinition> parts, MaterialCatalog materials, RecipeCatalog? recipes = null)
     {
@@ -74,6 +75,7 @@ public sealed class PartCatalog
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
             ValidateMaterials(part, materials);
             if (!_parts.TryAdd(part.Id, part)) throw new FormatException($"Duplicate part id '{part.Id}'.");
+            _ordered.Add(part);
         }
     }
 
@@ -98,7 +100,8 @@ public sealed class PartCatalog
             throw new FormatException($"Part '{part.Id}' weighs {part.MassKg} kg but its materials add up to {sum} kg.");
     }
 
-    public IReadOnlyCollection<PartDefinition> Parts => _parts.Values;
+    /// <summary>All parts in file order (the editor palette uses this order).</summary>
+    public IReadOnlyList<PartDefinition> Parts => _ordered;
 
     public bool TryGet(string id, out PartDefinition part) => _parts.TryGetValue(id, out part!);
 

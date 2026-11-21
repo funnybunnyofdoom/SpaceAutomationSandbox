@@ -12,7 +12,7 @@ namespace SpaceAutomationSandbox.UI;
 /// </summary>
 public partial class BlueprintGridCanvas : Control
 {
-    public const int CellPx = 32;
+    public const int CellPx = 26; // 21 cells fit beside the palette and the stats panel
     private const int H = BlueprintEditor.HalfExtent;
     private const int Side = (2 * H + 1) * CellPx;
 
