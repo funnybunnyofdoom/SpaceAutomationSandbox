@@ -1,0 +1,18 @@
+{
+  // Debug C# by launching the game through the Godot .NET editor binary.
+  // Requires the GODOT4 environment variable and the C# extension (ms-dotnettools.csharp).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Play main scene (debug C#)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${env:GODOT4}",
+      "args": ["--path", "${workspaceFolder}"],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    }
+  ]
+}

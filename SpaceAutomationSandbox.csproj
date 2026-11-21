@@ -1,0 +1,15 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <!--
+    SDK version matches the installed editor: C:\dev\Tools\Godot\Godot_v4.7.2-stable_mono_win64.exe
+    (GodotSharp\Tools\nupkgs\Godot.NET.Sdk.4.7.2.nupkg). Target framework net8.0 matches
+    GodotSharp\Api\Release\GodotPlugins.runtimeconfig.json ("tfm": "net8.0").
+    If the editor regenerates this file, prefer the editor's version and keep RootNamespace/Nullable.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>SpaceAutomationSandbox</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+</Project>

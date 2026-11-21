@@ -1,0 +1,23 @@
+# Godot-generated data
+.godot/
+/android/
+# .NET build outputs
+**/bin/
+**/obj/
+# Local editor and tooling caches (selected shared VS Code files are re-included below)
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.vs/
+*.user
+*.suo
+# OS files
+Thumbs.db
+.DS_Store
+desktop.ini
+# Logs and local outputs
+*.log
+_temp/

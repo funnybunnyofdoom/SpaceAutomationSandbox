@@ -1,0 +1,14 @@
+# Normalize text line endings in the repo; Godot and C# tools handle LF fine on Windows.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+
+# Binary art and media: never diff or convert
+*.png binary
+*.pxo binary
+*.ase binary
+*.aseprite binary
+*.wav binary
+*.ogg binary
+*.mp3 binary
+*.ttf binary
+*.otf binary
