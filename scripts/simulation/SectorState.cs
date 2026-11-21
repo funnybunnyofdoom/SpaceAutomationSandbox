@@ -13,7 +13,7 @@ public readonly record struct RelativeMotion(double SurfaceDistanceM, double Rel
 /// Authoritative state of one sector: its seed, the current tick and its bodies.
 /// No Godot types. Views read from this; they never own or mutate it directly.
 /// </summary>
-public sealed class SectorState
+public sealed partial class SectorState
 {
     private readonly List<CelestialBodyState> _bodies = new();
     private readonly Dictionary<BodyId, CelestialBodyState> _byId = new();
@@ -87,17 +87,23 @@ public sealed class SectorState
     /// </remarks>
     public void Step()
     {
-        var midTickS = TimeS + FixedStepClock.TickSeconds / 2;
-        var endS = TimeS + FixedStepClock.TickSeconds;
+        // Written as (tick + x) * dt, the same form as TimeS, so "end of this tick" is bit-identical
+        // to "TimeS of the next tick" (matters for exact save/load equivalence).
+        var midTickS = (Tick + 0.5) * FixedStepClock.TickSeconds;
+        var endS = (Tick + 1) * FixedStepClock.TickSeconds;
         foreach (var craft in _crafts)
         {
             var reference = craft.TargetBodyId.IsNone ? Vector2D.Zero : GetVelocityAt(craft.TargetBodyId, midTickS);
             var velocityBefore = craft.Velocity;
             FlightModel.Step(craft, FixedStepClock.TickSeconds, reference);
 
-            if (craft.IsLanded) UpdateLanded(craft, craft.Velocity - velocityBefore, endS);
+            if (craft.IsOnRails) UpdateOnRails(craft, craft.Velocity - velocityBefore, endS);
+            else if (craft.IsLanded) UpdateLanded(craft, craft.Velocity - velocityBefore, endS);
             else ResolveContact(craft, endS);
         }
+
+        // Shipyards advance after movement, so a finished craft is placed against the yard's new position.
+        StepFabrication(endS);
         Tick++;
     }
 

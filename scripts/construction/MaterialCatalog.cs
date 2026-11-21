@@ -91,5 +91,17 @@ public sealed class MaterialBill
 
     public MaterialBill Plus(MaterialBill other) => new(_kg.Concat(other._kg));
 
+    /// <summary>The same amounts as whole kg (for inventories). Throws if any amount has a fraction.</summary>
+    public SortedDictionary<string, long> ToWholeKg()
+    {
+        var result = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        foreach (var (id, kg) in _kg)
+        {
+            if (kg != Math.Floor(kg) || kg > long.MaxValue) throw new InvalidOperationException($"{id}: {kg} kg is not a whole number of kg.");
+            result[id] = (long)kg;
+        }
+        return result;
+    }
+
     public override string ToString() => string.Join(", ", _kg.Select(kv => $"{kv.Key} {kv.Value:R} kg"));
 }

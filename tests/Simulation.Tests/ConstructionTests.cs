@@ -8,11 +8,11 @@ namespace SpaceAutomationSandbox.Simulation.Tests;
 public class ConstructionTests
 {
     [Fact]
-    public void PartCatalog_LoadsTheSixStarterParts()
+    public void PartCatalog_LoadsTheStarterParts()
     {
         var ids = TestData.Catalog().Parts.Select(p => p.Id).OrderBy(id => id);
 
-        Assert.Equal(new[] { "battery", "cargo", "cockpit", "drill", "hull", "thruster" }, ids);
+        Assert.Equal(new[] { "battery", "cargo", "cockpit", "drill", "fabricator", "hull", "thruster" }, ids);
     }
 
     [Fact]

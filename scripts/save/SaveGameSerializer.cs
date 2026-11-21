@@ -20,8 +20,11 @@ public sealed record LoadedGame(SectorState Sector, CraftId PlayerCraftId);
 /// </summary>
 public static class SaveGameSerializer
 {
-    /// <summary>Version written. v2 added the landed state; v1 files still load (as not landed).</summary>
-    public const int SchemaVersion = 2;
+    /// <summary>
+    /// Version written. v2 added the landed state; v3 added rail orbits, inventories, build queues
+    /// and the order counter. Older files still load (missing parts read as empty).
+    /// </summary>
+    public const int SchemaVersion = 3;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -44,6 +47,7 @@ public static class SaveGameSerializer
             {
                 Seed = sector.Seed,
                 Tick = sector.Tick,
+                NextOrderId = sector.NextOrderId,
                 Bodies = sector.Bodies.Select(b => new BodyDto
                 {
                     Id = b.Id.Value,
@@ -52,20 +56,13 @@ public static class SaveGameSerializer
                     MassKg = b.MassKg,
                     DensityKgPerM3 = b.DensityKgPerM3,
                     IsMineable = b.IsMineable,
-                    Orbit = b.Orbit is { } o
-                        ? new OrbitDto { ParentId = o.Parent.Value, RadiusM = o.RadiusM, PeriodS = o.PeriodS, PhaseAtZeroRad = o.PhaseAtZeroRad }
-                        : null,
+                    Orbit = b.Orbit is { } o ? OrbitToDto(o) : null,
                 }).ToList(),
                 Crafts = sector.Crafts.Select(c => new CraftDto
                 {
                     Id = c.Id.Value,
                     Name = c.Name,
-                    Design = new DesignDto
-                    {
-                        Id = c.Design.Id,
-                        Name = c.Design.Name,
-                        Cells = c.Design.Cells.Select(cell => new CellDto { X = cell.Pos.X, Y = cell.Pos.Y, Part = cell.PartId }).ToList(),
-                    },
+                    Design = DesignToDto(c.Design),
                     Position = Vec(c.Position),
                     Velocity = Vec(c.Velocity),
                     HeadingRad = c.HeadingRad,
@@ -73,6 +70,18 @@ public static class SaveGameSerializer
                     TargetBodyId = c.TargetBodyId.Value,
                     LandedOnBodyId = c.LandedOnBodyId.Value,
                     LandedOffset = c.IsLanded ? Vec(c.LandedOffset) : null,
+                    RailOrbit = c.RailOrbit is { } r ? OrbitToDto(r) : null,
+                    InventoryKg = c.Inventory.Kg.Count > 0 ? new SortedDictionary<string, long>(c.Inventory.Kg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal) : null,
+                    BuildQueue = c.BuildQueue.Count > 0
+                        ? c.BuildQueue.Select(o => new OrderDto
+                        {
+                            OrderId = o.Id.Value,
+                            ShipName = o.ShipName,
+                            Design = DesignToDto(o.Design),
+                            MaterialsKg = new SortedDictionary<string, long>(o.MaterialsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal),
+                            ProgressKg = o.ProgressKg,
+                        }).ToList()
+                        : null,
                 }).ToList(),
             },
         };
@@ -100,13 +109,11 @@ public static class SaveGameSerializer
 
             foreach (var c in dto.Crafts ?? new List<CraftDto>())
             {
-                var d = c.Design ?? throw new FormatException($"Craft {c.Id} has no design.");
-                var design = new ShipDesign(d.Id ?? "", d.Name ?? "",
-                    (d.Cells ?? new List<CellDto>()).Select(cell =>
-                        new DesignCell(new GridPos(cell.X, cell.Y), cell.Part ?? throw new FormatException("Cell without a part."))));
-                var errors = design.Validate(catalog);
-                if (errors.Count > 0)
-                    throw new FormatException($"Craft {c.Id} design '{design.Id}' is invalid: {string.Join("; ", errors)}");
+                var design = DesignFromDto(c.Design, $"Craft {c.Id}");
+                // A craft must be usable as a ship or as a station.
+                var shipErrors = design.Validate(catalog, DesignRole.Ship);
+                if (shipErrors.Count > 0 && design.Validate(catalog, DesignRole.Station).Count > 0)
+                    throw new FormatException($"Craft {c.Id} design '{design.Id}' is invalid: {string.Join("; ", shipErrors)}");
 
                 var craft = new CraftState(new CraftId(c.Id), c.Name ?? "", design, design.ComputeStats(catalog),
                     ToVec(c.Position, "position"), c.HeadingRad)
@@ -119,7 +126,28 @@ public static class SaveGameSerializer
                 // v1 has no landed fields: they read as 0/null, i.e. flying. That is the whole v1 -> v2 migration.
                 if (c.LandedOnBodyId != 0)
                     sector.RestoreLanding(craft.Id, new BodyId(c.LandedOnBodyId), ToVec(c.LandedOffset, "landedOffset"));
+                // v1/v2 have none of the following; null reads as "not on rails, empty, nothing queued".
+                if (c.RailOrbit is { } rail) sector.RestoreRails(craft.Id, OrbitFromDto(rail));
+                foreach (var (material, kg) in c.InventoryKg ?? new SortedDictionary<string, long>())
+                {
+                    if (!catalog.Materials.Contains(material)) throw new FormatException($"Craft {c.Id} stores unknown material '{material}'.");
+                    if (kg <= 0) throw new FormatException($"Craft {c.Id} stores {kg} kg of '{material}'.");
+                    craft.Inventory.Add(material, kg);
+                }
+                foreach (var o in c.BuildQueue ?? new List<OrderDto>())
+                {
+                    var orderDesign = DesignFromDto(o.Design, $"Order {o.OrderId}");
+                    var orderErrors = orderDesign.Validate(catalog, DesignRole.Ship);
+                    if (orderErrors.Count > 0)
+                        throw new FormatException($"Order {o.OrderId} design '{orderDesign.Id}' is invalid: {string.Join("; ", orderErrors)}");
+                    var materials = o.MaterialsKg ?? new SortedDictionary<string, long>();
+                    if (materials.Any(kv => !catalog.Materials.Contains(kv.Key) || kv.Value < 0))
+                        throw new FormatException($"Order {o.OrderId} holds unknown or negative materials.");
+                    sector.RestoreOrder(craft.Id, new BuildOrder(new OrderId(o.OrderId), o.ShipName ?? "", orderDesign,
+                        orderDesign.ComputeStats(catalog), materials, o.ProgressKg));
+                }
             }
+            if (dto.NextOrderId > 0) sector.RestoreNextOrderId(dto.NextOrderId);
 
             var player = new CraftId(file.PlayerCraftId);
             if (!player.IsNone) sector.GetCraft(player); // must exist
@@ -153,10 +181,30 @@ public static class SaveGameSerializer
 
     private static VecDto Vec(Vector2D v) => new() { X = v.X, Y = v.Y };
 
+    private static OrbitDto OrbitToDto(CircularOrbit o) =>
+        new() { ParentId = o.Parent.Value, RadiusM = o.RadiusM, PeriodS = o.PeriodS, PhaseAtZeroRad = o.PhaseAtZeroRad };
+
+    private static CircularOrbit OrbitFromDto(OrbitDto o) => new(new BodyId(o.ParentId), o.RadiusM, o.PeriodS, o.PhaseAtZeroRad);
+
+    private static DesignDto DesignToDto(ShipDesign d) => new()
+    {
+        Id = d.Id,
+        Name = d.Name,
+        Cells = d.Cells.Select(cell => new CellDto { X = cell.Pos.X, Y = cell.Pos.Y, Part = cell.PartId }).ToList(),
+    };
+
+    private static ShipDesign DesignFromDto(DesignDto? d, string owner)
+    {
+        if (d is null) throw new FormatException($"{owner} has no design.");
+        return new ShipDesign(d.Id ?? "", d.Name ?? "",
+            (d.Cells ?? new List<CellDto>()).Select(cell =>
+                new DesignCell(new GridPos(cell.X, cell.Y), cell.Part ?? throw new FormatException("Cell without a part."))));
+    }
+
     private static Vector2D ToVec(VecDto? v, string what) =>
         v is null ? throw new FormatException($"Craft is missing {what}.") : new Vector2D(v.X, v.Y);
 
-    // --- File shape (schema 2). Change only together with SchemaVersion and docs/08. ---
+    // --- File shape (schema 3). Change only together with SchemaVersion and docs/08. ---
 
     private sealed class SaveFile
     {
@@ -170,6 +218,7 @@ public static class SaveGameSerializer
     {
         public ulong Seed { get; set; }
         public long Tick { get; set; }
+        public long NextOrderId { get; set; }
         public List<BodyDto>? Bodies { get; set; }
         public List<CraftDto>? Crafts { get; set; }
     }
@@ -205,6 +254,18 @@ public static class SaveGameSerializer
         public uint TargetBodyId { get; set; }
         public uint LandedOnBodyId { get; set; }
         public VecDto? LandedOffset { get; set; }
+        public OrbitDto? RailOrbit { get; set; }
+        public SortedDictionary<string, long>? InventoryKg { get; set; }
+        public List<OrderDto>? BuildQueue { get; set; }
+    }
+
+    private sealed class OrderDto
+    {
+        public long OrderId { get; set; }
+        public string? ShipName { get; set; }
+        public DesignDto? Design { get; set; }
+        public SortedDictionary<string, long>? MaterialsKg { get; set; }
+        public double ProgressKg { get; set; }
     }
 
     private sealed class DesignDto

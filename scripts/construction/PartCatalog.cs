@@ -18,6 +18,9 @@ public sealed record PartDefinition
     public double CargoCapacityKg { get; init; }
     public double MiningRateKgPerS { get; init; }
 
+    /// <summary>How many kg of finished craft this part assembles per second (shipyards).</summary>
+    public double FabricationRateKgPerS { get; init; }
+
     /// <summary>What one part is built from (kg per material id). Must add up to <see cref="MassKg"/>.</summary>
     public Dictionary<string, double>? MaterialsKg { get; init; }
 
@@ -53,7 +56,8 @@ public sealed class PartCatalog
         {
             if (string.IsNullOrWhiteSpace(part.Id)) throw new FormatException("Part with empty id.");
             if (!(part.MassKg > 0)) throw new FormatException($"Part '{part.Id}' needs massKg > 0.");
-            if (part.ThrustN < 0 || part.CargoCapacityKg < 0 || part.EnergyCapacityKJ < 0 || part.MiningRateKgPerS < 0)
+            if (part.ThrustN < 0 || part.CargoCapacityKg < 0 || part.EnergyCapacityKJ < 0 || part.MiningRateKgPerS < 0
+                || part.FabricationRateKgPerS < 0)
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
             ValidateMaterials(part, materials);
             if (!_parts.TryAdd(part.Id, part)) throw new FormatException($"Duplicate part id '{part.Id}'.");
@@ -70,6 +74,8 @@ public sealed class PartCatalog
         {
             if (!materials.Contains(id)) throw new FormatException($"Part '{part.Id}' uses unknown material '{id}'.");
             if (!(kg > 0) || double.IsInfinity(kg)) throw new FormatException($"Part '{part.Id}' needs a positive amount of '{id}'.");
+            // Inventories hold whole kilograms (docs/06), so costs must be whole too.
+            if (kg != Math.Floor(kg)) throw new FormatException($"Part '{part.Id}': '{id}' must be a whole number of kg (got {kg}).");
         }
         var sum = amounts.Values.Sum();
         if (Math.Abs(sum - part.MassKg) > part.MassKg * MassBalanceTolerance)

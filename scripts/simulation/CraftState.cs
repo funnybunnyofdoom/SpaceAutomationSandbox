@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using SpaceAutomationSandbox.Construction;
 
 namespace SpaceAutomationSandbox.Simulation;
@@ -68,6 +69,24 @@ public sealed class CraftState
     public Vector2D LandedOffset { get; internal set; }
 
     public bool IsLanded => !LandedOnBodyId.IsNone;
+
+    /// <summary>
+    /// Fixed circular orbit the craft is held on ("on rails"): stations, and ships parked next to
+    /// an orbiting yard. Null while flying freely or landed. A ship leaves it by thrusting.
+    /// </summary>
+    public CircularOrbit? RailOrbit { get; internal set; }
+
+    public bool IsOnRails => RailOrbit is not null;
+
+    /// <summary>Materials carried or stored here (whole kg).</summary>
+    public Inventory Inventory { get; } = new();
+
+    internal List<BuildOrder> BuildQueueList { get; } = new();
+
+    /// <summary>Orders waiting or in progress; only the first one advances. Empty unless the craft has fabricators.</summary>
+    public IReadOnlyList<BuildOrder> BuildQueue => BuildQueueList;
+
+    public bool IsShipyard => Stats.FabricationRateKgPerS > 0;
 
     /// <summary>Collision radius in metres (bounding circle of the grid).</summary>
     public double CollisionRadiusM => Stats.BoundingRadiusM;

@@ -27,11 +27,12 @@ File order is display order. The three current materials (metal, electronics, co
 | `energyCapacityKJ` | no | Battery capacity. Shown in stats only; nothing uses power yet. |
 | `cargoCapacityKg` | no | Cargo capacity by mass. Shown in stats only. |
 | `miningRateKgPerS` | no | Drill rate. Not used until mining (Phase 3). |
+| `fabricationRateKgPerS` | no | Shipyard build rate: kg of finished craft assembled per second. A design with any of these is a valid station. |
 | `materialsKg` | yes (v2) | What one part is built from, as `{ "materialId": kg }`. Every material must exist and be > 0, and the amounts **must add up to `massKg`** (checked on load), so building never creates or destroys mass. |
 
 ## `blueprints/*.json` ship designs (schema 1)
 
-The files here are **built-in** designs and are read-only from the game. Designs made in the in-game editor (key B) use the same format but are saved to `user://blueprints/<id>.json` (`%APPDATA%\Godot\app_userdata\SpaceAutomationSandbox\blueprints`). `ShipDesign.ToJson()` writes the format, and the output is byte-stable.
+The files here are **built-in** designs and are read-only from the game. `starter_ship.json` is the player's first ship. `starter_shipyard.json` is the first station (`DesignRole.Station`: needs a fabricator). Costs must be whole kg, because inventories are whole kg. Designs made in the in-game editor (key B) use the same format but are saved to `user://blueprints/<id>.json` (`%APPDATA%\Godot\app_userdata\SpaceAutomationSandbox\blueprints`). `ShipDesign.ToJson()` writes the format, and the output is byte-stable.
 
 `cells` is a list of `{ "x", "y", "part" }` on a square grid. Each cell is `ShipDesign.CellSizeM` (4 m) across. **Forward is −y**: the nose sits at the smallest y. Each cell holds one part, and parts have no rotation yet.
 

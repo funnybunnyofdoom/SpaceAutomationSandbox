@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Save;
@@ -17,12 +18,12 @@ public partial class Main : Node2D
 {
     // Fixed seeds so the backdrop and sector are identical on every run.
     private const int StarfieldSeed = 20261120;
-    private const ulong SectorSeed = 20261120;
     private const int StarCount = 220;
 
     private const string MaterialsPath = "res://data/materials/materials.json";
     private const string PartsPath = "res://data/parts/parts.json";
     private const string StarterDesignPath = "res://data/blueprints/starter_ship.json";
+    private const string StarterShipyardPath = "res://data/blueprints/starter_shipyard.json";
 
     // Zoom in screen pixels per sector metre. Mouse wheel changes it; this is view state only.
     private const float MinPixelsPerMetre = 0.005f;
@@ -38,6 +39,8 @@ public partial class Main : Node2D
     private static readonly Color FlameColor = new(1f, 0.75f, 0.3f, 0.9f);
     private static readonly Color MarkerColor = new(0.4f, 1f, 0.6f);
     private static readonly Color TargetLineColor = new(0.4f, 1f, 0.6f, 0.25f);
+    private static readonly Color RailColor = new(0.6f, 0.5f, 1f, 0.18f);
+    private static readonly Color CraftLabelColor = new(0.75f, 0.75f, 0.85f, 0.8f);
 
     // Single quicksave slot in Godot's per-user data folder (%APPDATA%\Godot\app_userdata\<project>).
     private const string SavePath = "user://savegame.json";
@@ -47,6 +50,7 @@ public partial class Main : Node2D
     private readonly Dictionary<string, Color> _partColors = new();
     private PartCatalog? _catalog;
     private ShipDesign? _starterDesign;
+    private ShipDesign? _starterShipyard;
     private SectorState _sector = null!;
     private CraftState? _player;
     private string _setupError = "";
@@ -55,6 +59,8 @@ public partial class Main : Node2D
     private Camera2D _camera = null!;
     private Label _hud = null!;
     private BlueprintEditorView? _editor;
+    private ShipyardPanel? _shipyardPanel;
+    private FleetPanel? _fleetPanel;
 
     private bool EditorOpen => _editor is { Visible: true };
 
@@ -74,6 +80,12 @@ public partial class Main : Node2D
             _editor = new BlueprintEditorView(_catalog, _partColors, () => _player?.Design) { Visible = false };
             _editor.CloseRequested += CloseEditor;
             hudLayer.AddChild(_editor);
+
+            _shipyardPanel = new ShipyardPanel(() => _sector, _catalog, () => _player?.Design) { Visible = false };
+            hudLayer.AddChild(_shipyardPanel);
+            _fleetPanel = new FleetPanel(() => _sector, () => _player?.Id) { Visible = false };
+            _fleetPanel.CraftChosen += Pilot;
+            hudLayer.AddChild(_fleetPanel);
         }
         // Continue where the player left off; a new game only if there's no usable save.
         if (_catalog != null && System.IO.File.Exists(SaveFilePath)) LoadGame(isStartup: true);
@@ -85,8 +97,33 @@ public partial class Main : Node2D
             GD.Print($"[Craft] {p.Id} '{p.Design.Name}' cells={p.Stats.CellCount} mass={p.Stats.TotalMassKg}kg thrust={p.Stats.TotalThrustN}N");
         GD.Print($"[Save] {SaveFilePath} {(_status.Length > 0 ? "- " + _status : "")}");
 
-        // Dev/test hook: `godot --path . -- --open-editor` starts with the editor open.
-        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "--open-editor") >= 0) OpenEditor();
+        // Dev/test hooks, e.g. `godot --path . -- --open-editor`: start with a panel open.
+        var args = OS.GetCmdlineUserArgs();
+        if (System.Array.IndexOf(args, "--new-game") >= 0) StartNewGame(); // ignores the save; nothing is written
+        if (System.Array.IndexOf(args, "--demo-build") >= 0) DemoBuild();
+        if (System.Array.IndexOf(args, "--open-editor") >= 0) OpenEditor();
+        if (System.Array.IndexOf(args, "--open-shipyard") >= 0) _shipyardPanel?.Open();
+        if (System.Array.IndexOf(args, "--open-fleet") >= 0) _fleetPanel?.Open();
+        foreach (var arg in args) // --zoom=0.2
+            if (arg.StartsWith("--zoom=") && float.TryParse(arg[7..], System.Globalization.CultureInfo.InvariantCulture, out var zoom))
+                _pixelsPerMetre = Mathf.Clamp(zoom, MinPixelsPerMetre, MaxPixelsPerMetre);
+    }
+
+    // Dev/test hook: order two of the player's ship at the first yard and fast-forward 40 s,
+    // so one finished ship is parked and the second is mid-build.
+    private void DemoBuild()
+    {
+        if (_catalog == null || _player == null || _sector.Crafts.FirstOrDefault(c => c.IsShipyard) is not { } yard) return;
+        for (var i = 0; i < 2; i++) _sector.OrderBuild(yard.Id, _player.Design, _catalog);
+        for (var i = 0; i < 40 * FixedStepClock.TicksPerSecond; i++) _sector.Step();
+    }
+
+    /// <summary>Hands the flight controls to another craft. The old one keeps its last controls cleared.</summary>
+    private void Pilot(CraftId id)
+    {
+        if (_player != null) _player.Controls = ShipControls.Idle;
+        _player = _sector.GetCraft(id);
+        ShowStatus($"Now piloting {_player.Name} ({_player.Id}).");
     }
 
     private void OpenEditor()
@@ -111,10 +148,12 @@ public partial class Main : Node2D
             var materials = MaterialCatalog.FromJson(Godot.FileAccess.GetFileAsString(MaterialsPath));
             var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath), materials);
             var design = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterDesignPath));
-            var errors = design.Validate(catalog);
+            var shipyard = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterShipyardPath));
+            var errors = design.Validate(catalog, DesignRole.Ship)
+                .Concat(shipyard.Validate(catalog, DesignRole.Station).Select(e => $"{shipyard.Id}: {e}")).ToList();
             if (errors.Count > 0)
             {
-                _setupError = $"Starter design '{design.Id}' is invalid:\n  " + string.Join("\n  ", errors);
+                _setupError = "Starter designs are invalid:\n  " + string.Join("\n  ", errors);
                 GD.PushError(_setupError);
                 return;
             }
@@ -123,6 +162,7 @@ public partial class Main : Node2D
                 _partColors[part.Id] = part.PlaceholderColor is { } hex ? Color.FromHtml(hex) : Colors.Magenta;
             _catalog = catalog;
             _starterDesign = design;
+            _starterShipyard = shipyard;
         }
         catch (System.Exception e) // bad or missing data file: show it instead of crashing
         {
@@ -133,14 +173,16 @@ public partial class Main : Node2D
 
     private void StartNewGame()
     {
-        _sector = SectorGenerator.Generate(SectorSeed);
         _player = null;
-        if (_catalog == null || _starterDesign == null) return;
+        if (_catalog == null || _starterDesign == null || _starterShipyard == null)
+        {
+            _sector = SectorGenerator.Generate(NewGame.DefaultSeed); // something to look at while the error shows
+            return;
+        }
 
-        _player = new CraftState(_sector.AllocateCraftId(), "Player", _starterDesign, _starterDesign.ComputeStats(_catalog),
-            SectorGenerator.PlayerSpawnPoint(_sector), headingRad: 0);
-        _sector.AddCraft(_player);
-        _sector.SetTarget(_player.Id, _sector.NearestBody(_player.Position).Body.Id);
+        var game = NewGame.Create(NewGame.DefaultSeed, _catalog, _starterDesign, _starterShipyard);
+        _sector = game.Sector;
+        _player = _sector.GetCraft(game.PlayerCraftId);
     }
 
     private void SaveGame()
@@ -212,6 +254,7 @@ public partial class Main : Node2D
             }
             return;
         }
+        // The side panels don't take keyboard focus, so flying continues while they're open.
 
         if (@event is InputEventMouseButton { Pressed: true } mouse)
         {
@@ -227,6 +270,16 @@ public partial class Main : Node2D
             case Key.F6: SaveGame(); break;
             case Key.F9: LoadGame(isStartup: false); break;
             case Key.B: OpenEditor(); break;
+            case Key.Y when _shipyardPanel != null:
+                if (_shipyardPanel.Visible) _shipyardPanel.Visible = false; else _shipyardPanel.Open();
+                break;
+            case Key.F when _fleetPanel != null:
+                if (_fleetPanel.Visible) _fleetPanel.Visible = false; else _fleetPanel.Open();
+                break;
+            case Key.Escape:
+                if (_shipyardPanel != null) _shipyardPanel.Visible = false;
+                if (_fleetPanel != null) _fleetPanel.Visible = false;
+                break;
             case Key.F7: StartNewGame(); ShowStatus("New game. The save file is unchanged until you save or quit."); break;
             case Key.Tab when _player != null: CycleTarget(); break;
             case Key.T when _player != null:
@@ -272,7 +325,7 @@ public partial class Main : Node2D
 
     private string BuildHud()
     {
-        var text = "SpaceAutomationSandbox (working title) - Phase 1\n"
+        var text = "SpaceAutomationSandbox (working title) - Phase 2\n"
                    + $"seed {_sector.Seed}   tick {_sector.Tick} ({FixedStepClock.TicksPerSecond}/s)   t={_sector.TimeS:0.0}s"
                    + (_clock.DroppedTicks > 0 ? $"   dropped {_clock.DroppedTicks}" : "")
                    + $"   zoom {_pixelsPerMetre:0.###} px/m\n";
@@ -282,13 +335,19 @@ public partial class Main : Node2D
 
         var (nearest, nearestSurface) = _sector.NearestBody(p.Position);
         var headingDeg = Mathf.PosMod(Mathf.RadToDeg((float)p.HeadingRad), 360f);
-        text += $"{p.Design.Name}: {p.Stats.TotalMassKg / 1000:0.0} t, {p.Stats.TotalThrustN / 1000:0} kN, "
+        text += $"Piloting {p.Name} ({p.Id}) - {p.Design.Name}: {p.Stats.TotalMassKg / 1000:0.0} t, {p.Stats.TotalThrustN / 1000:0} kN, "
                 + $"{p.Stats.MaxAccelerationMps2:0.0} m/s²   cargo cap {p.Stats.CargoCapacityKg / 1000:0} t\n"
                 + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
                 + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
                 + (p.IsLanded
                     ? $"LANDED on {_sector.GetBody(p.LandedOnBodyId).Name} - thrust away from the surface to lift off\n"
-                    : "");
+                    : "")
+                + (p.RailOrbit is { } rail
+                    ? (p.Stats.TotalThrustN > 0
+                        ? $"PARKED in orbit around {_sector.GetBody(rail.Parent).Name} - thrust to leave the parking orbit\n"
+                        : $"On a fixed orbit around {_sector.GetBody(rail.Parent).Name} (no thrusters)\n")
+                    : "")
+                + ShipyardSummary();
 
         if (p.TargetBodyId.IsNone)
         {
@@ -307,7 +366,17 @@ public partial class Main : Node2D
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
                + "W/Up thrust   A/D turn   S/Space brake (matches target)   Tab cycle target   T target nearest   wheel zoom\n"
-               + "B blueprint editor   F6 save   F9 load   F7 new game   (closing the window autosaves)";
+               + "B blueprint editor   Y shipyard   F fleet   F6 save   F9 load   F7 new game   (closing the window autosaves)";
+    }
+
+    private string ShipyardSummary()
+    {
+        var yards = _sector.Crafts.Where(c => c.IsShipyard).ToList();
+        if (yards.Count == 0) return "No shipyard in this save - F7 starts a new game with one.\n";
+        return string.Concat(yards.Select(y => y.BuildQueue.Count == 0
+            ? $"{y.Name}: idle\n"
+            : $"{y.Name}: building {y.BuildQueue[0].ShipName} {y.BuildQueue[0].Fraction * 100:0}%"
+              + (y.BuildQueue.Count > 1 ? $" (+{y.BuildQueue.Count - 1} queued)" : "") + "\n"));
     }
 
     private static string Describe(CelestialBodyState body) =>
@@ -324,7 +393,19 @@ public partial class Main : Node2D
         var renderTimeS = (_sector.Tick + _clock.Alpha) * FixedStepClock.TickSeconds;
         foreach (var body in _sector.Bodies) DrawBody(body, renderTimeS);
         if (_player is { TargetBodyId.IsNone: false }) DrawTargetMarker(_player, renderTimeS);
+        foreach (var craft in _sector.Crafts.Where(c => c.IsShipyard && c.RailOrbit != null))
+        {
+            var orbit = craft.RailOrbit!;
+            DrawArc(ToPixels(_sector.GetPositionAt(orbit.Parent, renderTimeS)), (float)orbit.RadiusM * _pixelsPerMetre,
+                0, Mathf.Tau, 512, RailColor);
+        }
         foreach (var craft in _sector.Crafts) DrawCraft(craft);
+        foreach (var craft in _sector.Crafts.Where(c => c != _player)) // name tags for everything but your own ship
+        {
+            var radiusPx = Mathf.Max(8f, (float)craft.CollisionRadiusM * _pixelsPerMetre);
+            DrawString(ThemeDB.FallbackFont, ToPixels(InterpolatedPosition(craft)) + new Vector2(radiusPx + 4, 4), craft.Name,
+                HorizontalAlignment.Left, -1, 11, CraftLabelColor);
+        }
     }
 
     // Bracket ring around the target plus a faint line from the ship, so it can be found off-screen.

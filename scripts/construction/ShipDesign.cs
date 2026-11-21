@@ -11,6 +11,16 @@ public readonly record struct GridPos(int X, int Y);
 /// <summary>One occupied cell of a design.</summary>
 public readonly record struct DesignCell(GridPos Pos, string PartId);
 
+/// <summary>
+/// What a design is meant to be. All roles use the same grid and data; only validation differs.
+/// Ship: flyable (cockpit and thrust). Station: hosts facilities (for now, at least one fabricator).
+/// </summary>
+public enum DesignRole
+{
+    Ship,
+    Station,
+}
+
 /// <summary>Derived totals for a design. Recomputed from the parts, never stored separately.</summary>
 public sealed record ShipStats(
     int CellCount,
@@ -20,7 +30,8 @@ public sealed record ShipStats(
     double EnergyCapacityKJ,
     double CenterOfMassX,
     double CenterOfMassY,
-    double BoundingRadiusM)
+    double BoundingRadiusM,
+    double FabricationRateKgPerS)
 {
     /// <summary>Full-thrust acceleration in m/s².</summary>
     public double MaxAccelerationMps2 => TotalMassKg > 0 ? TotalThrustN / TotalMassKg : 0;
@@ -59,14 +70,14 @@ public sealed class ShipDesign
     public string Name { get; }
     public IReadOnlyList<DesignCell> Cells { get; }
 
-    /// <summary>Human-readable problems; empty means the design can be flown.</summary>
-    public IReadOnlyList<string> Validate(PartCatalog catalog)
+    /// <summary>Human-readable problems for the given role; empty means the design is usable in that role.</summary>
+    public IReadOnlyList<string> Validate(PartCatalog catalog, DesignRole role = DesignRole.Ship)
     {
         var errors = new List<string>();
         if (Cells.Count == 0) { errors.Add("Design has no parts."); return errors; }
 
         var controlSources = 0;
-        double thrust = 0;
+        double thrust = 0, fabrication = 0;
         foreach (var cell in Cells)
         {
             if (!catalog.TryGet(cell.PartId, out var part))
@@ -76,17 +87,26 @@ public sealed class ShipDesign
             }
             if (part.IsControlSource) controlSources++;
             thrust += part.ThrustN;
+            fabrication += part.FabricationRateKgPerS;
         }
 
-        if (controlSources != 1) errors.Add($"Needs exactly one control source (cockpit); found {controlSources}.");
-        if (thrust <= 0) errors.Add("Needs at least one thruster.");
+        switch (role)
+        {
+            case DesignRole.Ship:
+                if (controlSources != 1) errors.Add($"Needs exactly one control source (cockpit); found {controlSources}.");
+                if (thrust <= 0) errors.Add("Needs at least one thruster.");
+                break;
+            case DesignRole.Station:
+                if (fabrication <= 0) errors.Add("A station needs at least one fabricator.");
+                break;
+        }
         return errors;
     }
 
     /// <summary>Totals and centre of mass (in cell units). Call only on a design that validates.</summary>
     public ShipStats ComputeStats(PartCatalog catalog)
     {
-        double mass = 0, thrust = 0, cargo = 0, energy = 0, momentX = 0, momentY = 0;
+        double mass = 0, thrust = 0, cargo = 0, energy = 0, fabrication = 0, momentX = 0, momentY = 0;
         foreach (var cell in Cells)
         {
             var part = catalog.Get(cell.PartId);
@@ -94,6 +114,7 @@ public sealed class ShipDesign
             thrust += part.ThrustN;
             cargo += part.CargoCapacityKg;
             energy += part.EnergyCapacityKJ;
+            fabrication += part.FabricationRateKgPerS;
             momentX += part.MassKg * cell.Pos.X;
             momentY += part.MassKg * cell.Pos.Y;
         }
@@ -111,7 +132,7 @@ public sealed class ShipDesign
         }
 
         return new ShipStats(Cells.Count, mass, thrust, cargo, energy, comX, comY,
-            Math.Sqrt(radiusCellsSq) * CellSizeM);
+            Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

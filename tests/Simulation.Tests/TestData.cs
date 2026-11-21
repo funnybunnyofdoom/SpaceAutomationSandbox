@@ -21,4 +21,10 @@ internal static class TestData
     public static PartCatalog Catalog() => PartCatalog.FromJson(Read("data/parts/parts.json"), Materials());
 
     public static ShipDesign StarterShip() => ShipDesign.FromJson(Read("data/blueprints/starter_ship.json"));
+
+    public static ShipDesign StarterShipyard() => ShipDesign.FromJson(Read("data/blueprints/starter_shipyard.json"));
+
+    /// <summary>The same starting state the game creates.</summary>
+    public static NewGameResult NewGame(ulong seed = Simulation.NewGame.DefaultSeed) =>
+        Simulation.NewGame.Create(seed, Catalog(), StarterShip(), StarterShipyard());
 }
