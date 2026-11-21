@@ -21,6 +21,8 @@
       "materialsKg": { "metal": 400, "composites": 100 } },
     { "id": "docking_port", "name": "Docking port", "massKg": 600, "placeholderColor": "#4fd1c5", "isDockingPort": true,
       "materialsKg": { "metal": 450, "electronics": 150 } },
+    { "id": "storage_silo", "name": "Storage silo", "massKg": 2000, "placeholderColor": "#7f8c6a", "cargoCapacityKg": 200000,
+      "materialsKg": { "metal": 1600, "composites": 400 } },
     { "id": "refinery", "name": "Refinery", "massKg": 5000, "placeholderColor": "#d98c4f", "refiningRateKgPerS": 200,
       "materialsKg": { "metal": 3500, "electronics": 1000, "composites": 500 } }
   ]

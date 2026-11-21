@@ -124,12 +124,12 @@ public sealed partial class SectorState
                     craft.Controls = ShipControls.Idle;
                     var anchor = craft.IsAnchored ? new ActionResult(true, "") : TryAnchor(craft.Id);
                     if (anchor.Done) job.State = MiningJobState.Mining;
+                    else if (craft.Stats.CanAnchor && !AnchorTouchesGround(craft)) Lift(craft, job, MiningJobState.ToSource); // wrong side down: try again
                     else Wait(craft, job, MiningJobState.Landing, anchor.Message);
                     return;
                 }
                 SetTarget(craft.Id, source.Id);
-                craft.Controls = Autopilot.Approach(craft, SurfacePoint(source, craft, -3), GetVelocityAt(source.Id, TimeS),
-                    JobLandingSpeedMps, arrivalSpeed: 1.5);
+                craft.Controls = LandOnAnchor(craft, source);
                 return;
 
             case MiningJobState.Mining:
@@ -175,6 +175,31 @@ public sealed partial class SectorState
                 }
                 return;
         }
+    }
+
+    /// <summary>
+    /// Final descent onto a body with the anchor clamp down (#42). Ships only thrust forward, so:
+    /// nose-first to build a gentle descent (up to <see cref="JobLandingSpeedMps"/>), then turn the
+    /// clamp towards the surface and coast down onto it; brake if descending too fast or sliding.
+    /// </summary>
+    private ShipControls LandOnAnchor(CraftState craft, CelestialBodyState body)
+    {
+        var centre = GetPosition(body.Id);
+        var bodyVelocity = GetVelocityAt(body.Id, TimeS);
+        var down = centre - craft.Position;
+        var downUnit = down * (1 / Math.Max(down.Length, 1e-9));
+        var relative = craft.Velocity - bodyVelocity;
+        var descent = relative.X * downUnit.X + relative.Y * downUnit.Y;
+        var lateral = (relative - downUnit * descent).Length;
+
+        if (descent > JobLandingSpeedMps + 1 || lateral > 2) return new ShipControls(0, 0, true); // stop relative to the body
+        if (descent < 0.5)
+            return Autopilot.Approach(craft, centre, bodyVelocity, JobLandingSpeedMps, arrivalSpeed: JobLandingSpeedMps); // nose down, build descent
+        var heading = AnchorDownHeading(craft, centre);
+        var turn = heading is { } h
+            ? Math.Clamp(FlightModel.WrapAngle(h - craft.HeadingRad) / (FlightModel.TurnRateRadPerS * FixedStepClock.TickSeconds), -1, 1)
+            : 0;
+        return new ShipControls(0, turn, false); // coast down, clamp first
     }
 
     private void Wait(CraftState craft, MiningJob job, MiningJobState resume, string reason, double retryAfterS = 0)

@@ -35,6 +35,10 @@ Controls are Godot input actions (see `scripts/core/InputActions.cs`): rebind th
 
 `export_presets.cfg` has a Windows Desktop preset that packs the `data/*.json` files. Export from the Godot editor (Project → Export) or with `godot --headless --path . --export-release "Windows Desktop" builds/windows/SpaceAutomationSandbox.exe`. The `builds/` folder is git-ignored. This needs Godot's export templates (4.7.2 mono).
 
+## Benchmarks
+
+`dotnet run -c Release --project tools/Benchmarks` times the simulation with 10 to 10,000 automated ships. Results and how to read them are in `docs/09_BENCHMARKS.md`.
+
 ## Daily loop
 
 ```powershell

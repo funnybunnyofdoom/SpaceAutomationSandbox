@@ -29,7 +29,7 @@ Each recipe has an `id`, a `name`, and whole-kg `inputsKg` and `outputsKg` keyed
 | `isControlSource` | no | Can pilot the craft (cockpit). A design needs exactly one. |
 | `thrustN` | no | Thrust in newtons. Phase 1: all thrust pushes along the ship's forward axis. |
 | `energyCapacityKJ` | no | Battery capacity. Shown in stats only; nothing uses power yet. |
-| `cargoCapacityKg` | no | Cargo capacity by mass. Shown in stats only. |
+| `cargoCapacityKg` | no | Cargo capacity by mass (cargo bays, storage silos). A craft holds at most the sum of its parts' capacity. |
 | `miningRateKgPerS` | no | Drill rate. Not used until mining (Phase 3). |
 | `isAnchorClamp` | no | Lets a landed craft anchor to the body it's on (G) and release again. |
 | `isFoundation` | no | Makes the design a fixed structure: it anchors permanently when it lands. Not allowed in ship designs. |

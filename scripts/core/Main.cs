@@ -124,10 +124,10 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--demo-build") >= 0) DemoBuild();
         if (System.Array.IndexOf(args, "--demo-anchor") >= 0 && _player != null)
         {
-            // Dev/test hook: fly straight down onto the primary, then anchor.
-            _player.HeadingRad = System.Math.PI;
-            _player.Controls = new ShipControls(1, 0, false);
-            for (var i = 0; i < 200 && !_player.IsLanded; i++) _sector.Step();
+            // Dev/test hook: drop onto the primary clamp-first (nose up), then anchor.
+            _player.HeadingRad = 0;
+            _player.Velocity = new Vector2D(0, 20); // falling towards the primary below
+            for (var i = 0; i < 600 && !_player.IsLanded; i++) _sector.Step();
             _player.Controls = ShipControls.Idle;
             ShowStatus(_sector.TryAnchor(_player.Id).Message);
         }
@@ -489,7 +489,8 @@ public partial class Main : Node2D
             ? $"{y.Name}: idle"
             : $"{y.Name}: building {y.BuildQueue[0].ShipName} {y.BuildQueue[0].Fraction * 100:0}%"
               + (y.BuildQueue.Count > 1 ? $" (+{y.BuildQueue.Count - 1} queued)" : ""))
-            + (_sector.RefiningStatus(y) is { Length: > 0 } refining ? $"   {refining}" : "") + "\n"));
+            + (_sector.RefiningStatus(y) is { Length: > 0 } refining ? $"   {refining}" : "")
+            + (y.HasCargoLimit ? $"   storage {y.Inventory.TotalKg / 1000.0:0.0}/{y.CargoCapacityKg / 1000.0:0} t" : "") + "\n"));
     }
 
     private static string Describe(CelestialBodyState body) =>

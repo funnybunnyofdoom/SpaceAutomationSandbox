@@ -15,5 +15,7 @@
   <ItemGroup>
     <!-- tests/ is a separate plain .NET project (with its own obj/ files); Godot must not compile it. -->
     <Compile Remove="tests/**" />
+    <!-- tools/ holds separate .NET tools (e.g. the benchmark); Godot must not compile them either. -->
+    <Compile Remove="tools/**" />
   </ItemGroup>
 </Project>

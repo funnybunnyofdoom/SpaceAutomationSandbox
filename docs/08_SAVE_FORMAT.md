@@ -1,4 +1,4 @@
-# 08 — Save format (schema 8)
+# 08 — Save format (schema 9)
 
 The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs`.
 
@@ -22,7 +22,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
 
 ```jsonc
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "game": "SpaceAutomationSandbox",
   "playerCraftId": 1,                 // 0 = no player craft
   "sector": {
@@ -65,11 +65,11 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
 }
 ```
 
-The load checks for: the right `game`, a `schemaVersion` from 1 to 8, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs (as a ship or as a station; queued designs as ships), known materials in inventories and orders, target, landed-on, rail-orbit parent and player IDs that exist, dock links to real free ports (one ship per port, not also landed or on rails), and anchor states the rules allow (anchored only while landed with a clamp or foundation; a landed foundation always anchored). Any failure raises `FormatException` with a reason.
+The load checks for: the right `game`, a `schemaVersion` from 1 to 9, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs (as a ship or as a station; queued designs as ships), known materials in inventories and orders, target, landed-on, rail-orbit parent and player IDs that exist, dock links to real free ports (one ship per port, not also landed or on rails), and anchor states the rules allow (anchored only while landed with a clamp or foundation; a landed foundation always anchored). Any failure raises `FormatException` with a reason.
 
 ## Changing the format
 
-Bump `SaveGameSerializer.SchemaVersion` and update this document. Then either add a migration from the old version, or decide explicitly, and record in docs/06, that old saves are dropped. Until then, loading a different version is refused with a message.
+Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per version, applied to the raw JSON in order (v1→v2→…→current) before reading, so the loader only reads the current format. To change the format: bump `SaveGameSerializer.SchemaVersion`, add exactly one step (even if it changes nothing), and update this document. A test checks that every older version has a step. A version newer than this build is refused with a message.
 
 ## Version history
 
@@ -79,6 +79,7 @@ Bump `SaveGameSerializer.SchemaVersion` and update this document. Then either ad
 | 2 | Added `landedOnBodyId` and `landedOffset` per craft (solid bodies) | A v1 file loads with every craft flying. The next save writes v2. |
 | 3 | Added `railOrbit`, `inventoryKg` and `buildQueue` per craft, and `nextOrderId` (shipyards) | v1/v2 files load with empty inventories and no queues. They contain no shipyard; F7 starts a new game that has one. |
 | 4 | Added `anchored` per craft (anchor clamps and foundations) | Older files load with nothing anchored, except a landed foundation, which is always anchored. |
+| 9 | Storage is limited to storage parts. Adds `legacyUnlimitedStorage` per craft (only written when true) | The migration sets it on stations that held stock without any storage parts (e.g. the old starter shipyard), so those games keep working. |
 | 8 | Added `sector.tuning` (debug multipliers) and `job.retryAtTick` (blocked ships retry after a delay) | Older files load with default tuning and immediate retries. |
 | 7 | Added `surveyed` per body, `refiningBatch` per craft, and freight jobs (`job.kind` = "freight" with `pickupId`, `minPickupKg`, `keepStockedKg`, `haulState`, `haulResumeState`) | Older files load with every body surveyed, no refinery batches, and mining jobs only. |
 | 6 | Added `depositsKg` per body, and `miningRemainderKg` and `job` per craft (mining) | Older files load with no deposits (nothing to mine) and no jobs. F7 starts a new game with Rock-1's deposit. |

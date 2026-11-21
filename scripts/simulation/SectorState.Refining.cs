@@ -30,6 +30,11 @@ public sealed partial class SectorState
     /// <summary>Recipes for refineries (game definitions, not saved). Set when a game is created or loaded.</summary>
     public RecipeCatalog Recipes { get; set; } = RecipeCatalog.Empty;
 
+    /// <summary>Part definitions (game definitions, not saved), for per-part rules such as anchoring. Set with <see cref="Recipes"/>.</summary>
+    public PartCatalog? Parts { get; set; }
+
+    private PartDefinition? Catalog(string partId) => Parts is { } parts && parts.TryGet(partId, out var part) ? part : null;
+
     private void StepRefining()
     {
         foreach (var craft in _crafts)

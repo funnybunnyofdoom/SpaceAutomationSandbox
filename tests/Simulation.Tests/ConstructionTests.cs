@@ -12,7 +12,7 @@ public class ConstructionTests
     {
         var ids = TestData.Catalog().Parts.Select(p => p.Id).OrderBy(id => id);
 
-        Assert.Equal(new[] { "anchor_clamp", "battery", "cargo", "cockpit", "docking_port", "drill", "fabricator", "foundation", "hull", "refinery", "thruster" }, ids);
+        Assert.Equal(new[] { "anchor_clamp", "battery", "cargo", "cockpit", "docking_port", "drill", "fabricator", "foundation", "hull", "refinery", "storage_silo", "thruster" }, ids);
     }
 
     [Fact]

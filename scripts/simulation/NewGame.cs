@@ -39,6 +39,7 @@ public static class NewGame
 
         var sector = SectorGenerator.Generate(seed);
         sector.Recipes = catalog.Recipes;
+        sector.Parts = catalog;
         var primary = sector.Bodies.First(b => b.Orbit is null);
 
         var player = new CraftState(sector.AllocateCraftId(), "Player", starterShip, starterShip.ComputeStats(catalog),

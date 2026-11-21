@@ -30,12 +30,13 @@ public class AnchoringTests
     private static (SectorState Sector, CraftState Craft, CelestialBodyState Rock) LandOnRock(ShipDesign design)
     {
         var sector = SectorGenerator.Generate(NewGame.DefaultSeed);
+        sector.Parts = Catalog;
         var rock = sector.Bodies.First(b => b.IsMineable);
         var stats = design.ComputeStats(Catalog);
         var craft = AddCraft(sector, design,
             sector.GetPosition(rock.Id) + new Vector2D(0, -(rock.RadiusM + stats.BoundingRadiusM + 1)), stats);
         craft.Velocity = sector.GetVelocityAt(rock.Id, sector.TimeS) + new Vector2D(0, 3);
-        Run(sector, craft, ShipControls.Idle, 20);
+        for (var i = 0; i < 400 && !craft.IsLanded; i++) sector.Step(); // falls until its lowest cell touches
         Assert.True(craft.IsLanded);
         return (sector, craft, rock);
     }
@@ -78,6 +79,7 @@ public class AnchoringTests
     public void Anchor_IsRefused_WithAReason_WhenNotLandedOrWithoutAClamp()
     {
         var sector = SectorGenerator.Generate(NewGame.DefaultSeed);
+        sector.Parts = Catalog;
         var flying = AddCraft(sector, TestData.StarterShip(), SectorGenerator.PlayerSpawnPoint(sector));
         var refusal = sector.TryAnchor(flying.Id);
         Assert.False(refusal.Done);
@@ -89,6 +91,45 @@ public class AnchoringTests
         Assert.False(noClampRefusal.Done);
         Assert.Contains("no anchor clamp", noClampRefusal.Message);
         Assert.False(sector2.TryRelease(plain.Id).Done);
+    }
+
+    [Fact]
+    public void Anchor_IsRefused_WhenTheClampIsntTouchingTheGround()
+    {
+        // Drop onto the rock nose-first: the clamp (at the rear) faces away from the surface.
+        var sector = SectorGenerator.Generate(NewGame.DefaultSeed);
+        sector.Parts = Catalog;
+        var rock = sector.Bodies.First(b => b.IsMineable);
+        var design = TestData.StarterShip();
+        var craft = AddCraft(sector, design, sector.GetPosition(rock.Id) + new Vector2D(0, -(rock.RadiusM + 30)));
+        craft.HeadingRad = Math.PI; // nose towards +Y, i.e. down at the rock
+        craft.Velocity = sector.GetVelocityAt(rock.Id, sector.TimeS) + new Vector2D(0, 3);
+        for (var i = 0; i < 600 && !craft.IsLanded; i++) sector.Step();
+        Assert.True(craft.IsLanded);
+
+        var result = sector.TryAnchor(craft.Id);
+
+        Assert.False(result.Done);
+        Assert.Contains("isn't touching", result.Message);
+        Assert.False(sector.AnchorTouchesGround(craft));
+    }
+
+    [Fact]
+    public void MiningJob_LandsClampFirst_AndAnchors()
+    {
+        var game = TestData.NewGame();
+        var sector = game.Sector;
+        var rock = sector.Bodies.First(b => b.IsMineable);
+        Assert.True(sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "iron_ore", game.ShipyardId, 0.25)).Done);
+        var ship = sector.GetCraft(game.PlayerCraftId);
+        var job = (MiningJob)ship.Job!;
+
+        for (var i = 0; i < 20 * 60 * FixedStepClock.TicksPerSecond && job.State != MiningJobState.Mining; i++) sector.Step();
+
+        Assert.Equal(MiningJobState.Mining, job.State);
+        Assert.True(ship.IsAnchored);
+        Assert.True(sector.AnchorTouchesGround(ship));
+        Assert.InRange(sector.SurfaceGap(ship, rock), -1e-6, 1e-6);
     }
 
     [Fact]

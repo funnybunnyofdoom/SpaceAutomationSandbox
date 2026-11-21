@@ -54,14 +54,14 @@ public class StationBuildTests
 
         Assert.Equal(rock.Id, depot.LandedOnBodyId);
         Assert.True(depot.IsAnchored);
-        Assert.Equal(rock.RadiusM + depot.CollisionRadiusM, sector.GetPosition(rock.Id).DistanceTo(depot.Position), 6);
+        Assert.InRange(sector.SurfaceGap(depot, rock), -1e-6, 1e-6); // resting on its foundation row
         // Nose points away from the rock, so the foundation row (rear) faces the ground.
         var outward = depot.Position - sector.GetPosition(rock.Id);
         var forward = depot.Forward;
         Assert.True((outward.X * forward.X + outward.Y * forward.Y) / outward.Length > 0.999);
 
         RunSeconds(sector, 120); // rides along with the orbiting rock
-        Assert.Equal(rock.RadiusM + depot.CollisionRadiusM, sector.GetPosition(rock.Id).DistanceTo(depot.Position), 6);
+        Assert.InRange(sector.SurfaceGap(depot, rock), -1e-6, 1e-6);
     }
 
     [Fact]

@@ -96,10 +96,14 @@ public sealed class CraftState
     public Inventory Inventory { get; } = new();
 
     /// <summary>
-    /// Craft that can fly, and stations with cargo bays, hold up to their cargo bays' capacity.
-    /// Stations without cargo bays (e.g. the starter shipyard) have no limit yet. PLACEHOLDER.
+    /// Every craft holds at most its cargo bays' and storage silos' capacity (#2). The only exception:
+    /// stations from saves older than v9, made before storage parts existed, keep unlimited storage
+    /// (<see cref="LegacyUnlimitedStorage"/>, set by the save migration) so those games keep working.
     /// </summary>
-    public bool HasCargoLimit => Stats.TotalThrustN > 0 || Stats.CargoCapacityKg > 0;
+    public bool HasCargoLimit => !LegacyUnlimitedStorage;
+
+    /// <summary>Set only by the v8→v9 save migration on stations that had no storage at all.</summary>
+    public bool LegacyUnlimitedStorage { get; internal set; }
 
     public long CargoCapacityKg => HasCargoLimit ? (long)Stats.CargoCapacityKg : long.MaxValue;
 

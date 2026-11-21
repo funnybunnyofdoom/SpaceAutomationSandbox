@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Simulation;
@@ -25,10 +26,10 @@ public static class SaveGameSerializer
     /// and the order counter; v4 added the anchored flag; v5 added part rotation, craft targets,
     /// docking, and order landing sites; v6 added body deposits, the drill remainder and mining jobs;
     /// v7 added survey flags, refinery batches and freight jobs; v8 added debug tuning and job retry
-    /// times. Older files still load (missing parts read as empty / none / default; before v7 every
-    /// body counts as surveyed).
+    /// times; v9 limited storage to storage parts. Older files are upgraded step by step by
+    /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 8;
+    public const int SchemaVersion = 9;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -88,6 +89,7 @@ public static class SaveGameSerializer
                     LandedOnBodyId = c.LandedOnBodyId.Value,
                     LandedOffset = c.IsLanded ? Vec(c.LandedOffset) : null,
                     Anchored = c.IsAnchored,
+                    LegacyUnlimitedStorage = c.LegacyUnlimitedStorage,
                     MiningRemainderKg = c.MiningRemainderKg,
                     RefiningBatch = c.RefiningBatch is { } rb
                         ? new BatchDto
@@ -136,26 +138,34 @@ public static class SaveGameSerializer
     public static LoadedGame FromJson(string json, PartCatalog catalog)
     {
         SaveFile? file;
-        try { file = JsonSerializer.Deserialize<SaveFile>(json, Options); }
-        catch (JsonException e) { throw new FormatException($"Save file is not valid JSON: {e.Message}", e); }
+        try
+        {
+            if (JsonNode.Parse(json) is not JsonObject root) throw new FormatException("Save file is empty.");
+            if (root["game"]?.GetValue<string>() is var game && game != GameId) throw new FormatException($"Not a {GameId} save (game '{game}').");
+            var version = root["schemaVersion"]?.GetValue<int>() ?? 0;
+            if (version < OldestReadableSchemaVersion || version > SchemaVersion)
+                throw new FormatException($"Save schemaVersion {version}; this build reads {OldestReadableSchemaVersion} to {SchemaVersion}.");
+            SaveMigrations.Migrate(root, catalog); // older versions become the current format here
+            file = root.Deserialize<SaveFile>(Options);
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException)
+        {
+            throw new FormatException($"Save file is not valid JSON: {e.Message}", e);
+        }
 
         if (file is null) throw new FormatException("Save file is empty.");
-        if (file.Game != GameId) throw new FormatException($"Not a {GameId} save (game '{file.Game}').");
-        if (file.SchemaVersion < OldestReadableSchemaVersion || file.SchemaVersion > SchemaVersion)
-            throw new FormatException(
-                $"Save schemaVersion {file.SchemaVersion}; this build reads {OldestReadableSchemaVersion} to {SchemaVersion}.");
         var dto = file.Sector ?? throw new FormatException("Save has no sector.");
 
         try
         {
-            var sector = new SectorState(dto.Seed, dto.Tick) { Recipes = catalog.Recipes };
+            var sector = new SectorState(dto.Seed, dto.Tick) { Recipes = catalog.Recipes, Parts = catalog };
             if (dto.Tuning is { } t)
             {
                 sector.Tuning.DrillRateMultiplier = t.DrillRateMultiplier;
                 sector.Tuning.RefiningRateMultiplier = t.RefiningRateMultiplier;
                 sector.Tuning.FabricationRateMultiplier = t.FabricationRateMultiplier;
             }
-            AddBodiesParentsFirst(sector, dto.Bodies ?? new List<BodyDto>(), file.SchemaVersion);
+            AddBodiesParentsFirst(sector, dto.Bodies ?? new List<BodyDto>());
 
             foreach (var c in dto.Crafts ?? new List<CraftDto>())
             {
@@ -173,12 +183,10 @@ public static class SaveGameSerializer
                 };
                 sector.AddCraft(craft);
                 sector.SetTarget(craft.Id, new BodyId(c.TargetBodyId));
-                // v1 has no landed fields: they read as 0/null, i.e. flying. That is the whole v1 -> v2 migration.
                 if (c.LandedOnBodyId != 0)
                     sector.RestoreLanding(craft.Id, new BodyId(c.LandedOnBodyId), ToVec(c.LandedOffset, "landedOffset"));
-                // Before v4 nothing could be anchored, except that a landed foundation always is.
-                sector.RestoreAnchored(craft.Id, file.SchemaVersion >= 4 ? c.Anchored : craft.IsLanded && craft.Stats.IsFixedStructure);
-                // v1/v2 have none of the following; null reads as "not on rails, empty, nothing queued".
+                sector.RestoreAnchored(craft.Id, c.Anchored);
+                craft.LegacyUnlimitedStorage = c.LegacyUnlimitedStorage;
                 if (c.RailOrbit is { } rail) sector.RestoreRails(craft.Id, OrbitFromDto(rail));
                 foreach (var (material, kg) in c.InventoryKg ?? new SortedDictionary<string, long>())
                 {
@@ -202,7 +210,7 @@ public static class SaveGameSerializer
             }
             if (dto.NextOrderId > 0) sector.RestoreNextOrderId(dto.NextOrderId);
 
-            // Links between crafts, after every craft exists (v5; older files have none).
+            // Links between crafts, after every craft exists.
             foreach (var c in dto.Crafts ?? new List<CraftDto>())
             {
                 if (c.TargetCraftId != 0) sector.SetTargetCraft(new CraftId(c.Id), new CraftId(c.TargetCraftId));
@@ -254,7 +262,7 @@ public static class SaveGameSerializer
     }
 
     // SectorState requires parents before children; saves list bodies by id, which may not be that order.
-    private static void AddBodiesParentsFirst(SectorState sector, List<BodyDto> bodies, int schemaVersion)
+    private static void AddBodiesParentsFirst(SectorState sector, List<BodyDto> bodies)
     {
         var pending = bodies.ToList();
         var added = new HashSet<uint>();
@@ -268,8 +276,7 @@ public static class SaveGameSerializer
                 var orbit = b.Orbit is { } o ? new CircularOrbit(new BodyId(o.ParentId), o.RadiusM, o.PeriodS, o.PhaseAtZeroRad) : null;
                 sector.AddBody(new CelestialBodyState(new BodyId(b.Id), b.Name ?? "", b.Kind, b.MassKg, b.DensityKgPerM3, b.IsMineable, orbit,
                     b.DepositsKg));
-                // Before v7 there was no survey: treat every body as surveyed so old games keep working.
-                if (schemaVersion < 7 || b.Surveyed) sector.MarkSurveyed(new BodyId(b.Id));
+                if (b.Surveyed) sector.MarkSurveyed(new BodyId(b.Id));
                 added.Add(b.Id);
                 pending.Remove(b);
             }
@@ -301,7 +308,7 @@ public static class SaveGameSerializer
     private static Vector2D ToVec(VecDto? v, string what) =>
         v is null ? throw new FormatException($"Craft is missing {what}.") : new Vector2D(v.X, v.Y);
 
-    // --- File shape (schema 8). Change only together with SchemaVersion and docs/08. ---
+    // --- File shape (schema 9). Change only together with SchemaVersion and docs/08. ---
 
     private sealed class SaveFile
     {
@@ -359,6 +366,9 @@ public static class SaveGameSerializer
         public uint LandedOnBodyId { get; set; }
         public VecDto? LandedOffset { get; set; }
         public bool Anchored { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] // only on stations from pre-v9 saves
+        public bool LegacyUnlimitedStorage { get; set; }
         public double MiningRemainderKg { get; set; }
         public BatchDto? RefiningBatch { get; set; }
         public JobDto? Job { get; set; }

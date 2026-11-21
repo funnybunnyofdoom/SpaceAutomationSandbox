@@ -84,7 +84,8 @@ public partial class CargoPanel : PanelContainer
         }
 
         var station = sector.GetCraft(ship.DockedToCraftId);
-        _header.Text = $"{ship.Name}: {ship.Inventory.TotalKg / 1000.0:0.0} / {ship.CargoCapacityKg / 1000.0:0} t      at {station.Name}";
+        var stationRoom = station.HasCargoLimit ? $"{station.Inventory.TotalKg / 1000.0:0.0} / {station.CargoCapacityKg / 1000.0:0} t" : "unlimited";
+        _header.Text = $"{ship.Name}: {ship.Inventory.TotalKg / 1000.0:0.0} / {ship.CargoCapacityKg / 1000.0:0} t      {station.Name}: {stationRoom}";
 
         var ids = _materials.Materials.Select(m => m.Id)
             .Concat(ship.Inventory.Kg.Keys).Concat(station.Inventory.Kg.Keys).Distinct().ToList();

@@ -172,7 +172,10 @@ public partial class ShipyardPanel : PanelContainer
         var materials = _catalog.Materials;
         string Name(string id) => materials.Contains(id) ? materials.Get(id).Name : id;
         var ids = materials.Materials.Select(m => m.Id).Concat(yard.Inventory.Kg.Keys).Distinct().ToList();
-        _stock.Text = "Stock:\n" + string.Join("\n", ids.Select(id => $"  {Name(id)}  {yard.Inventory[id] / 1000.0:0.0##} t"));
+        _stock.Text = (yard.HasCargoLimit
+                          ? $"Stock ({yard.Inventory.TotalKg / 1000.0:0.0} / {yard.CargoCapacityKg / 1000.0:0} t storage):\n"
+                          : $"Stock ({yard.Inventory.TotalKg / 1000.0:0.0} t, unlimited: old save):\n")
+                      + string.Join("\n", ids.Select(id => $"  {Name(id)}  {yard.Inventory[id] / 1000.0:0.0##} t"));
 
         var selected = SelectedDesign();
         var needsSite = selected is not null && selected.ComputeStats(_catalog).IsFixedStructure;

@@ -129,11 +129,12 @@ public sealed partial class SectorState
             var angle = baseAngle + step / radius;
             var offset = new Vector2D(Math.Cos(angle) * radius, Math.Sin(angle) * radius);
             if (!IsFree(bodyPos + offset, craft)) continue;
-            craft.LandedOnBodyId = body.Id;
-            craft.LandedOffset = offset;
-            craft.Position = craft.PreviousPosition = bodyPos + offset;
-            craft.Velocity = GetVelocityAt(body.Id, timeS);
             craft.HeadingRad = craft.PreviousHeadingRad = FlightModel.WrapAngle(Math.Atan2(offset.X, -offset.Y)); // forward = outward
+            var settled = SettleOnSurface(craft, bodyPos + offset, bodyPos, body.RadiusM); // rest on the foundation row
+            craft.LandedOnBodyId = body.Id;
+            craft.LandedOffset = settled - bodyPos;
+            craft.Position = craft.PreviousPosition = settled;
+            craft.Velocity = GetVelocityAt(body.Id, timeS);
             OnLanded(craft);
             return;
         }
@@ -177,9 +178,11 @@ public sealed partial class SectorState
                 var offset = new Vector2D(Math.Cos(angle) * radius, Math.Sin(angle) * radius);
                 var position = GetPositionAt(body.Id, timeS) + offset;
                 if (!IsFree(position, craft)) continue;
+                var bodyCentre = GetPositionAt(body.Id, timeS);
+                var settled = SettleOnSurface(craft, position, bodyCentre, body.RadiusM);
                 craft.LandedOnBodyId = body.Id;
-                craft.LandedOffset = offset;
-                craft.Position = craft.PreviousPosition = position;
+                craft.LandedOffset = settled - bodyCentre;
+                craft.Position = craft.PreviousPosition = settled;
                 craft.Velocity = GetVelocityAt(body.Id, timeS);
                 OnLanded(craft);
                 return;

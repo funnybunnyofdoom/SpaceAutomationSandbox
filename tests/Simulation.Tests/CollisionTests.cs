@@ -57,7 +57,7 @@ public class CollisionTests
 
         Assert.True(craft.IsLanded);
         Assert.Equal(planet.Id, craft.LandedOnBodyId);
-        Assert.Equal(planet.RadiusM + craft.CollisionRadiusM, CentreDistance(sector, craft, planet), 6);
+        Assert.InRange(sector.SurfaceGap(craft, planet), -1e-6, 1e-6); // resting on its lowest cell
         Assert.Equal(Vector2D.Zero, craft.Velocity); // the primary doesn't move
     }
 
@@ -114,7 +114,7 @@ public class CollisionTests
         Run(sector, craft, ShipControls.Idle, 5);
 
         Assert.True(craft.IsLanded);
-        Assert.Equal(planet.RadiusM + craft.CollisionRadiusM, CentreDistance(sector, craft, planet), 6);
+        Assert.InRange(sector.SurfaceGap(craft, planet), -1e-6, 1e-6);
     }
 
     [Fact]
@@ -132,8 +132,7 @@ public class CollisionTests
             if (!wasLanded && craft.IsLanded) landings++;
 
             foreach (var body in sector.Bodies)
-                Assert.True(CentreDistance(sector, craft, body) >= body.RadiusM + craft.CollisionRadiusM - 1e-6,
-                    $"tick {tick}: inside {body.Name}");
+                Assert.True(sector.SurfaceGap(craft, body) >= -1e-6, $"tick {tick}: a cell is inside {body.Name} by {-sector.SurfaceGap(craft, body)} m (landed={craft.IsLanded}, anchored={craft.IsAnchored}, controls={craft.Controls})");
         }
         Assert.True(landings > 0, "The random pilot should hit the planet at least once (it spawns 300 m up).");
     }
@@ -147,7 +146,7 @@ public class CollisionTests
             var rock = Rock(sector);
             craft.Position = sector.GetPosition(rock.Id) + new Vector2D(rock.RadiusM + craft.CollisionRadiusM + 1, 0);
             craft.Velocity = sector.GetVelocityAt(rock.Id, sector.TimeS) + new Vector2D(-3, 0);
-            Run(sector, craft, ShipControls.Idle, 20);
+            for (var i = 0; i < 400 && !craft.IsLanded; i++) sector.Step();
             Assert.True(craft.IsLanded);
             return sector;
         }

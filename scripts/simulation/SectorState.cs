@@ -132,31 +132,23 @@ public sealed partial class SectorState
             craft.LandedOnBodyId = BodyId.None;
             craft.Velocity = bodyVel + ownDeltaV;
             craft.Position = bodyPos + craft.LandedOffset + ownDeltaV * FixedStepClock.TickSeconds;
+            // Turning in the same tick can swing a cell into the ground: keep every cell outside.
+            var surface = GetBody(bodyId).RadiusM;
+            if (SurfaceGap(craft, craft.Position, craft.HeadingRad, bodyPos, surface) < 0)
+                craft.Position = SettleOnSurface(craft, craft.Position, bodyPos, surface);
             return;
         }
 
         craft.Velocity = bodyVel;
-        craft.Position = bodyPos + craft.LandedOffset;
-    }
-
-    private void ResolveContact(CraftState craft, double endS)
-    {
-        foreach (var body in _bodies) // id order: deterministic if two bodies overlap
+        if (craft.IsAnchored) craft.HeadingRad = craft.PreviousHeadingRad; // anchored: locked, can't turn
+        else if (craft.HeadingRad != craft.PreviousHeadingRad)
         {
-            var bodyPos = GetPositionAt(body.Id, endS);
-            var offset = craft.Position - bodyPos;
-            var contactDistance = body.RadiusM + craft.CollisionRadiusM;
-            var distance = offset.Length;
-            if (distance >= contactDistance) continue;
-
-            var normal = distance > 1e-9 ? offset * (1.0 / distance) : new Vector2D(0, -1);
-            craft.LandedOnBodyId = body.Id;
-            craft.LandedOffset = normal * contactDistance;
-            craft.Position = bodyPos + craft.LandedOffset;
-            craft.Velocity = GetVelocityAt(body.Id, endS);
-            OnLanded(craft);
-            return;
+            // Turning on the ground: re-settle so it rests on its (new) lowest cells, never inside.
+            var body = GetBody(bodyId);
+            var settled = SettleOnSurface(craft, bodyPos + craft.LandedOffset, bodyPos, body.RadiusM);
+            craft.LandedOffset = settled - bodyPos;
         }
+        craft.Position = bodyPos + craft.LandedOffset;
     }
 
     /// <summary>Restores a landed state from a save; validates the body and the offset.</summary>

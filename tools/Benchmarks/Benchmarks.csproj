@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Simulation benchmarks (#20): automated ships at increasing counts, timed per tick.
+    Run (Release): dotnet run -c Release - -project tools/Benchmarks
+    Links the Godot-free simulation sources, like the tests. Results are recorded in docs/09_BENCHMARKS.md.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../scripts/simulation/**/*.cs" Link="Simulation/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../scripts/construction/**/*.cs" Link="Construction/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
