@@ -61,6 +61,17 @@ public sealed class CraftState
     /// <summary>Body the brake matches velocity with. Set via <see cref="SectorState.SetTarget"/> so it's validated.</summary>
     public BodyId TargetBodyId { get; internal set; } = BodyId.None;
 
+    /// <summary>Body the craft rests on, or None while flying. See <see cref="SectorState.Step"/>.</summary>
+    public BodyId LandedOnBodyId { get; internal set; } = BodyId.None;
+
+    /// <summary>While landed: the craft's centre relative to the body's centre (constant until lift-off).</summary>
+    public Vector2D LandedOffset { get; internal set; }
+
+    public bool IsLanded => !LandedOnBodyId.IsNone;
+
+    /// <summary>Collision radius in metres (bounding circle of the grid).</summary>
+    public double CollisionRadiusM => Stats.BoundingRadiusM;
+
     public double SpeedMps => Velocity.Length;
 
     public Vector2D Forward => FlightModel.ForwardFromHeading(HeadingRad);

@@ -19,7 +19,8 @@ public sealed record ShipStats(
     double CargoCapacityKg,
     double EnergyCapacityKJ,
     double CenterOfMassX,
-    double CenterOfMassY)
+    double CenterOfMassY,
+    double BoundingRadiusM)
 {
     /// <summary>Full-thrust acceleration in m/s².</summary>
     public double MaxAccelerationMps2 => TotalMassKg > 0 ? TotalThrustN / TotalMassKg : 0;
@@ -96,8 +97,21 @@ public sealed class ShipDesign
             momentX += part.MassKg * cell.Pos.X;
             momentY += part.MassKg * cell.Pos.Y;
         }
-        return new ShipStats(Cells.Count, mass, thrust, cargo, energy,
-            mass > 0 ? momentX / mass : 0, mass > 0 ? momentY / mass : 0);
+        var comX = mass > 0 ? momentX / mass : 0;
+        var comY = mass > 0 ? momentY / mass : 0;
+
+        // Smallest circle around the centre of mass that contains every cell square (its corners).
+        // Used as the collision shape for now.
+        double radiusCellsSq = 0;
+        foreach (var cell in Cells)
+        {
+            var dx = Math.Abs(cell.Pos.X - comX) + 0.5;
+            var dy = Math.Abs(cell.Pos.Y - comY) + 0.5;
+            radiusCellsSq = Math.Max(radiusCellsSq, dx * dx + dy * dy);
+        }
+
+        return new ShipStats(Cells.Count, mass, thrust, cargo, energy, comX, comY,
+            Math.Sqrt(radiusCellsSq) * CellSizeM);
     }
 
     public static ShipDesign FromJson(string json)

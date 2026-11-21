@@ -40,7 +40,8 @@ public class SaveLoadTests
             .Concat(s.Bodies.Select(b => $"{b.Id}|{b.Name}|{b.Kind}|{b.MassKg:R}|{b.DensityKgPerM3:R}|{b.IsMineable}|{b.Orbit}"))
             .Concat(s.Crafts.Select(c =>
                 $"{c.Id}|{c.Name}|{c.Design.Id}|{string.Join(",", c.Design.Cells)}|{c.Position.X:R},{c.Position.Y:R}|" +
-                $"{c.Velocity.X:R},{c.Velocity.Y:R}|{c.HeadingRad:R}|{c.Controls}|{c.TargetBodyId}")));
+                $"{c.Velocity.X:R},{c.Velocity.Y:R}|{c.HeadingRad:R}|{c.Controls}|{c.TargetBodyId}|" +
+                $"{c.LandedOnBodyId}|{c.LandedOffset.X:R},{c.LandedOffset.Y:R}")));
 
     [Fact]
     public void RoundTrip_PreservesTheWholeState()
@@ -134,7 +135,8 @@ public class SaveLoadTests
     [InlineData("not json")]
     [InlineData("{}")]
     [InlineData("""{ "schemaVersion": 1, "game": "SomethingElse", "sector": {} }""")]
-    [InlineData("""{ "schemaVersion": 2, "game": "SpaceAutomationSandbox", "sector": {} }""")]
+    [InlineData("""{ "schemaVersion": 0, "game": "SpaceAutomationSandbox", "sector": {} }""")]
+    [InlineData("""{ "schemaVersion": 3, "game": "SpaceAutomationSandbox", "sector": {} }""")]
     public void Load_RejectsWrongOrForeignFiles(string json)
     {
         Assert.Throws<FormatException>(() => SaveGameSerializer.FromJson(json, TestData.Catalog()));

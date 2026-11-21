@@ -29,6 +29,20 @@ Work:
 
 **Acceptance:** pilot, stop, return to a resource source, identify the object, quit/reload without losing ship/body identity. Movement must be independent of render FPS.
 
+**Status (2026-11-20, commits 94d4079 to 9968a88):**
+
+| Item | State | Evidence |
+| --- | --- | --- |
+| Seeded sector: one central body and one mineable body | Done | `SectorGenerator`; same-seed tests |
+| Ship as a 2D grid of parts, steering, camera follow | Done | `data/blueprints/starter_ship.json`, `FlightModel`; the creator flew it |
+| Modules: hull, thruster, battery, cockpit, cargo, drill | Defined as data with stats | `data/parts/parts.json`. Battery, cargo and drill have no behaviour yet |
+| Pilot, stop, return to the source, identify it | Done | Target-relative brake, Tab/T targeting, HUD; rendezvous tests; the creator flew it |
+| Persist seed, ship and body resources; quit/reload | Done | `docs/08_SAVE_FORMAT.md`; continue-equivalence tests; the creator checked F6, closing, reopening and F9 |
+| Movement independent of render FPS | Done | Fixed 20 ticks/s; frame-pacing tests |
+| HUD: speed/location, cargo, part power, target | Partial | Speed, position and target are shown. Cargo and power show only *capacity*, because no cargo or power is simulated |
+| Solid bodies (added after the acceptance items) | Done | Landing, riding along and lift-off; tests check that a ship never ends a tick inside a body over 40,000 random ticks |
+| Not covered by Phase 1 | — | Power and fuel use, cargo contents, damage, anchoring |
+
 ## Phase 2 — Blueprint construction and deployment
 
 **Goal:** edit, validate, save and fabricate a usable modular craft.

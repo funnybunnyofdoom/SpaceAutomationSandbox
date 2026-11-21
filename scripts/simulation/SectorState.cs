@@ -79,15 +79,77 @@ public sealed class SectorState
     /// Advances the sector by exactly one fixed tick. A craft's brake matches its target body's
     /// velocity, sampled mid-tick so a held brake tracks a curving orbit closely.
     /// </summary>
+    /// <remarks>
+    /// PLACEHOLDER collision (docs/06): bodies are solid. A craft (as a circle of
+    /// <see cref="CraftState.CollisionRadiusM"/>) that would end a tick inside a body is placed on
+    /// its surface and lands: it then moves with the body, with no damage and no bounce. It lifts
+    /// off when its own thrust this tick points away from the surface.
+    /// </remarks>
     public void Step()
     {
         var midTickS = TimeS + FixedStepClock.TickSeconds / 2;
+        var endS = TimeS + FixedStepClock.TickSeconds;
         foreach (var craft in _crafts)
         {
             var reference = craft.TargetBodyId.IsNone ? Vector2D.Zero : GetVelocityAt(craft.TargetBodyId, midTickS);
+            var velocityBefore = craft.Velocity;
             FlightModel.Step(craft, FixedStepClock.TickSeconds, reference);
+
+            if (craft.IsLanded) UpdateLanded(craft, craft.Velocity - velocityBefore, endS);
+            else ResolveContact(craft, endS);
         }
         Tick++;
+    }
+
+    private void UpdateLanded(CraftState craft, Vector2D ownDeltaV, double endS)
+    {
+        var bodyId = craft.LandedOnBodyId;
+        var bodyPos = GetPositionAt(bodyId, endS);
+        var bodyVel = GetVelocityAt(bodyId, endS);
+        var outward = craft.LandedOffset * (1.0 / craft.LandedOffset.Length);
+
+        // Only throttle can lift it. The body's motion never does, and neither does brake, whose
+        // "match the reference velocity" change could otherwise point slightly outward.
+        if (!craft.Controls.Clamped().Brake && ownDeltaV.X * outward.X + ownDeltaV.Y * outward.Y > 0)
+        {
+            craft.LandedOnBodyId = BodyId.None;
+            craft.Velocity = bodyVel + ownDeltaV;
+            craft.Position = bodyPos + craft.LandedOffset + ownDeltaV * FixedStepClock.TickSeconds;
+            return;
+        }
+
+        craft.Velocity = bodyVel;
+        craft.Position = bodyPos + craft.LandedOffset;
+    }
+
+    private void ResolveContact(CraftState craft, double endS)
+    {
+        foreach (var body in _bodies) // id order: deterministic if two bodies overlap
+        {
+            var bodyPos = GetPositionAt(body.Id, endS);
+            var offset = craft.Position - bodyPos;
+            var contactDistance = body.RadiusM + craft.CollisionRadiusM;
+            var distance = offset.Length;
+            if (distance >= contactDistance) continue;
+
+            var normal = distance > 1e-9 ? offset * (1.0 / distance) : new Vector2D(0, -1);
+            craft.LandedOnBodyId = body.Id;
+            craft.LandedOffset = normal * contactDistance;
+            craft.Position = bodyPos + craft.LandedOffset;
+            craft.Velocity = GetVelocityAt(body.Id, endS);
+            return;
+        }
+    }
+
+    /// <summary>Restores a landed state from a save; validates the body and the offset.</summary>
+    public void RestoreLanding(CraftId craftId, BodyId bodyId, Vector2D offset)
+    {
+        var craft = GetCraft(craftId);
+        if (bodyId.IsNone) { craft.LandedOnBodyId = BodyId.None; return; }
+        GetBody(bodyId);
+        if (!(offset.Length > 0)) throw new ArgumentException("Landed offset must be non-zero.", nameof(offset));
+        craft.LandedOnBodyId = bodyId;
+        craft.LandedOffset = offset;
     }
 
     /// <summary>Sets what the craft's brake matches; <see cref="BodyId.None"/> means "stop relative to the sector".</summary>

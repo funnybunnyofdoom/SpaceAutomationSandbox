@@ -20,7 +20,9 @@ public sealed record LoadedGame(SectorState Sector, CraftId PlayerCraftId);
 /// </summary>
 public static class SaveGameSerializer
 {
-    public const int SchemaVersion = 1;
+    /// <summary>Version written. v2 added the landed state; v1 files still load (as not landed).</summary>
+    public const int SchemaVersion = 2;
+    public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
     private static readonly JsonSerializerOptions Options = new()
@@ -69,6 +71,8 @@ public static class SaveGameSerializer
                     HeadingRad = c.HeadingRad,
                     Controls = new ControlsDto { Throttle = c.Controls.Throttle, Turn = c.Controls.Turn, Brake = c.Controls.Brake },
                     TargetBodyId = c.TargetBodyId.Value,
+                    LandedOnBodyId = c.LandedOnBodyId.Value,
+                    LandedOffset = c.IsLanded ? Vec(c.LandedOffset) : null,
                 }).ToList(),
             },
         };
@@ -84,8 +88,9 @@ public static class SaveGameSerializer
 
         if (file is null) throw new FormatException("Save file is empty.");
         if (file.Game != GameId) throw new FormatException($"Not a {GameId} save (game '{file.Game}').");
-        if (file.SchemaVersion != SchemaVersion)
-            throw new FormatException($"Save schemaVersion {file.SchemaVersion}; this build reads {SchemaVersion}.");
+        if (file.SchemaVersion < OldestReadableSchemaVersion || file.SchemaVersion > SchemaVersion)
+            throw new FormatException(
+                $"Save schemaVersion {file.SchemaVersion}; this build reads {OldestReadableSchemaVersion} to {SchemaVersion}.");
         var dto = file.Sector ?? throw new FormatException("Save has no sector.");
 
         try
@@ -111,6 +116,9 @@ public static class SaveGameSerializer
                 };
                 sector.AddCraft(craft);
                 sector.SetTarget(craft.Id, new BodyId(c.TargetBodyId));
+                // v1 has no landed fields: they read as 0/null, i.e. flying. That is the whole v1 -> v2 migration.
+                if (c.LandedOnBodyId != 0)
+                    sector.RestoreLanding(craft.Id, new BodyId(c.LandedOnBodyId), ToVec(c.LandedOffset, "landedOffset"));
             }
 
             var player = new CraftId(file.PlayerCraftId);
@@ -148,7 +156,7 @@ public static class SaveGameSerializer
     private static Vector2D ToVec(VecDto? v, string what) =>
         v is null ? throw new FormatException($"Craft is missing {what}.") : new Vector2D(v.X, v.Y);
 
-    // --- File shape (schema 1). Change only together with SchemaVersion and docs/08. ---
+    // --- File shape (schema 2). Change only together with SchemaVersion and docs/08. ---
 
     private sealed class SaveFile
     {
@@ -195,6 +203,8 @@ public static class SaveGameSerializer
         public double HeadingRad { get; set; }
         public ControlsDto? Controls { get; set; }
         public uint TargetBodyId { get; set; }
+        public uint LandedOnBodyId { get; set; }
+        public VecDto? LandedOffset { get; set; }
     }
 
     private sealed class DesignDto

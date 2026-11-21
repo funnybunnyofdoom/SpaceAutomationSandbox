@@ -1,4 +1,4 @@
-# 08 — Save format (schema 1)
+# 08 — Save format (schema 2)
 
 The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs`.
 
@@ -22,7 +22,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
 
 ```jsonc
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "game": "SpaceAutomationSandbox",
   "playerCraftId": 1,                 // 0 = no player craft
   "sector": {
@@ -43,14 +43,23 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
         "velocity": { "x": 60.1, "y": 46.3 },        // m/s
         "headingRad": 2.63,
         "controls": { "throttle": 0, "turn": 0, "brake": false },
-        "targetBodyId": 2 }                          // 0 = no target
+        "targetBodyId": 2,                           // 0 = no target
+        "landedOnBodyId": 0,                         // v2: 0 = flying
+        "landedOffset": null }                       // v2: craft centre minus body centre while landed
     ]
   }
 }
 ```
 
-The load checks for: the right `game` and `schemaVersion`, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs, and target and player IDs that exist. Any failure raises `FormatException` with a reason.
+The load checks for: the right `game`, a `schemaVersion` from 1 to 2, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs, and target, landed-on and player IDs that exist. Any failure raises `FormatException` with a reason.
 
 ## Changing the format
 
 Bump `SaveGameSerializer.SchemaVersion` and update this document. Then either add a migration from the old version, or decide explicitly, and record in docs/06, that old saves are dropped. Until then, loading a different version is refused with a message.
+
+## Version history
+
+| Version | Change | Reading older files |
+| --- | --- | --- |
+| 1 | First format | — |
+| 2 | Added `landedOnBodyId` and `landedOffset` per craft (solid bodies) | A v1 file loads with every craft flying. The next save writes v2. |

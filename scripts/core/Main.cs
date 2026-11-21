@@ -244,7 +244,10 @@ public partial class Main : Node2D
         text += $"{p.Design.Name}: {p.Stats.TotalMassKg / 1000:0.0} t, {p.Stats.TotalThrustN / 1000:0} kN, "
                 + $"{p.Stats.MaxAccelerationMps2:0.0} m/s²   cargo cap {p.Stats.CargoCapacityKg / 1000:0} t\n"
                 + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
-                + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n";
+                + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
+                + (p.IsLanded
+                    ? $"LANDED on {_sector.GetBody(p.LandedOnBodyId).Name} - thrust away from the surface to lift off\n"
+                    : "");
 
         if (p.TargetBodyId.IsNone)
         {
