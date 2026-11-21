@@ -2,6 +2,40 @@ using System;
 
 namespace SpaceAutomationSandbox.Simulation;
 
+/// <summary>
+/// A job that drives a craft (data, not code). Common parts: what it moves, where to, whether it
+/// runs, progress counters, and why it's waiting. Run by SectorState.StepJobs.
+/// </summary>
+public abstract class ShipJob
+{
+    protected ShipJob(string materialId, CraftId destinationId)
+    {
+        if (destinationId.IsNone) throw new ArgumentException("Job needs a destination.", nameof(destinationId));
+        MaterialId = materialId;
+        DestinationId = destinationId;
+    }
+
+    public string MaterialId { get; }
+    public CraftId DestinationId { get; }
+
+    public bool Active { get; internal set; } = true;
+
+    /// <summary>Why the job is waiting, or null when it isn't.</summary>
+    public string? WaitReason { get; internal set; }
+
+    /// <summary>Completed cycles (mine or pick up → deliver).</summary>
+    public int CompletedCycles { get; internal set; }
+
+    /// <summary>Total kg unloaded at the destination.</summary>
+    public long DeliveredKg { get; internal set; }
+
+    /// <summary>What it is doing now, in plain words (with the wait reason when blocked).</summary>
+    public abstract string Status { get; }
+
+    /// <summary>Short kind name for UI and saves.</summary>
+    public abstract string Kind { get; }
+}
+
 /// <summary>Where a mining job is in its cycle.</summary>
 public enum MiningJobState
 {
@@ -15,47 +49,34 @@ public enum MiningJobState
 }
 
 /// <summary>
-/// A repeatable mining job (data, not code): fly to <see cref="SourceBodyId"/>, land, anchor, mine
-/// <see cref="MaterialId"/> until the hold is <see cref="ReturnFraction"/> full (or the deposit
-/// runs out), fly to <see cref="DestinationId"/>, dock, unload, repeat. Always says what it's doing
-/// (<see cref="Status"/>) and, when blocked, why (<see cref="WaitReason"/>). Run by SectorState.StepJobs.
+/// Repeatable mining: fly to <see cref="SourceBodyId"/>, land, anchor, mine <see cref="ShipJob.MaterialId"/>
+/// until the hold is <see cref="ReturnFraction"/> full (or the deposit runs out), fly to the destination,
+/// dock, unload, repeat.
 /// </summary>
-public sealed class MiningJob
+public sealed class MiningJob : ShipJob
 {
     public MiningJob(BodyId sourceBodyId, string materialId, CraftId destinationId, double returnFraction)
+        : base(materialId, destinationId)
     {
         if (sourceBodyId.IsNone) throw new ArgumentException("Job needs a source body.", nameof(sourceBodyId));
-        if (destinationId.IsNone) throw new ArgumentException("Job needs a destination.", nameof(destinationId));
         if (!(returnFraction > 0) || returnFraction > 1) throw new ArgumentOutOfRangeException(nameof(returnFraction));
         SourceBodyId = sourceBodyId;
-        MaterialId = materialId;
-        DestinationId = destinationId;
         ReturnFraction = returnFraction;
     }
 
     public BodyId SourceBodyId { get; }
-    public string MaterialId { get; }
-    public CraftId DestinationId { get; }
 
     /// <summary>Head home when cargo reaches this fraction of capacity (0–1].</summary>
     public double ReturnFraction { get; }
 
-    public bool Active { get; internal set; } = true;
     public MiningJobState State { get; internal set; } = MiningJobState.ToSource;
 
     /// <summary>State to resume after a wait clears.</summary>
     public MiningJobState ResumeState { get; internal set; } = MiningJobState.ToSource;
 
-    /// <summary>Why the job is waiting, or null when it isn't.</summary>
-    public string? WaitReason { get; internal set; }
+    public override string Kind => "mining";
 
-    /// <summary>Completed mine → deliver cycles.</summary>
-    public int CompletedCycles { get; internal set; }
-
-    /// <summary>Total kg unloaded at the destination.</summary>
-    public long DeliveredKg { get; internal set; }
-
-    public string Status => !Active ? "stopped"
+    public override string Status => !Active ? "stopped"
         : State == MiningJobState.Waiting ? $"waiting: {WaitReason}"
         : State switch
         {
@@ -65,6 +86,60 @@ public sealed class MiningJob
             MiningJobState.Lifting => "lifting off",
             MiningJobState.ToDestination => "flying to the destination",
             MiningJobState.Unloading => "unloading",
+            _ => State.ToString(),
+        };
+}
+
+/// <summary>Where a freight job is in its cycle.</summary>
+public enum HaulJobState
+{
+    ToPickup,
+    Loading,
+    ToDropoff,
+    Unloading,
+    Waiting,
+}
+
+/// <summary>
+/// Repeatable freight: dock at <see cref="PickupId"/>, load <see cref="ShipJob.MaterialId"/> once at least
+/// <see cref="MinPickupKg"/> is there (as much as fits), fly to the destination, dock, unload, repeat.
+/// With <see cref="KeepStockedKg"/> &gt; 0 it only delivers until the destination holds that much
+/// ("keep stocked"), then waits there with the rest. Replaces the player hauling goods by hand.
+/// </summary>
+public sealed class HaulJob : ShipJob
+{
+    public HaulJob(CraftId pickupId, string materialId, CraftId destinationId, long minPickupKg, long keepStockedKg)
+        : base(materialId, destinationId)
+    {
+        if (pickupId.IsNone) throw new ArgumentException("Job needs a pickup station.", nameof(pickupId));
+        if (minPickupKg < 1) throw new ArgumentOutOfRangeException(nameof(minPickupKg));
+        if (keepStockedKg < 0) throw new ArgumentOutOfRangeException(nameof(keepStockedKg));
+        PickupId = pickupId;
+        MinPickupKg = minPickupKg;
+        KeepStockedKg = keepStockedKg;
+    }
+
+    public CraftId PickupId { get; }
+
+    /// <summary>Wait at the pickup until at least this much is there (avoids hauling scraps).</summary>
+    public long MinPickupKg { get; }
+
+    /// <summary>0 = deliver everything; otherwise deliver only until the destination holds this much.</summary>
+    public long KeepStockedKg { get; }
+
+    public HaulJobState State { get; internal set; } = HaulJobState.ToPickup;
+    public HaulJobState ResumeState { get; internal set; } = HaulJobState.ToPickup;
+
+    public override string Kind => "freight";
+
+    public override string Status => !Active ? "stopped"
+        : State == HaulJobState.Waiting ? $"waiting: {WaitReason}"
+        : State switch
+        {
+            HaulJobState.ToPickup => "flying to the pickup",
+            HaulJobState.Loading => "loading",
+            HaulJobState.ToDropoff => "flying to the destination",
+            HaulJobState.Unloading => "unloading",
             _ => State.ToString(),
         };
 }

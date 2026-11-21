@@ -38,12 +38,14 @@ public static class NewGame
         Require(starterShipyard.Validate(catalog, DesignRole.Station), starterShipyard);
 
         var sector = SectorGenerator.Generate(seed);
+        sector.Recipes = catalog.Recipes;
         var primary = sector.Bodies.First(b => b.Orbit is null);
 
         var player = new CraftState(sector.AllocateCraftId(), "Player", starterShip, starterShip.ComputeStats(catalog),
             SectorGenerator.PlayerSpawnPoint(sector), headingRad: 0);
         sector.AddCraft(player);
         sector.SetTarget(player.Id, primary.Id);
+        sector.PilotCraftId = player.Id;
 
         var yard = new CraftState(sector.AllocateCraftId(), "Shipyard", starterShipyard, starterShipyard.ComputeStats(catalog),
             Vector2D.Zero, headingRad: 0);

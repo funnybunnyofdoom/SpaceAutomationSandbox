@@ -36,6 +36,7 @@ public sealed class CelestialBodyState
         DensityKgPerM3 = densityKgPerM3;
         IsMineable = isMineable;
         Orbit = orbit;
+        Surveyed = !isMineable; // nothing to discover on the others yet
         foreach (var (material, kg) in depositsKg ?? new Dictionary<string, long>())
         {
             if (kg < 0) throw new ArgumentOutOfRangeException(nameof(depositsKg), $"{material}: {kg} kg");
@@ -64,6 +65,12 @@ public sealed class CelestialBodyState
     }
 
     public BodyId Id { get; }
+
+    /// <summary>
+    /// Whether the player has visited it (a piloted ship within <see cref="SectorState.SurveyRangeM"/>).
+    /// Mineable bodies start unsurveyed; jobs and structures can only use surveyed bodies (docs/06).
+    /// </summary>
+    public bool Surveyed { get; internal set; }
     public string Name { get; }
     public BodyKind Kind { get; }
 

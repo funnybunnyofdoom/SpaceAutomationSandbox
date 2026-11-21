@@ -46,7 +46,7 @@ public class StationBuildTests
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
-        var rock = sector.Bodies.Single(b => b.IsMineable);
+        var rock = sector.Bodies.First(b => b.IsMineable);
 
         Assert.True(sector.OrderBuild(game.ShipyardId, Depot(), Catalog, landingSite: rock.Id).Accepted);
         RunSeconds(sector, 20);
@@ -102,7 +102,7 @@ public class StationBuildTests
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
-        var rock = sector.Bodies.Single(b => b.IsMineable);
+        var rock = sector.Bodies.First(b => b.IsMineable);
         sector.OrderBuild(game.ShipyardId, TestData.StarterShip(), Catalog);       // goes first
         sector.OrderBuild(game.ShipyardId, Depot(), Catalog, landingSite: rock.Id); // waits
 

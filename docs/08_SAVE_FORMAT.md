@@ -1,4 +1,4 @@
-# 08 — Save format (schema 6)
+# 08 — Save format (schema 7)
 
 The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs`.
 
@@ -22,7 +22,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
 
 ```jsonc
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "game": "SpaceAutomationSandbox",
   "playerCraftId": 1,                 // 0 = no player craft
   "sector": {
@@ -51,6 +51,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
         "landedOffset": null,                        // v2: craft centre minus body centre while landed
         "anchored": false,                           // v4: only while landed, and only with a clamp or foundation
         "miningRemainderKg": 0.25,                   // v6: drilled fraction of a kg not yet in cargo (0..1)
+        "refiningBatch": { "recipeId": "smelt_iron", "inputsKg": { "iron_ore": 1000 }, "progressKg": 420.0 },  // v7
         "job": { "sourceBodyId": 2, "materialId": "metal", "destinationId": 2, "returnFraction": 0.25,
                  "active": true, "state": "Mining", "resumeState": "ToSource", "waitReason": null,
                  "completedCycles": 3, "deliveredKg": 30000 },  // v6, omitted when the craft has none
@@ -63,7 +64,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
 }
 ```
 
-The load checks for: the right `game`, a `schemaVersion` from 1 to 6, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs (as a ship or as a station; queued designs as ships), known materials in inventories and orders, target, landed-on, rail-orbit parent and player IDs that exist, dock links to real free ports (one ship per port, not also landed or on rails), and anchor states the rules allow (anchored only while landed with a clamp or foundation; a landed foundation always anchored). Any failure raises `FormatException` with a reason.
+The load checks for: the right `game`, a `schemaVersion` from 1 to 7, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs (as a ship or as a station; queued designs as ships), known materials in inventories and orders, target, landed-on, rail-orbit parent and player IDs that exist, dock links to real free ports (one ship per port, not also landed or on rails), and anchor states the rules allow (anchored only while landed with a clamp or foundation; a landed foundation always anchored). Any failure raises `FormatException` with a reason.
 
 ## Changing the format
 
@@ -77,5 +78,6 @@ Bump `SaveGameSerializer.SchemaVersion` and update this document. Then either ad
 | 2 | Added `landedOnBodyId` and `landedOffset` per craft (solid bodies) | A v1 file loads with every craft flying. The next save writes v2. |
 | 3 | Added `railOrbit`, `inventoryKg` and `buildQueue` per craft, and `nextOrderId` (shipyards) | v1/v2 files load with empty inventories and no queues. They contain no shipyard; F7 starts a new game that has one. |
 | 4 | Added `anchored` per craft (anchor clamps and foundations) | Older files load with nothing anchored, except a landed foundation, which is always anchored. |
+| 7 | Added `surveyed` per body, `refiningBatch` per craft, and freight jobs (`job.kind` = "freight" with `pickupId`, `minPickupKg`, `keepStockedKg`, `haulState`, `haulResumeState`) | Older files load with every body surveyed, no refinery batches, and mining jobs only. |
 | 6 | Added `depositsKg` per body, and `miningRemainderKg` and `job` per craft (mining) | Older files load with no deposits (nothing to mine) and no jobs. F7 starts a new game with Rock-1's deposit. |
 | 5 | Added `rot` per design cell (omitted when 0), `targetCraftId`, `dockedToCraftId` and `dockPort` per craft, and `landingSiteBodyId` per build order | Older files load with no rotation, no craft targets, nothing docked, and no landing sites. |

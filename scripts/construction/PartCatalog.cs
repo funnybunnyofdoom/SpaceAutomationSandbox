@@ -27,6 +27,9 @@ public sealed record PartDefinition
     /// <summary>One berth where a ship can dock; it opens in the direction the part faces.</summary>
     public bool IsDockingPort { get; init; }
 
+    /// <summary>How many kg of recipe input this part refines per second (refineries).</summary>
+    public double RefiningRateKgPerS { get; init; }
+
     /// <summary>How many kg of finished craft this part assembles per second (shipyards).</summary>
     public double FabricationRateKgPerS { get; init; }
 
@@ -57,16 +60,17 @@ public sealed class PartCatalog
 
     private readonly Dictionary<string, PartDefinition> _parts;
 
-    public PartCatalog(IEnumerable<PartDefinition> parts, MaterialCatalog materials)
+    public PartCatalog(IEnumerable<PartDefinition> parts, MaterialCatalog materials, RecipeCatalog? recipes = null)
     {
         Materials = materials;
+        Recipes = recipes ?? RecipeCatalog.Empty;
         _parts = new Dictionary<string, PartDefinition>(StringComparer.Ordinal);
         foreach (var part in parts)
         {
             if (string.IsNullOrWhiteSpace(part.Id)) throw new FormatException("Part with empty id.");
             if (!(part.MassKg > 0)) throw new FormatException($"Part '{part.Id}' needs massKg > 0.");
             if (part.ThrustN < 0 || part.CargoCapacityKg < 0 || part.EnergyCapacityKJ < 0 || part.MiningRateKgPerS < 0
-                || part.FabricationRateKgPerS < 0)
+                || part.FabricationRateKgPerS < 0 || part.RefiningRateKgPerS < 0)
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
             ValidateMaterials(part, materials);
             if (!_parts.TryAdd(part.Id, part)) throw new FormatException($"Duplicate part id '{part.Id}'.");
@@ -74,6 +78,9 @@ public sealed class PartCatalog
     }
 
     public MaterialCatalog Materials { get; }
+
+    /// <summary>Refining recipes, carried with the parts so every loader gets the same definitions.</summary>
+    public RecipeCatalog Recipes { get; }
 
     private static void ValidateMaterials(PartDefinition part, MaterialCatalog materials)
     {
@@ -98,13 +105,13 @@ public sealed class PartCatalog
     public PartDefinition Get(string id) =>
         _parts.TryGetValue(id, out var part) ? part : throw new KeyNotFoundException($"Unknown part '{id}'.");
 
-    public static PartCatalog FromJson(string json, MaterialCatalog materials)
+    public static PartCatalog FromJson(string json, MaterialCatalog materials, RecipeCatalog? recipes = null)
     {
         var file = JsonSerializer.Deserialize<PartFile>(json, JsonOptions)
                    ?? throw new FormatException("Part file is empty.");
         if (file.SchemaVersion != SchemaVersion)
             throw new FormatException($"Part file schemaVersion {file.SchemaVersion}, expected {SchemaVersion}.");
-        return new PartCatalog(file.Parts ?? Enumerable.Empty<PartDefinition>(), materials);
+        return new PartCatalog(file.Parts ?? Enumerable.Empty<PartDefinition>(), materials, recipes);
     }
 
     private sealed class PartFile

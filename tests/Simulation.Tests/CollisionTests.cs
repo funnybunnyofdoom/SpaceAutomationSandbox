@@ -19,7 +19,7 @@ public class CollisionTests
     }
 
     private static CelestialBodyState Primary(SectorState s) => s.Bodies.First(b => b.Orbit is null);
-    private static CelestialBodyState Rock(SectorState s) => s.Bodies.Single(b => b.IsMineable);
+    private static CelestialBodyState Rock(SectorState s) => s.Bodies.First(b => b.IsMineable);
 
     private static void Run(SectorState sector, CraftState craft, ShipControls controls, int ticks)
     {

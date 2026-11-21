@@ -19,17 +19,25 @@ public class MiningJobTests
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
-        var rock = sector.Bodies.Single(b => b.IsMineable);
-        var started = sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "metal", game.ShipyardId, returnFraction));
+        var rock = sector.Bodies.First(b => b.IsMineable);
+        var started = sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "iron_ore", game.ShipyardId, returnFraction));
         Assert.True(started.Done, started.Message);
         var miner = sector.GetCraft(game.PlayerCraftId);
-        return (sector, miner, sector.GetCraft(game.ShipyardId), rock, miner.Job!);
+        return (sector, miner, sector.GetCraft(game.ShipyardId), rock, (MiningJob)miner.Job!);
     }
 
-    /// <summary>Metal anywhere: deposits + every inventory + materials held by build orders.</summary>
+    /// <summary>
+    /// All material anywhere, in kg: deposits + every inventory + build orders + refinery batches.
+    /// Mining moves it, refining converts it (equal mass in and out); nothing may change the total.
+    /// </summary>
     private static long TotalMetal(SectorState sector) =>
-        sector.Bodies.Sum(b => b.Deposit("metal"))
-        + sector.Crafts.Sum(c => c.Inventory["metal"] + c.BuildQueue.Sum(o => o.MaterialsKg.TryGetValue("metal", out var kg) ? kg : 0));
+        sector.Bodies.Sum(b => b.DepositsKg.Values.Sum())
+        + sector.Crafts.Sum(c => c.Inventory.TotalKg
+                                 + c.BuildQueue.Sum(o => o.MaterialsKg.Values.Sum())
+                                 + (c.RefiningBatch?.InputsKg.Values.Sum() ?? 0));
+
+    /// <summary>A station's stock plus what its refinery holds: grows by exactly what is delivered.</summary>
+    private static long Holdings(CraftState craft) => craft.Inventory.TotalKg + (craft.RefiningBatch?.InputsKg.Values.Sum() ?? 0);
 
     private static bool RunUntil(SectorState sector, Func<bool> done, int maxTicks, Action? everyTick = null)
     {
@@ -48,17 +56,17 @@ public class MiningJobTests
         var (sector, miner, yard, rock, job) = MiningGame();
         var metal = TotalMetal(sector);
         var rockMass = rock.MassKg;
-        var deposit = rock.Deposit("metal");
-        var yardMetal = yard.Inventory["metal"];
+        var deposit = rock.Deposit("iron_ore");
+        var yardHoldings = Holdings(yard);
 
         var done = RunUntil(sector, () => job.CompletedCycles >= 10, 240 * TicksPerMinute,
             () => Assert.Equal(metal, TotalMetal(sector))); // checked every single tick
 
         Assert.True(done, $"only {job.CompletedCycles} cycles; now {job.Status}");
-        var mined = deposit - rock.Deposit("metal");
+        var mined = deposit - rock.Deposit("iron_ore");
         Assert.Equal(rockMass - mined, rock.MassKg);              // body mass drops by exactly what was mined
-        Assert.Equal(job.DeliveredKg, yard.Inventory["metal"] - yardMetal); // everything delivered arrived
-        Assert.Equal(mined, job.DeliveredKg + miner.Inventory["metal"]);
+        Assert.Equal(job.DeliveredKg, Holdings(yard) - yardHoldings); // everything delivered arrived (some already refined)
+        Assert.Equal(mined, job.DeliveredKg + miner.Inventory["iron_ore"]);
         Assert.InRange(job.DeliveredKg, 10 * (long)(0.25 * miner.CargoCapacityKg), 11 * (long)(0.25 * miner.CargoCapacityKg));
     }
 
@@ -68,9 +76,9 @@ public class MiningJobTests
         var (sector, miner, _, rock, job) = MiningGame();
         var radius = rock.RadiusM;
         var mass = rock.MassKg;
-        Assert.True(RunUntil(sector, () => job.State == MiningJobState.Mining && miner.Inventory["metal"] >= 5_000, 30 * TicksPerMinute));
+        Assert.True(RunUntil(sector, () => job.State == MiningJobState.Mining && miner.Inventory["iron_ore"] >= 5_000, 30 * TicksPerMinute));
 
-        Assert.Equal(mass - miner.Inventory["metal"], rock.MassKg);
+        Assert.Equal(mass - miner.Inventory["iron_ore"], rock.MassKg);
         Assert.True(rock.RadiusM < radius);
         Assert.Equal(CelestialBodyState.RadiusFromMass(rock.MassKg, rock.DensityKgPerM3), rock.RadiusM);
     }
@@ -80,11 +88,11 @@ public class MiningJobTests
     {
         var (sector, miner, _, _, job) = MiningGame();
         Assert.True(RunUntil(sector, () => job.State == MiningJobState.Mining, 30 * TicksPerMinute));
-        var before = miner.Inventory["metal"] + miner.MiningRemainderKg;
+        var before = miner.Inventory["iron_ore"] + miner.MiningRemainderKg;
 
         for (var i = 0; i < 7 * FixedStepClock.TicksPerSecond; i++) sector.Step(); // 7 s
 
-        var after = miner.Inventory["metal"] + miner.MiningRemainderKg;
+        var after = miner.Inventory["iron_ore"] + miner.MiningRemainderKg;
         Assert.Equal(miner.Stats.MiningRateKgPerS * 7, after - before, 6);
         Assert.InRange(miner.MiningRemainderKg, 0, 1);
     }
@@ -114,17 +122,17 @@ public class MiningJobTests
     public void EmptySource_DeliversWhatItHas_ThenWaitsWithAReason()
     {
         var (sector, miner, yard, rock, job) = MiningGame();
-        rock.Extract("metal", rock.Deposit("metal") - 3_000); // leave only 3 t (test-only shortcut)
+        rock.Extract("iron_ore", rock.Deposit("iron_ore") - 3_000); // leave only 3 t (test-only shortcut)
 
         Assert.True(RunUntil(sector, () => job.State == MiningJobState.Waiting && job.CompletedCycles == 1, 60 * TicksPerMinute),
             job.Status);
 
-        Assert.Equal(0, rock.Deposit("metal"));
+        Assert.Equal(0, rock.Deposit("iron_ore"));
         Assert.Equal(3_000, job.DeliveredKg);
-        Assert.Contains("no metal left", job.Status);
+        Assert.Contains("no iron_ore left", job.Status);
         // It stays put and keeps saying why.
         for (var i = 0; i < TicksPerMinute; i++) sector.Step();
-        Assert.Contains("no metal left", job.Status);
+        Assert.Contains("no iron_ore left", job.Status);
     }
 
     [Fact]
@@ -132,7 +140,7 @@ public class MiningJobTests
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
-        var rock = sector.Bodies.Single(b => b.IsMineable);
+        var rock = sector.Bodies.First(b => b.IsMineable);
         var yard = sector.GetCraft(game.ShipyardId);
         // A small depot next to the yard: one port and one cargo bay (20 t), already full.
         var depotDesign = new ShipDesign("depot", "Depot", new[]
@@ -144,8 +152,8 @@ public class MiningJobTests
         sector.PutOnRails(depot.Id, yard.RailOrbit! with { PhaseAtZeroRad = yard.RailOrbit!.PhaseAtZeroRad - 0.02 });
         depot.Inventory.Add("composites", (long)depotDesign.ComputeStats(Catalog).CargoCapacityKg);
 
-        Assert.True(sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "metal", depot.Id, 0.25)).Done);
-        var job = sector.GetCraft(game.PlayerCraftId).Job!;
+        Assert.True(sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "iron_ore", depot.Id, 0.25)).Done);
+        var job = (MiningJob)sector.GetCraft(game.PlayerCraftId).Job!;
 
         Assert.True(RunUntil(sector, () => job.State == MiningJobState.Waiting && job.ResumeState == MiningJobState.Unloading,
             60 * TicksPerMinute), job.Status);
@@ -164,9 +172,9 @@ public class MiningJobTests
         for (var i = 0; i < 2 * TicksPerMinute; i++) sector.Step(); // both new ships take the two ports
         Assert.Empty(sector.FreePorts(yard));
 
-        var rock = sector.Bodies.Single(b => b.IsMineable);
-        Assert.True(sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "metal", yard.Id, 0.25)).Done);
-        var job = sector.GetCraft(game.PlayerCraftId).Job!;
+        var rock = sector.Bodies.First(b => b.IsMineable);
+        Assert.True(sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "iron_ore", yard.Id, 0.25)).Done);
+        var job = (MiningJob)sector.GetCraft(game.PlayerCraftId).Job!;
 
         Assert.True(RunUntil(sector, () => job.Status.Contains("no free docking port"), 60 * TicksPerMinute), job.Status);
     }
@@ -176,17 +184,17 @@ public class MiningJobTests
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
-        var rock = sector.Bodies.Single(b => b.IsMineable);
+        var rock = sector.Bodies.First(b => b.IsMineable);
         var primary = sector.Bodies.Single(b => !b.IsMineable);
 
         var noClamp = new ShipDesign("nc", "No clamp", TestData.StarterShip().Cells.Where(c => c.PartId != "anchor_clamp"));
         var plain = new CraftState(sector.AllocateCraftId(), "Plain", noClamp, noClamp.ComputeStats(Catalog), Vector2D.Zero, 0);
         sector.AddCraft(plain);
 
-        Assert.Contains("anchor clamp", sector.StartJob(plain.Id, new MiningJob(rock.Id, "metal", game.ShipyardId, 0.5)).Message);
-        Assert.Contains("mineable", sector.StartJob(game.PlayerCraftId, new MiningJob(primary.Id, "metal", game.ShipyardId, 0.5)).Message);
-        Assert.Contains("docking port", sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "metal", plain.Id, 0.5)).Message);
-        Assert.Contains("another craft", sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "metal", game.PlayerCraftId, 0.5)).Message);
+        Assert.Contains("anchor clamp", sector.StartJob(plain.Id, new MiningJob(rock.Id, "iron_ore", game.ShipyardId, 0.5)).Message);
+        Assert.Contains("mineable", sector.StartJob(game.PlayerCraftId, new MiningJob(primary.Id, "iron_ore", game.ShipyardId, 0.5)).Message);
+        Assert.Contains("docking port", sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "iron_ore", plain.Id, 0.5)).Message);
+        Assert.Contains("another craft", sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "iron_ore", game.PlayerCraftId, 0.5)).Message);
         Assert.Null(sector.GetCraft(game.PlayerCraftId).Job);
     }
 
@@ -213,9 +221,9 @@ public class MiningJobTests
         sector.OrderBuild(yard.Id, TestData.StarterShip(), Catalog);
         for (var i = 0; i < TicksPerMinute; i++) sector.Step();
         var second = sector.Crafts.Single(c => c.Id != game.PlayerCraftId && c.Id != game.ShipyardId);
-        var rock = sector.Bodies.Single(b => b.IsMineable);
-        Assert.True(sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "metal", yard.Id, 0.25)).Done);
-        Assert.True(sector.StartJob(second.Id, new MiningJob(rock.Id, "metal", yard.Id, 0.25)).Done);
+        var rock = sector.Bodies.First(b => b.IsMineable);
+        Assert.True(sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "iron_ore", yard.Id, 0.25)).Done);
+        Assert.True(sector.StartJob(second.Id, new MiningJob(rock.Id, "iron_ore", yard.Id, 0.25)).Done);
         var metal = TotalMetal(sector);
 
         Assert.True(RunUntil(sector,

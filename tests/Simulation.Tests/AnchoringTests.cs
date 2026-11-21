@@ -30,7 +30,7 @@ public class AnchoringTests
     private static (SectorState Sector, CraftState Craft, CelestialBodyState Rock) LandOnRock(ShipDesign design)
     {
         var sector = SectorGenerator.Generate(NewGame.DefaultSeed);
-        var rock = sector.Bodies.Single(b => b.IsMineable);
+        var rock = sector.Bodies.First(b => b.IsMineable);
         var stats = design.ComputeStats(Catalog);
         var craft = AddCraft(sector, design,
             sector.GetPosition(rock.Id) + new Vector2D(0, -(rock.RadiusM + stats.BoundingRadiusM + 1)), stats);

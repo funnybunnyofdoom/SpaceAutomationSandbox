@@ -3,6 +3,9 @@
   "materials": [
     { "id": "metal",       "name": "Metal",       "placeholderColor": "#9aa3ad" },
     { "id": "electronics", "name": "Electronics", "placeholderColor": "#5fd38d" },
-    { "id": "composites",  "name": "Composites",  "placeholderColor": "#c9a96e" }
+    { "id": "composites",  "name": "Composites",  "placeholderColor": "#c9a96e" },
+    { "id": "iron_ore",    "name": "Iron ore",    "placeholderColor": "#8c5a46" },
+    { "id": "silicate",    "name": "Silicate",    "placeholderColor": "#b8b39a" },
+    { "id": "slag",        "name": "Slag",        "placeholderColor": "#55504a" }
   ]
 }

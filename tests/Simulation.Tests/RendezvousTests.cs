@@ -12,7 +12,7 @@ public class RendezvousTests
     private static (SectorState Sector, CraftState Craft, CelestialBodyState Rock) Setup(ulong seed, Vector2D? at = null)
     {
         var sector = SectorGenerator.Generate(seed);
-        var rock = sector.Bodies.Single(b => b.IsMineable);
+        var rock = sector.Bodies.First(b => b.IsMineable);
         var design = TestData.StarterShip();
         var craft = new CraftState(sector.AllocateCraftId(), "Test", design, design.ComputeStats(TestData.Catalog()),
             at ?? SectorGenerator.PlayerSpawnPoint(sector), 0);

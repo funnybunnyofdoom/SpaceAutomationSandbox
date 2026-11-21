@@ -13,8 +13,11 @@ public static class SectorGenerator
     public const double PlanetDensityKgPerM3 = 5500;
     public const double AsteroidDensityKgPerM3 = 2500;
 
-    /// <summary>Placeholder: the asteroid's minable metal (docs/06, Phase 3). Finite, so it can run out.</summary>
-    public const long AsteroidMetalDepositKg = 500_000;
+    /// <summary>Placeholder deposits (docs/06, Phase 4). Finite, so they can run out.</summary>
+    public const long Rock1IronOreKg = 500_000;
+    public const long Rock2SilicateKg = 400_000;
+    public const long Rock2IronOreKg = 100_000;
+    public const long Rock3IronOreKg = 300_000;
 
     public static SectorState Generate(ulong seed)
     {
@@ -40,9 +43,25 @@ public static class SectorGenerator
             sector.AllocateBodyId(), "Rock-1", BodyKind.Asteroid,
             Math.Round(CelestialBodyState.MassFromRadius(asteroidRadiusM, AsteroidDensityKgPerM3)),
             AsteroidDensityKgPerM3, isMineable: true, orbit,
-            new Dictionary<string, long> { ["metal"] = AsteroidMetalDepositKg }));
+            new Dictionary<string, long> { ["iron_ore"] = Rock1IronOreKg }));
+
+        // More asteroids further out (drawn after Rock-1, so Rock-1 is unchanged for a given seed).
+        AddAsteroid(sector, rng, planet.Id, "Rock-2", 34_000, 40_000, 2_400, 3_600,
+            new Dictionary<string, long> { ["silicate"] = Rock2SilicateKg, ["iron_ore"] = Rock2IronOreKg });
+        AddAsteroid(sector, rng, planet.Id, "Rock-3", 44_000, 50_000, 3_000, 4_200,
+            new Dictionary<string, long> { ["iron_ore"] = Rock3IronOreKg });
 
         return sector;
+    }
+
+    private static void AddAsteroid(SectorState sector, DeterministicRandom rng, BodyId parent, string name,
+        double minOrbitM, double maxOrbitM, double minPeriodS, double maxPeriodS, Dictionary<string, long> deposits)
+    {
+        var radiusM = rng.Range(400, 800);
+        var orbit = new CircularOrbit(parent, rng.Range(minOrbitM, maxOrbitM), rng.Range(minPeriodS, maxPeriodS), rng.Range(0, 2 * Math.PI));
+        sector.AddBody(new CelestialBodyState(sector.AllocateBodyId(), name, BodyKind.Asteroid,
+            Math.Round(CelestialBodyState.MassFromRadius(radiusM, AsteroidDensityKgPerM3)),
+            AsteroidDensityKgPerM3, isMineable: true, orbit, deposits));
     }
 
     /// <summary>Gap between the primary's surface and the player's spawn point. Placeholder.</summary>

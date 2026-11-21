@@ -110,6 +110,8 @@ public sealed partial class SectorState
 
         if (docked != null) UpdateDocked(docked);
         StepMining();
+        StepRefining();
+        StepSurvey();
 
         // Shipyards advance after movement, so a finished craft is placed against the yard's new position.
         StepFabrication(endS);

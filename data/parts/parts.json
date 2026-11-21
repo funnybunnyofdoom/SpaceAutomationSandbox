@@ -20,6 +20,8 @@
     { "id": "foundation", "name": "Foundation", "massKg": 500, "placeholderColor": "#6e6253", "isFoundation": true,
       "materialsKg": { "metal": 400, "composites": 100 } },
     { "id": "docking_port", "name": "Docking port", "massKg": 600, "placeholderColor": "#4fd1c5", "isDockingPort": true,
-      "materialsKg": { "metal": 450, "electronics": 150 } }
+      "materialsKg": { "metal": 450, "electronics": 150 } },
+    { "id": "refinery", "name": "Refinery", "massKg": 5000, "placeholderColor": "#d98c4f", "refiningRateKgPerS": 50,
+      "materialsKg": { "metal": 3500, "electronics": 1000, "composites": 500 } }
   ]
 }

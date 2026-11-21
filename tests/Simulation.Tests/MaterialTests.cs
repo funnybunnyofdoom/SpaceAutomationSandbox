@@ -11,11 +11,11 @@ public class MaterialTests
     private static PartCatalog CatalogFrom(string partsJson) => PartCatalog.FromJson(partsJson, TestData.Materials());
 
     [Fact]
-    public void MaterialCatalog_LoadsTheThreePlaceholders_InFileOrder()
+    public void MaterialCatalog_LoadsTheMaterials_InFileOrder()
     {
         var materials = TestData.Materials();
 
-        Assert.Equal(new[] { "metal", "electronics", "composites" }, materials.Materials.Select(m => m.Id));
+        Assert.Equal(new[] { "metal", "electronics", "composites", "iron_ore", "silicate", "slag" }, materials.Materials.Select(m => m.Id));
         Assert.Equal(0, materials.OrderOf("metal"));
         Assert.Equal(int.MaxValue, materials.OrderOf("unobtainium"));
     }

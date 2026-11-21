@@ -15,7 +15,7 @@ public class SaveLoadTests
         var craft = new CraftState(sector.AllocateCraftId(), "Player", design, design.ComputeStats(TestData.Catalog()),
             SectorGenerator.PlayerSpawnPoint(sector), 0);
         sector.AddCraft(craft);
-        sector.SetTarget(craft.Id, sector.Bodies.Single(b => b.IsMineable).Id);
+        sector.SetTarget(craft.Id, sector.Bodies.First(b => b.IsMineable).Id);
         return (sector, craft.Id);
     }
 
@@ -136,7 +136,7 @@ public class SaveLoadTests
     [InlineData("{}")]
     [InlineData("""{ "schemaVersion": 1, "game": "SomethingElse", "sector": {} }""")]
     [InlineData("""{ "schemaVersion": 0, "game": "SpaceAutomationSandbox", "sector": {} }""")]
-    [InlineData("""{ "schemaVersion": 7, "game": "SpaceAutomationSandbox", "sector": {} }""")]
+    [InlineData("""{ "schemaVersion": 8, "game": "SpaceAutomationSandbox", "sector": {} }""")]
     public void Load_RejectsWrongOrForeignFiles(string json)
     {
         Assert.Throws<FormatException>(() => SaveGameSerializer.FromJson(json, TestData.Catalog()));

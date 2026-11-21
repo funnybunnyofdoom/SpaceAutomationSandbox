@@ -55,7 +55,8 @@ public sealed record ShipStats(
     int FoundationCount,
     double NonForwardThrustN,
     IReadOnlyList<DockingPortInfo> DockingPorts,
-    double MiningRateKgPerS)
+    double MiningRateKgPerS,
+    double RefiningRateKgPerS)
 {
     /// <summary>Can lock onto a body once landed (clamps release again; foundations never do).</summary>
     public bool CanAnchor => AnchorClampCount > 0 || FoundationCount > 0;
@@ -113,7 +114,8 @@ public sealed class ShipDesign
         return parts.Any(p => IsStationFacility(p!)) ? DesignRole.Station : DesignRole.Ship;
     }
 
-    private static bool IsStationFacility(PartDefinition p) => p.FabricationRateKgPerS > 0 || p.IsDockingPort || p.CargoCapacityKg > 0;
+    private static bool IsStationFacility(PartDefinition p) =>
+        p.FabricationRateKgPerS > 0 || p.IsDockingPort || p.CargoCapacityKg > 0 || p.RefiningRateKgPerS > 0;
 
     /// <summary>Human-readable problems for the given role; empty means the design is usable in that role.</summary>
     public IReadOnlyList<string> Validate(PartCatalog catalog, DesignRole role = DesignRole.Ship)
@@ -145,7 +147,7 @@ public sealed class ShipDesign
                 if (foundations > 0) errors.Add("Foundations make a fixed structure; a ship can't have one (use an anchor clamp).");
                 break;
             case DesignRole.Station:
-                if (facilities == 0) errors.Add("A station needs a fabricator, docking port or cargo bay.");
+                if (facilities == 0) errors.Add("A station needs a fabricator, docking port or cargo bay (or a refinery).");
                 break;
         }
         return errors;
@@ -163,7 +165,7 @@ public sealed class ShipDesign
     /// <summary>Totals and centre of mass (in cell units). Call only on a design whose parts are all known.</summary>
     public ShipStats ComputeStats(PartCatalog catalog)
     {
-        double mass = 0, thrust = 0, otherThrust = 0, cargo = 0, energy = 0, fabrication = 0, mining = 0, momentX = 0, momentY = 0;
+        double mass = 0, thrust = 0, otherThrust = 0, cargo = 0, energy = 0, fabrication = 0, mining = 0, refining = 0, momentX = 0, momentY = 0;
         int clamps = 0, foundations = 0;
         var ports = new List<DockingPortInfo>();
         foreach (var cell in Cells)
@@ -176,6 +178,7 @@ public sealed class ShipDesign
             energy += part.EnergyCapacityKJ;
             fabrication += part.FabricationRateKgPerS;
             mining += part.MiningRateKgPerS;
+            refining += part.RefiningRateKgPerS;
             if (part.IsAnchorClamp) clamps++;
             if (part.IsFoundation) foundations++;
             if (part.IsDockingPort) ports.Add(new DockingPortInfo(cell.Pos, cell.Rotation));
@@ -196,7 +199,7 @@ public sealed class ShipDesign
         }
 
         return new ShipStats(Cells.Count, mass, thrust, cargo, energy, comX, comY,
-            Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations, otherThrust, ports, mining);
+            Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations, otherThrust, ports, mining, refining);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

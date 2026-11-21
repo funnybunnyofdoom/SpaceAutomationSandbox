@@ -24,13 +24,16 @@ public class SectorTests
     }
 
     [Fact]
-    public void StarterSector_HasOneFixedPlanetAndOneMineableOrbitingBody()
+    public void StarterSector_HasOneFixedPlanetAndThreeMineableOrbitingAsteroids()
     {
         var sector = SectorGenerator.Generate(Seed);
 
-        Assert.Equal(2, sector.Bodies.Count);
+        Assert.Equal(4, sector.Bodies.Count);
         var planet = Assert.Single(sector.Bodies, b => b.Kind == BodyKind.Planet);
-        var rock = Assert.Single(sector.Bodies, b => b.IsMineable);
+        Assert.Equal(new[] { "Rock-1", "Rock-2", "Rock-3" }, sector.Bodies.Where(b => b.IsMineable).Select(b => b.Name));
+        Assert.All(sector.Bodies.Where(b => b.IsMineable), b => Assert.Equal(planet.Id, b.Orbit!.Parent));
+        Assert.True(sector.Bodies.First(b => b.Name == "Rock-2").Deposit("silicate") > 0);
+        var rock = sector.Bodies.First(b => b.IsMineable);
         Assert.Null(planet.Orbit);
         Assert.Equal(planet.Id, rock.Orbit!.Parent);
         Assert.True(rock.Orbit.RadiusM > planet.RadiusM + rock.RadiusM, "Orbit must clear the planet surface.");
@@ -61,7 +64,7 @@ public class SectorTests
     public void Orbit_ReturnsToStartAfterOnePeriod_AndKeepsItsRadius()
     {
         var sector = SectorGenerator.Generate(Seed);
-        var rock = sector.Bodies.Single(b => b.IsMineable);
+        var rock = sector.Bodies.First(b => b.IsMineable);
         var start = sector.GetPositionAt(rock.Id, 0);
 
         var afterPeriod = sector.GetPositionAt(rock.Id, rock.Orbit!.PeriodS);

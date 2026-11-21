@@ -23,10 +23,11 @@ public static class SaveGameSerializer
     /// <summary>
     /// Version written. v2 added the landed state; v3 added rail orbits, inventories, build queues
     /// and the order counter; v4 added the anchored flag; v5 added part rotation, craft targets,
-    /// docking, and order landing sites; v6 added body deposits, the drill remainder and mining jobs.
-    /// Older files still load (missing parts read as empty / none).
+    /// docking, and order landing sites; v6 added body deposits, the drill remainder and mining jobs;
+    /// v7 added survey flags, refinery batches and freight jobs. Older files still load (missing parts
+    /// read as empty / none; before v7 every body counts as surveyed).
     /// </summary>
-    public const int SchemaVersion = 6;
+    public const int SchemaVersion = 7;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -62,6 +63,7 @@ public static class SaveGameSerializer
                         ? new SortedDictionary<string, long>(b.DepositsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal)
                         : null,
                     Orbit = b.Orbit is { } o ? OrbitToDto(o) : null,
+                    Surveyed = b.Surveyed,
                 }).ToList(),
                 Crafts = sector.Crafts.Select(c => new CraftDto
                 {
@@ -80,14 +82,30 @@ public static class SaveGameSerializer
                     LandedOffset = c.IsLanded ? Vec(c.LandedOffset) : null,
                     Anchored = c.IsAnchored,
                     MiningRemainderKg = c.MiningRemainderKg,
-                    Job = c.Job is { } j
-                        ? new JobDto
+                    RefiningBatch = c.RefiningBatch is { } rb
+                        ? new BatchDto
                         {
-                            SourceBodyId = j.SourceBodyId.Value, MaterialId = j.MaterialId, DestinationId = j.DestinationId.Value,
-                            ReturnFraction = j.ReturnFraction, Active = j.Active, State = j.State, ResumeState = j.ResumeState,
-                            WaitReason = j.WaitReason, CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg,
+                            RecipeId = rb.RecipeId, ProgressKg = rb.ProgressKg,
+                            InputsKg = new SortedDictionary<string, long>(rb.InputsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal),
                         }
                         : null,
+                    Job = c.Job switch
+                    {
+                        MiningJob j => new JobDto
+                        {
+                            Kind = j.Kind, SourceBodyId = j.SourceBodyId.Value, MaterialId = j.MaterialId, DestinationId = j.DestinationId.Value,
+                            ReturnFraction = j.ReturnFraction, Active = j.Active, State = j.State, ResumeState = j.ResumeState,
+                            WaitReason = j.WaitReason, CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg,
+                        },
+                        HaulJob h => new JobDto
+                        {
+                            Kind = h.Kind, PickupId = h.PickupId.Value, MaterialId = h.MaterialId, DestinationId = h.DestinationId.Value,
+                            MinPickupKg = h.MinPickupKg, KeepStockedKg = h.KeepStockedKg, Active = h.Active,
+                            HaulState = h.State, HaulResumeState = h.ResumeState,
+                            WaitReason = h.WaitReason, CompletedCycles = h.CompletedCycles, DeliveredKg = h.DeliveredKg,
+                        },
+                        _ => null,
+                    },
                     RailOrbit = c.RailOrbit is { } r ? OrbitToDto(r) : null,
                     InventoryKg = c.Inventory.Kg.Count > 0 ? new SortedDictionary<string, long>(c.Inventory.Kg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal) : null,
                     BuildQueue = c.BuildQueue.Count > 0
@@ -123,8 +141,8 @@ public static class SaveGameSerializer
 
         try
         {
-            var sector = new SectorState(dto.Seed, dto.Tick);
-            AddBodiesParentsFirst(sector, dto.Bodies ?? new List<BodyDto>());
+            var sector = new SectorState(dto.Seed, dto.Tick) { Recipes = catalog.Recipes };
+            AddBodiesParentsFirst(sector, dto.Bodies ?? new List<BodyDto>(), file.SchemaVersion);
 
             foreach (var c in dto.Crafts ?? new List<CraftDto>())
             {
@@ -179,21 +197,41 @@ public static class SaveGameSerializer
                 var restored = sector.GetCraft(new CraftId(c.Id));
                 if (c.MiningRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has a drill remainder of {c.MiningRemainderKg} kg.");
                 restored.MiningRemainderKg = c.MiningRemainderKg;
+                if (c.RefiningBatch is { } batch)
+                {
+                    var inputs = batch.InputsKg ?? new SortedDictionary<string, long>();
+                    if (inputs.Any(kv => !catalog.Materials.Contains(kv.Key) || kv.Value <= 0) || batch.ProgressKg < 0)
+                        throw new FormatException($"Craft {c.Id} has an invalid refining batch.");
+                    restored.RefiningBatch = new RefiningBatch(batch.RecipeId ?? "", inputs, batch.ProgressKg);
+                }
                 if (c.Job is { } j)
                 {
-                    if (!catalog.Materials.Contains(j.MaterialId ?? "")) throw new FormatException($"Craft {c.Id} job mines unknown material '{j.MaterialId}'.");
-                    sector.GetBody(new BodyId(j.SourceBodyId));
+                    if (!catalog.Materials.Contains(j.MaterialId ?? "")) throw new FormatException($"Craft {c.Id} job uses unknown material '{j.MaterialId}'.");
                     sector.GetCraft(new CraftId(j.DestinationId));
-                    sector.RestoreJob(restored.Id, new MiningJob(new BodyId(j.SourceBodyId), j.MaterialId!, new CraftId(j.DestinationId), j.ReturnFraction)
+                    if (j.Kind == "freight")
                     {
-                        Active = j.Active, State = j.State, ResumeState = j.ResumeState, WaitReason = j.WaitReason,
-                        CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg,
-                    });
+                        sector.GetCraft(new CraftId(j.PickupId));
+                        sector.RestoreJob(restored.Id, new HaulJob(new CraftId(j.PickupId), j.MaterialId!, new CraftId(j.DestinationId), j.MinPickupKg, j.KeepStockedKg)
+                        {
+                            Active = j.Active, State = j.HaulState, ResumeState = j.HaulResumeState, WaitReason = j.WaitReason,
+                            CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg,
+                        });
+                    }
+                    else
+                    {
+                        sector.GetBody(new BodyId(j.SourceBodyId));
+                        sector.RestoreJob(restored.Id, new MiningJob(new BodyId(j.SourceBodyId), j.MaterialId!, new CraftId(j.DestinationId), j.ReturnFraction)
+                        {
+                            Active = j.Active, State = j.State, ResumeState = j.ResumeState, WaitReason = j.WaitReason,
+                            CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg,
+                        });
+                    }
                 }
             }
 
             var player = new CraftId(file.PlayerCraftId);
             if (!player.IsNone) sector.GetCraft(player); // must exist
+            sector.PilotCraftId = player;
             return new LoadedGame(sector, player);
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException or KeyNotFoundException)
@@ -203,7 +241,7 @@ public static class SaveGameSerializer
     }
 
     // SectorState requires parents before children; saves list bodies by id, which may not be that order.
-    private static void AddBodiesParentsFirst(SectorState sector, List<BodyDto> bodies)
+    private static void AddBodiesParentsFirst(SectorState sector, List<BodyDto> bodies, int schemaVersion)
     {
         var pending = bodies.ToList();
         var added = new HashSet<uint>();
@@ -217,6 +255,8 @@ public static class SaveGameSerializer
                 var orbit = b.Orbit is { } o ? new CircularOrbit(new BodyId(o.ParentId), o.RadiusM, o.PeriodS, o.PhaseAtZeroRad) : null;
                 sector.AddBody(new CelestialBodyState(new BodyId(b.Id), b.Name ?? "", b.Kind, b.MassKg, b.DensityKgPerM3, b.IsMineable, orbit,
                     b.DepositsKg));
+                // Before v7 there was no survey: treat every body as surveyed so old games keep working.
+                if (schemaVersion < 7 || b.Surveyed) sector.MarkSurveyed(new BodyId(b.Id));
                 added.Add(b.Id);
                 pending.Remove(b);
             }
@@ -248,7 +288,7 @@ public static class SaveGameSerializer
     private static Vector2D ToVec(VecDto? v, string what) =>
         v is null ? throw new FormatException($"Craft is missing {what}.") : new Vector2D(v.X, v.Y);
 
-    // --- File shape (schema 6). Change only together with SchemaVersion and docs/08. ---
+    // --- File shape (schema 7). Change only together with SchemaVersion and docs/08. ---
 
     private sealed class SaveFile
     {
@@ -277,6 +317,7 @@ public static class SaveGameSerializer
         public bool IsMineable { get; set; }
         public OrbitDto? Orbit { get; set; }
         public SortedDictionary<string, long>? DepositsKg { get; set; }
+        public bool Surveyed { get; set; }
     }
 
     private sealed class OrbitDto
@@ -304,15 +345,30 @@ public static class SaveGameSerializer
         public VecDto? LandedOffset { get; set; }
         public bool Anchored { get; set; }
         public double MiningRemainderKg { get; set; }
+        public BatchDto? RefiningBatch { get; set; }
         public JobDto? Job { get; set; }
         public OrbitDto? RailOrbit { get; set; }
         public SortedDictionary<string, long>? InventoryKg { get; set; }
         public List<OrderDto>? BuildQueue { get; set; }
     }
 
+    private sealed class BatchDto
+    {
+        public string? RecipeId { get; set; }
+        public SortedDictionary<string, long>? InputsKg { get; set; }
+        public double ProgressKg { get; set; }
+    }
+
     private sealed class JobDto
     {
+        /// <summary>"mining" (v6 default) or "freight" (v7).</summary>
+        public string? Kind { get; set; }
         public uint SourceBodyId { get; set; }
+        public uint PickupId { get; set; }
+        public long MinPickupKg { get; set; }
+        public long KeepStockedKg { get; set; }
+        public HaulJobState HaulState { get; set; }
+        public HaulJobState HaulResumeState { get; set; }
         public string? MaterialId { get; set; }
         public uint DestinationId { get; set; }
         public double ReturnFraction { get; set; }

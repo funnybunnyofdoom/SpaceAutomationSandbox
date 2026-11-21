@@ -32,6 +32,8 @@ public sealed partial class SectorState
         if (craft.Stats.AnchorClampCount <= 0) return new(false, $"{craft.Name} has no anchor clamp (needed to mine).");
         if (!_byId.TryGetValue(job.SourceBodyId, out var source) || !source.IsMineable)
             return new(false, "The source must be a mineable body.");
+        if (!source.Surveyed)
+            return new(false, $"{source.Name} hasn't been surveyed: fly a ship you pilot within {SurveyRangeM / 1000:0} km of it first.");
         if (!_craftsById.TryGetValue(job.DestinationId, out var destination) || destination.Id == craft.Id)
             return new(false, "The destination must be another craft.");
         if (destination.Stats.DockingPorts.Count == 0) return new(false, $"{destination.Name} has no docking port.");
@@ -56,12 +58,18 @@ public sealed partial class SectorState
     }
 
     /// <summary>Restores a saved job exactly (no validation of the current situation; the job re-checks every tick).</summary>
-    public void RestoreJob(CraftId craftId, MiningJob job) => GetCraft(craftId).Job = job;
+    public void RestoreJob(CraftId craftId, ShipJob job) => GetCraft(craftId).Job = job;
 
     private void StepJobs()
     {
         foreach (var craft in _crafts)
-            if (craft.Job is { Active: true } job) StepJob(craft, job, allowResume: true);
+        {
+            switch (craft.Job)
+            {
+                case MiningJob { Active: true } mining: StepJob(craft, mining, allowResume: true); break;
+                case HaulJob { Active: true } haul: StepHaul(craft, haul, allowResume: true); break;
+            }
+        }
     }
 
     private void StepJob(CraftState craft, MiningJob job, bool allowResume)
@@ -136,21 +144,10 @@ public sealed partial class SectorState
             case MiningJobState.ToDestination:
                 if (craft.IsLanded) { Lift(craft, job, MiningJobState.ToDestination); return; }
                 if (craft.IsDocked && craft.DockedToCraftId == destination.Id) { job.State = MiningJobState.Unloading; return; }
-                if (craft.IsDocked) TryUndock(craft.Id);
-                SetTargetCraft(craft.Id, destination.Id);
-                var ports = FreePorts(destination);
-                if (ports.Count == 0) { Wait(craft, job, MiningJobState.ToDestination, $"no free docking port at {destination.Name}"); return; }
-                var berth = BerthPosition(destination, ports[0], craft.CollisionRadiusM, destination.Position);
-                var stationVelocity = CraftVelocityAt(destination, TimeS);
-                craft.Controls = NavigateTo(craft, berth, stationVelocity, BodyId.None, JobCruiseSpeedMps, 0);
-                if (berth.DistanceTo(craft.Position) < 30 && (craft.Velocity - stationVelocity).Length < DockMaxRelativeSpeedMps * 0.8)
+                switch (FlyToDock(craft, destination))
                 {
-                    var dock = TryDock(craft.Id);
-                    if (dock.Done)
-                    {
-                        job.State = MiningJobState.Unloading;
-                        craft.Controls = ShipControls.Idle; // this tick's throttle would undock it again
-                    }
+                    case DockApproach.Docked: job.State = MiningJobState.Unloading; break;
+                    case DockApproach.NoFreePort: Wait(craft, job, MiningJobState.ToDestination, $"no free docking port at {destination.Name}"); break;
                 }
                 return;
 

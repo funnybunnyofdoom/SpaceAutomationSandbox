@@ -22,6 +22,7 @@ public partial class Main : Node2D
 
     private const string MaterialsPath = "res://data/materials/materials.json";
     private const string PartsPath = "res://data/parts/parts.json";
+    private const string RecipesPath = "res://data/recipes/recipes.json";
     private const string StarterDesignPath = "res://data/blueprints/starter_ship.json";
     private const string StarterShipyardPath = "res://data/blueprints/starter_shipyard.json";
 
@@ -90,7 +91,7 @@ public partial class Main : Node2D
             hudLayer.AddChild(_fleetPanel);
             _cargoPanel = new CargoPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
             hudLayer.AddChild(_cargoPanel);
-            _jobPanel = new JobPanel(() => _sector, () => _player) { Visible = false };
+            _jobPanel = new JobPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
             hudLayer.AddChild(_jobPanel);
         }
         // Continue where the player left off; a new game only if there's no usable save.
@@ -131,7 +132,8 @@ public partial class Main : Node2D
             && _sector.Crafts.FirstOrDefault(c => c.Stats.DockingPorts.Count > 0) is { } demoYard)
         {
             // Dev/test hook: start a metal job on the player's ship and fast-forward ~5 minutes (mid-mining).
-            ShowStatus(_sector.StartJob(_player.Id, new MiningJob(demoRock.Id, "metal", demoYard.Id, 0.25)).Message);
+            _sector.MarkSurveyed(demoRock.Id);
+            ShowStatus(_sector.StartJob(_player.Id, new MiningJob(demoRock.Id, demoRock.DepositsKg.Keys.First(), demoYard.Id, 0.25)).Message);
             for (var i = 0; i < 300 * FixedStepClock.TicksPerSecond; i++) _sector.Step();
         }
         if (System.Array.IndexOf(args, "--open-job") >= 0) _jobPanel?.Open();
@@ -158,6 +160,7 @@ public partial class Main : Node2D
     {
         if (_player != null) _player.Controls = ShipControls.Idle;
         _player = _sector.GetCraft(id);
+        _sector.PilotCraftId = id; // the craft you fly is the one that surveys
         ShowStatus($"Now piloting {_player.Name} ({_player.Id}).");
     }
 
@@ -181,7 +184,8 @@ public partial class Main : Node2D
         try
         {
             var materials = MaterialCatalog.FromJson(Godot.FileAccess.GetFileAsString(MaterialsPath));
-            var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath), materials);
+            var recipes = RecipeCatalog.FromJson(Godot.FileAccess.GetFileAsString(RecipesPath), materials);
+            var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath), materials, recipes);
             var design = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterDesignPath));
             var shipyard = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterShipyardPath));
             var errors = design.Validate(catalog, DesignRole.Ship)
@@ -384,7 +388,7 @@ public partial class Main : Node2D
 
     private string BuildHud()
     {
-        var text = "SpaceAutomationSandbox (working title) - Phase 3\n"
+        var text = "SpaceAutomationSandbox (working title) - Phase 4\n"
                    + $"seed {_sector.Seed}   tick {_sector.Tick} ({FixedStepClock.TicksPerSecond}/s)   t={_sector.TimeS:0.0}s"
                    + (_clock.DroppedTicks > 0 ? $"   dropped {_clock.DroppedTicks}" : "")
                    + $"   zoom {_pixelsPerMetre:0.###} px/m\n";
@@ -400,7 +404,7 @@ public partial class Main : Node2D
                 + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
                 + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
                 + (p.Job is { Active: true } job
-                    ? $"AUTOPILOT (mining job): {job.Status}   cycles {job.CompletedCycles}, delivered {job.DeliveredKg / 1000.0:0.0} t - J to view/stop\n"
+                    ? $"AUTOPILOT ({job.Kind} job): {job.Status}   cycles {job.CompletedCycles}, delivered {job.DeliveredKg / 1000.0:0.0} t - J to view/stop\n"
                     : "")
                 + (_sector.MiningMaterial(p) is { } mining && p.FreeCargoKg > 0
                     ? $"MINING {mining}: {p.Stats.MiningRateKgPerS:0} kg/s, {_sector.GetBody(p.LandedOnBodyId).Deposit(mining) / 1000.0:0.0} t left in {_sector.GetBody(p.LandedOnBodyId).Name}\n"
@@ -444,7 +448,7 @@ public partial class Main : Node2D
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
                + "W/Up thrust   A/D turn   S/Space brake (matches target)   G anchor   K dock   Tab cycle target   T target nearest   wheel zoom\n"
-               + "B blueprint editor   Y shipyard   F fleet   C cargo   J mining job   F6 save   F9 load   F7 new game   (closing the window autosaves)";
+               + "B blueprint editor   Y shipyard   F fleet   C cargo   J job (mining/freight)   F6 save   F9 load   F7 new game   (closing the window autosaves)";
     }
 
     private string LandedLine(CraftState p)
@@ -462,14 +466,19 @@ public partial class Main : Node2D
     {
         var yards = _sector.Crafts.Where(c => c.IsShipyard).ToList();
         if (yards.Count == 0) return "No shipyard in this save - F7 starts a new game with one.\n";
-        return string.Concat(yards.Select(y => y.BuildQueue.Count == 0
-            ? $"{y.Name}: idle\n"
+        return string.Concat(yards.Select(y => (y.BuildQueue.Count == 0
+            ? $"{y.Name}: idle"
             : $"{y.Name}: building {y.BuildQueue[0].ShipName} {y.BuildQueue[0].Fraction * 100:0}%"
-              + (y.BuildQueue.Count > 1 ? $" (+{y.BuildQueue.Count - 1} queued)" : "") + "\n"));
+              + (y.BuildQueue.Count > 1 ? $" (+{y.BuildQueue.Count - 1} queued)" : ""))
+            + (_sector.RefiningStatus(y) is { Length: > 0 } refining ? $"   {refining}" : "") + "\n"));
     }
 
     private static string Describe(CelestialBodyState body) =>
-        $"{body.Name} ({body.Kind}{(body.IsMineable ? ", mineable" : "")})";
+        $"{body.Name} ({body.Kind}"
+        + (!body.IsMineable ? "" : !body.Surveyed ? $", unsurveyed - fly within {SectorState.SurveyRangeM / 1000:0} km"
+            : body.DepositsKg.Count == 0 ? ", mined out"
+            : ", " + string.Join(", ", body.DepositsKg.Select(kv => $"{kv.Key} {kv.Value / 1000.0:0} t")))
+        + ")";
 
     private static string FormatDistance(double metres) =>
         System.Math.Abs(metres) >= 1000 ? $"{metres / 1000:0.00} km" : $"{metres:0} m";
@@ -537,7 +546,7 @@ public partial class Main : Node2D
         if (radiusPx < 200f) DrawCircle(centre, radiusPx, color);
         else DrawColoredPolygon(CirclePoints(centre, radiusPx, 512), color); // smoother edge up close
 
-        DrawString(ThemeDB.FallbackFont, centre + new Vector2(radiusPx + 4, 4), body.Name,
+        DrawString(ThemeDB.FallbackFont, centre + new Vector2(radiusPx + 4, 4), body.Surveyed || !body.IsMineable ? body.Name : $"{body.Name} (unsurveyed)",
             HorizontalAlignment.Left, -1, 12, NameColor);
     }
 

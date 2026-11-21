@@ -40,6 +40,8 @@ public sealed partial class SectorState
         if (fixedStructure && landingSite.IsNone)
             return BuildOrderResult.Rejected($"'{design.Name}' has a foundation: choose a body to place it on.");
         if (fixedStructure && !_byId.ContainsKey(landingSite)) return BuildOrderResult.Rejected($"No {landingSite} in this sector.");
+        if (fixedStructure && !GetBody(landingSite).Surveyed)
+            return BuildOrderResult.Rejected($"{GetBody(landingSite).Name} hasn't been surveyed: visit it with a ship you pilot first.");
         if (!fixedStructure) landingSite = BodyId.None;
 
         var bill = design.ComputeBillOfMaterials(catalog).ToWholeKg();

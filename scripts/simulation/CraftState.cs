@@ -105,10 +105,13 @@ public sealed class CraftState
 
     public long FreeCargoKg => HasCargoLimit ? Math.Max(0, CargoCapacityKg - Inventory.TotalKg) : long.MaxValue;
 
-    /// <summary>Automation: a mining job that drives this craft's controls while active. Null = none.</summary>
-    public MiningJob? Job { get; internal set; }
+    /// <summary>Automation: a job (mining or freight) that drives this craft's controls while active. Null = none.</summary>
+    public ShipJob? Job { get; internal set; }
 
     public bool IsAutomated => Job is { Active: true };
+
+    /// <summary>The refinery batch in progress (inputs held here), or null.</summary>
+    public RefiningBatch? RefiningBatch { get; internal set; }
 
     /// <summary>Drilled material not yet whole kg (0..1), carried between ticks so no fraction is lost.</summary>
     public double MiningRemainderKg { get; internal set; }

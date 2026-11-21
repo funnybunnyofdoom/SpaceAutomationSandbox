@@ -18,13 +18,19 @@ internal static class TestData
 
     public static MaterialCatalog Materials() => MaterialCatalog.FromJson(Read("data/materials/materials.json"));
 
-    public static PartCatalog Catalog() => PartCatalog.FromJson(Read("data/parts/parts.json"), Materials());
+    public static RecipeCatalog Recipes() => RecipeCatalog.FromJson(Read("data/recipes/recipes.json"), Materials());
+
+    public static PartCatalog Catalog() => PartCatalog.FromJson(Read("data/parts/parts.json"), Materials(), Recipes());
 
     public static ShipDesign StarterShip() => ShipDesign.FromJson(Read("data/blueprints/starter_ship.json"));
 
     public static ShipDesign StarterShipyard() => ShipDesign.FromJson(Read("data/blueprints/starter_shipyard.json"));
 
-    /// <summary>The same starting state the game creates.</summary>
-    public static NewGameResult NewGame(ulong seed = Simulation.NewGame.DefaultSeed) =>
-        Simulation.NewGame.Create(seed, Catalog(), StarterShip(), StarterShipyard());
+    /// <summary>The same starting state the game creates; by default with every body already surveyed.</summary>
+    public static NewGameResult NewGame(ulong seed = Simulation.NewGame.DefaultSeed, bool surveyAll = true)
+    {
+        var game = Simulation.NewGame.Create(seed, Catalog(), StarterShip(), StarterShipyard());
+        if (surveyAll) foreach (var body in game.Sector.Bodies) game.Sector.MarkSurveyed(body.Id);
+        return game;
+    }
 }

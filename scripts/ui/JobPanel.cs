@@ -2,53 +2,59 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Simulation;
 
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>
-/// Sets up and watches the mining job of the craft you're viewing (key J): source body, material,
-/// destination station and "return when the hold is X% full", plus Start/Stop. Shows the job's
-/// state, why it's waiting, completed cycles and delivered mass. Starting goes through
-/// <see cref="SectorState.StartJob"/>, which refuses with the reason if the ship or job can't work.
+/// Sets up and watches the job of the craft you're viewing (key J). Two kinds:
+/// Mining (source body, material, destination, return-at %) and Freight (pickup station, material,
+/// destination, minimum pickup, keep-stocked target). Shows state, wait reason, cycles and delivered
+/// mass. Starting goes through SectorState.StartJob, which refuses with the reason if it can't work.
 /// </summary>
 public partial class JobPanel : PanelContainer
 {
     private const double RefreshSeconds = 0.25;
     private static readonly double[] ReturnFractions = { 0.25, 0.5, 0.75, 1.0 };
+    private static readonly long[] MinPickups = { 1_000, 5_000, 10_000, 20_000 };
+    private static readonly long[] KeepStocked = { 0, 5_000, 10_000, 20_000, 50_000 };
     private static readonly Color ErrorColor = new(1f, 0.45f, 0.4f);
     private static readonly Color OkColor = new(0.5f, 1f, 0.6f);
 
     private readonly Func<SectorState> _sector;
     private readonly Func<CraftState?> _craft;
+    private readonly MaterialCatalog _materials;
     private Label _title = null!;
-    private OptionButton _source = null!;
-    private OptionButton _material = null!;
-    private OptionButton _destination = null!;
-    private OptionButton _returnAt = null!;
+    private OptionButton _kind = null!;
+    private GridContainer _miningRows = null!;
+    private GridContainer _freightRows = null!;
+    private OptionButton _source = null!, _mineMaterial = null!, _mineDestination = null!, _returnAt = null!;
+    private OptionButton _pickup = null!, _haulMaterial = null!, _haulDestination = null!, _minPickup = null!, _keepStocked = null!;
     private Label _state = null!;
     private Label _message = null!;
     private List<BodyId> _sources = new();
-    private List<string> _materials = new();
-    private List<CraftId> _destinations = new();
+    private List<string> _deposits = new();
+    private List<CraftId> _stations = new();
     private double _sinceRefresh;
 
-    public JobPanel(Func<SectorState> sector, Func<CraftState?> craft)
+    public JobPanel(Func<SectorState> sector, Func<CraftState?> craft, MaterialCatalog materials)
     {
         _sector = sector;
         _craft = craft;
+        _materials = materials;
         Build();
     }
 
-    public JobPanel() : this(() => new SectorState(0), () => null) { }
+    public JobPanel() : this(() => new SectorState(0), () => null, new MaterialCatalog(Array.Empty<MaterialDefinition>())) { }
 
     private void Build()
     {
         SetAnchorsPreset(LayoutPreset.CenterTop);
-        OffsetLeft = -210;
-        OffsetRight = 210;
+        OffsetLeft = -220;
+        OffsetRight = 220;
         OffsetTop = 370; // below the HUD text
-        OffsetBottom = 700;
+        OffsetBottom = 710;
 
         var box = new VBoxContainer();
         box.AddThemeConstantOverride("separation", 6);
@@ -57,15 +63,33 @@ public partial class JobPanel : PanelContainer
         _title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(_title);
 
-        var grid = new GridContainer { Columns = 2 };
-        box.AddChild(grid);
-        _source = AddRow(grid, "Mine at");
-        _source.ItemSelected += _ => RefreshMaterials();
-        _material = AddRow(grid, "Material");
-        _destination = AddRow(grid, "Deliver to");
-        _returnAt = AddRow(grid, "Return when hold is");
+        var kindRow = new HBoxContainer();
+        kindRow.AddChild(new Label { Text = "Job" });
+        _kind = new OptionButton { FocusMode = FocusModeEnum.None };
+        _kind.AddItem("Mining");
+        _kind.AddItem("Freight");
+        _kind.ItemSelected += _ => ShowKind();
+        kindRow.AddChild(_kind);
+        box.AddChild(kindRow);
+
+        _miningRows = new GridContainer { Columns = 2 };
+        box.AddChild(_miningRows);
+        _source = AddRow(_miningRows, "Mine at");
+        _source.ItemSelected += _ => RefreshDeposits();
+        _mineMaterial = AddRow(_miningRows, "Material");
+        _mineDestination = AddRow(_miningRows, "Deliver to");
+        _returnAt = AddRow(_miningRows, "Return when hold is");
         foreach (var f in ReturnFractions) _returnAt.AddItem($"{f * 100:0}% full");
-        _returnAt.Select(0);
+
+        _freightRows = new GridContainer { Columns = 2 };
+        box.AddChild(_freightRows);
+        _pickup = AddRow(_freightRows, "Pick up at");
+        _haulMaterial = AddRow(_freightRows, "Material");
+        _haulDestination = AddRow(_freightRows, "Deliver to");
+        _minPickup = AddRow(_freightRows, "Wait for at least");
+        foreach (var kg in MinPickups) _minPickup.AddItem($"{kg / 1000} t");
+        _keepStocked = AddRow(_freightRows, "Keep destination at");
+        foreach (var kg in KeepStocked) _keepStocked.AddItem(kg == 0 ? "no limit (deliver all)" : $"{kg / 1000} t");
 
         var buttons = new HBoxContainer();
         var start = new Button { Text = "Start job", FocusMode = FocusModeEnum.None };
@@ -76,15 +100,15 @@ public partial class JobPanel : PanelContainer
         buttons.AddChild(stop);
         box.AddChild(buttons);
 
-        _state = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(390, 0) };
+        _state = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(410, 0) };
         box.AddChild(_state);
-        _message = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(390, 0) };
+        _message = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(410, 0) };
         box.AddChild(_message);
         box.AddChild(new Label
         {
             Text = "While a job runs it flies the ship; your flight keys do nothing until you stop it.",
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            CustomMinimumSize = new Vector2(390, 0),
+            CustomMinimumSize = new Vector2(410, 0),
             Modulate = new Color(1, 1, 1, 0.55f),
         });
     }
@@ -92,7 +116,7 @@ public partial class JobPanel : PanelContainer
     private static OptionButton AddRow(GridContainer grid, string label)
     {
         grid.AddChild(new Label { Text = label });
-        var option = new OptionButton { FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(240, 0) };
+        var option = new OptionButton { FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(250, 0) };
         grid.AddChild(option);
         return option;
     }
@@ -112,45 +136,79 @@ public partial class JobPanel : PanelContainer
         if (_sinceRefresh >= RefreshSeconds) Refresh();
     }
 
+    private void ShowKind()
+    {
+        _miningRows.Visible = _kind.Selected == 0;
+        _freightRows.Visible = _kind.Selected == 1;
+    }
+
     private void RefreshChoices()
     {
         var sector = _sector();
         var craft = _craft();
+
+        // Unsurveyed bodies are listed (so you know they exist) but jobs there are refused with the reason.
         _sources = sector.Bodies.Where(b => b.IsMineable).Select(b => b.Id).ToList();
         _source.Clear();
         foreach (var id in _sources)
         {
             var body = sector.GetBody(id);
-            _source.AddItem($"{body.Name} ({body.DepositsKg.Values.Sum() / 1000.0:0} t left)");
+            _source.AddItem(body.Surveyed ? $"{body.Name} ({body.DepositsKg.Values.Sum() / 1000.0:0} t left)" : $"{body.Name} (unsurveyed)");
         }
-        _destinations = sector.Crafts.Where(c => c.Stats.DockingPorts.Count > 0 && c.Id != craft?.Id).Select(c => c.Id).ToList();
-        _destination.Clear();
-        foreach (var id in _destinations) _destination.AddItem($"{sector.GetCraft(id).Name} ({id})");
 
-        // Preselect the current job's settings, if any.
-        if (craft?.Job is { } job)
+        _stations = sector.Crafts.Where(c => c.Stats.DockingPorts.Count > 0 && c.Id != craft?.Id).Select(c => c.Id).ToList();
+        foreach (var option in new[] { _mineDestination, _pickup, _haulDestination })
         {
-            Select(_source, _sources.IndexOf(job.SourceBodyId));
-            Select(_destination, _destinations.IndexOf(job.DestinationId));
-            Select(_returnAt, Array.IndexOf(ReturnFractions, job.ReturnFraction));
+            option.Clear();
+            foreach (var id in _stations) option.AddItem($"{sector.GetCraft(id).Name} ({id})");
         }
-        else
+        _haulMaterial.Clear();
+        foreach (var m in _materials.Materials) _haulMaterial.AddItem(m.Name);
+
+        Select(_source, 0);
+        Select(_mineDestination, 0);
+        Select(_returnAt, 0);
+        Select(_pickup, 0);
+        Select(_haulDestination, Math.Min(1, _stations.Count - 1));
+        Select(_haulMaterial, 0);
+        Select(_minPickup, 1);
+        Select(_keepStocked, 0);
+
+        // Show the current job's settings, if any.
+        switch (craft?.Job)
         {
-            Select(_source, 0);
-            Select(_destination, 0);
+            case MiningJob mining:
+                _kind.Select(0);
+                Select(_source, _sources.IndexOf(mining.SourceBodyId));
+                Select(_mineDestination, _stations.IndexOf(mining.DestinationId));
+                Select(_returnAt, Array.IndexOf(ReturnFractions, mining.ReturnFraction));
+                RefreshDeposits();
+                Select(_mineMaterial, _deposits.IndexOf(mining.MaterialId));
+                break;
+            case HaulJob haul:
+                _kind.Select(1);
+                Select(_pickup, _stations.IndexOf(haul.PickupId));
+                Select(_haulDestination, _stations.IndexOf(haul.DestinationId));
+                Select(_haulMaterial, _materials.Materials.ToList().FindIndex(m => m.Id == haul.MaterialId));
+                Select(_minPickup, Array.IndexOf(MinPickups, haul.MinPickupKg));
+                Select(_keepStocked, Array.IndexOf(KeepStocked, haul.KeepStockedKg));
+                RefreshDeposits();
+                break;
+            default:
+                RefreshDeposits();
+                break;
         }
-        RefreshMaterials();
-        if (craft?.Job is { } j) Select(_material, _materials.IndexOf(j.MaterialId));
+        ShowKind();
     }
 
-    private void RefreshMaterials()
+    private void RefreshDeposits()
     {
-        _materials = _source.Selected >= 0 && _source.Selected < _sources.Count
-            ? _sector().GetBody(_sources[_source.Selected]).DepositsKg.Keys.ToList()
-            : new List<string>();
-        _material.Clear();
-        foreach (var m in _materials) _material.AddItem(m);
-        Select(_material, 0);
+        var body = _source.Selected >= 0 && _source.Selected < _sources.Count ? _sector().GetBody(_sources[_source.Selected]) : null;
+        _deposits = body is { Surveyed: true } ? body.DepositsKg.Keys.ToList() : new List<string>();
+        _mineMaterial.Clear();
+        foreach (var m in _deposits) _mineMaterial.AddItem(_materials.Contains(m) ? _materials.Get(m).Name : m);
+        if (_deposits.Count == 0) _mineMaterial.AddItem(body is { Surveyed: false } ? "(unknown: survey it first)" : "(nothing left)");
+        Select(_mineMaterial, 0);
     }
 
     private static void Select(OptionButton option, int index)
@@ -162,33 +220,54 @@ public partial class JobPanel : PanelContainer
     {
         _sinceRefresh = 0;
         var craft = _craft();
-        _title.Text = craft is null ? "MINING JOB" : $"MINING JOB: {craft.Name}  (J to close)";
+        _title.Text = craft is null ? "JOB" : $"JOB: {craft.Name}  (J to close)";
         if (craft?.Job is not { } job)
         {
             _state.Text = "No job.";
             return;
         }
         var sector = _sector();
-        var source = sector.Bodies.FirstOrDefault(b => b.Id == job.SourceBodyId)?.Name ?? "?";
-        var destination = sector.Crafts.FirstOrDefault(c => c.Id == job.DestinationId)?.Name ?? "?";
-        _state.Text = $"{job.MaterialId} from {source} to {destination}, return at {job.ReturnFraction * 100:0}%\n"
-                      + $"State: {job.Status}\n"
+        string Station(CraftId id) => sector.Crafts.FirstOrDefault(c => c.Id == id)?.Name ?? "?";
+        var what = job switch
+        {
+            MiningJob m => $"Mining {job.MaterialId} at {sector.Bodies.FirstOrDefault(b => b.Id == m.SourceBodyId)?.Name ?? "?"} for "
+                           + $"{Station(m.DestinationId)}, return at {m.ReturnFraction * 100:0}%",
+            HaulJob h => $"Freight: {job.MaterialId} from {Station(h.PickupId)} to {Station(h.DestinationId)}"
+                         + (h.KeepStockedKg > 0 ? $", keep {h.KeepStockedKg / 1000} t there" : ""),
+            _ => job.Kind,
+        };
+        _state.Text = $"{what}\nState: {job.Status}\n"
                       + $"Cycles: {job.CompletedCycles}    Delivered: {job.DeliveredKg / 1000.0:0.0} t    "
                       + $"Hold: {craft.Inventory.TotalKg / 1000.0:0.0} / {craft.CargoCapacityKg / 1000.0:0} t";
-        _state.AddThemeColorOverride("font_color", job.State == MiningJobState.Waiting ? ErrorColor : new Color(1, 1, 1));
+        _state.AddThemeColorOverride("font_color", job.Status.StartsWith("waiting") ? ErrorColor : new Color(1, 1, 1));
     }
 
     private void Start()
     {
         var craft = _craft();
         if (craft is null) return;
-        if (_source.Selected < 0 || _source.Selected >= _sources.Count) { Show(new ActionResult(false, "No mineable body.")); return; }
-        if (_material.Selected < 0 || _material.Selected >= _materials.Count) { Show(new ActionResult(false, "That body has nothing left to mine.")); return; }
-        if (_destination.Selected < 0 || _destination.Selected >= _destinations.Count) { Show(new ActionResult(false, "No station with a docking port.")); return; }
+        if (_stations.Count == 0) { Show(new ActionResult(false, "No station with a docking port.")); return; }
 
-        var job = new MiningJob(_sources[_source.Selected], _materials[_material.Selected], _destinations[_destination.Selected],
-            ReturnFractions[Math.Max(0, _returnAt.Selected)]);
-        Show(_sector().StartJob(craft.Id, job));
+        if (_kind.Selected == 0)
+        {
+            if (_source.Selected < 0 || _source.Selected >= _sources.Count) { Show(new ActionResult(false, "No mineable body.")); return; }
+            var source = _sector().GetBody(_sources[_source.Selected]);
+            if (!source.Surveyed)
+            {
+                Show(new ActionResult(false, $"{source.Name} hasn't been surveyed: fly a ship you pilot within {SectorState.SurveyRangeM / 1000:0} km of it first."));
+                return;
+            }
+            if (_mineMaterial.Selected < 0 || _mineMaterial.Selected >= _deposits.Count) { Show(new ActionResult(false, $"{source.Name} has nothing left to mine.")); return; }
+            Show(_sector().StartJob(craft.Id, new MiningJob(source.Id, _deposits[_mineMaterial.Selected],
+                _stations[Math.Max(0, _mineDestination.Selected)], ReturnFractions[Math.Max(0, _returnAt.Selected)])));
+        }
+        else
+        {
+            var material = _materials.Materials[Math.Max(0, _haulMaterial.Selected)].Id;
+            Show(_sector().StartJob(craft.Id, new HaulJob(_stations[Math.Max(0, _pickup.Selected)], material,
+                _stations[Math.Max(0, _haulDestination.Selected)], MinPickups[Math.Max(0, _minPickup.Selected)],
+                KeepStocked[Math.Max(0, _keepStocked.Selected)])));
+        }
     }
 
     private void Show(ActionResult result)

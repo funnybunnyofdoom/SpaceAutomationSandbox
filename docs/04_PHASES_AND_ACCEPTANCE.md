@@ -82,6 +82,8 @@ Work:
 
 **Gate:** demonstrate a small autonomous network replacing the player manually hauling goods.
 
+**Status (2026-11-21): gate met in tests** (`ProductionNetworkTests`, headless). The player builds a surface depot on Rock-2 and a second ship, then starts a mining job (Rock-2 silicate → depot) and a freight job (depot → shipyard). With no further input, the yard refines the silicate and gains 10 t of composites in about 82 game minutes, with total mass checked unchanged every tick. Also in place: ore and refining with slag, three asteroids and the survey, freight with minimum-pickup and keep-stocked rules, and 30 automated ships for 10 game minutes in about 1 s (about 0.1 ms per tick; the budget is 50 ms). **Not yet:** a request/offer marketplace, storage buffers beyond cargo bays, service and maintenance, NPC expansion, and a fleet UI for dozens of ships.
+
 ## Phase 5 — Workforce and scale
 
 - Food/water/oxygen/habitat systems and recruitable organics; robotics with power/maintenance infrastructure.

@@ -16,7 +16,7 @@ public sealed partial class SectorState
     {
         if (!craft.IsAnchored || !craft.IsLanded || craft.Stats.MiningRateKgPerS <= 0) return null;
         var body = GetBody(craft.LandedOnBodyId);
-        if (craft.Job is { } job && job.Active) return body.Deposit(job.MaterialId) > 0 ? job.MaterialId : null;
+        if (craft.Job is MiningJob { Active: true } job) return body.Deposit(job.MaterialId) > 0 ? job.MaterialId : null;
         return body.DepositsKg.Keys.FirstOrDefault();
     }
 

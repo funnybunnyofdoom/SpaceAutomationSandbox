@@ -14,6 +14,10 @@ Units are kilograms, metres, seconds, newtons and kilojoules.
 
 File order is display order. The three current materials (metal, electronics, composites) are **placeholders** until the resource taxonomy is designed (docs/06, question 5).
 
+## `recipes/recipes.json` (schema 1)
+
+Each recipe has an `id`, a `name`, and whole-kg `inputsKg` and `outputsKg` keyed by material ID. **Inputs and outputs must weigh the same** (checked on load), so put waste such as `slag` in the outputs. A refinery tries recipes in file order and starts the first one whose inputs are all in its station's stock.
+
 ## `parts/parts.json` (schema 2)
 
 | Field | Required | Meaning |
@@ -30,6 +34,7 @@ File order is display order. The three current materials (metal, electronics, co
 | `isAnchorClamp` | no | Lets a landed craft anchor to the body it's on (G) and release again. |
 | `isFoundation` | no | Makes the design a fixed structure: it anchors permanently when it lands. Not allowed in ship designs. |
 | `isDockingPort` | no | One berth where a ship can dock. It opens in the direction the part faces (its rotation). |
+| `refiningRateKgPerS` | no | Refinery speed in kg of recipe input per second. Any station with one refines its own stock. |
 | `fabricationRateKgPerS` | no | Shipyard build rate: kg of finished craft assembled per second. A design with any of these is a valid station. |
 | `materialsKg` | yes (v2) | What one part is built from, as `{ "materialId": kg }`. Every material must exist and be > 0, and the amounts **must add up to `massKg`** (checked on load), so building never creates or destroys mass. |
 
