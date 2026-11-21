@@ -39,6 +39,7 @@ public sealed partial class SectorState
         switch (job.State)
         {
             case HaulJobState.Waiting:
+                if (Tick < job.RetryAtTick) { craft.Controls = new ShipControls(0, 0, !craft.IsDocked); return; }
                 job.State = job.ResumeState;
                 job.WaitReason = null;
                 if (allowResume) StepHaul(craft, job, allowResume: false);
@@ -59,8 +60,9 @@ public sealed partial class SectorState
                 var available = pickup.Inventory[material];
                 if (available < job.MinPickupKg && craft.Inventory[material] == 0)
                 {
-                    WaitHaul(craft, job, HaulJobState.Loading,
-                        $"{pickup.Name} has {available / 1000.0:0.0} t of {material} (waiting for {job.MinPickupKg / 1000.0:0.0} t)");
+                    TryUndock(craft.Id); // don't hold the port (a miner may need it to deliver)
+                    WaitHaul(craft, job, HaulJobState.ToPickup,
+                        $"{pickup.Name} has {available / 1000.0:0.0} t of {material} (waiting for {job.MinPickupKg / 1000.0:0.0} t)", JobStationRetryS);
                     return;
                 }
                 var take = MaxTransferKg(pickup.Id, craft.Id, material);
@@ -90,16 +92,18 @@ public sealed partial class SectorState
                 }
                 else if (room == 0)
                 {
-                    WaitHaul(craft, job, HaulJobState.Unloading, job.KeepStockedKg > 0 && destination.Inventory[material] >= job.KeepStockedKg
+                    TryUndock(craft.Id); // don't hold the port while blocked
+                    WaitHaul(craft, job, HaulJobState.ToDropoff, job.KeepStockedKg > 0 && destination.Inventory[material] >= job.KeepStockedKg
                         ? $"{destination.Name} already has {job.KeepStockedKg / 1000.0:0.0} t of {material}"
-                        : $"{destination.Name} is full");
+                        : $"{destination.Name} is full", JobStationRetryS);
                 }
                 return;
         }
     }
 
-    private static void WaitHaul(CraftState craft, HaulJob job, HaulJobState resume, string reason)
+    private void WaitHaul(CraftState craft, HaulJob job, HaulJobState resume, string reason, double retryAfterS = 0)
     {
+        job.RetryAtTick = Tick + (long)(retryAfterS * FixedStepClock.TicksPerSecond);
         job.ResumeState = resume;
         job.WaitReason = reason;
         job.State = HaulJobState.Waiting;

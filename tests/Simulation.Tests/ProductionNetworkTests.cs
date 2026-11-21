@@ -73,7 +73,7 @@ public class ProductionNetworkTests
         var game = TestData.NewGame();
         var yard = game.Sector.GetCraft(game.ShipyardId);
         yard.Inventory.Add("silicate", 1_000);
-        Run(game.Sector, 5 * FixedStepClock.TicksPerSecond); // mid-batch
+        Run(game.Sector, 2 * FixedStepClock.TicksPerSecond); // mid-batch (1 t at 200 kg/s takes 5 s)
         Assert.NotNull(yard.RefiningBatch);
 
         var loaded = SaveGameSerializer.FromJson(SaveGameSerializer.ToJson(game.Sector, game.PlayerCraftId), Catalog).Sector;
@@ -143,8 +143,9 @@ public class ProductionNetworkTests
         Assert.True(sector.StartJob(game.PlayerCraftId, new HaulJob(depot.Id, "silicate", yard.Id, minPickupKg: 5_000, keepStockedKg: 0)).Done);
         var job = (HaulJob)sector.GetCraft(game.PlayerCraftId).Job!;
 
-        Assert.True(RunUntil(sector, () => job.State == HaulJobState.Waiting && job.ResumeState == HaulJobState.Loading, 20 * TicksPerMinute), job.Status);
+        Assert.True(RunUntil(sector, () => job.State == HaulJobState.Waiting && job.WaitReason!.Contains("waiting for"), 20 * TicksPerMinute), job.Status);
         Assert.Contains("waiting for 5.0 t", job.Status);
+        Assert.False(sector.GetCraft(game.PlayerCraftId).IsDocked); // doesn't block the pickup's port
 
         depot.Inventory.Add("silicate", 4_000); // now 7 t
         Assert.True(RunUntil(sector, () => job.CompletedCycles >= 1, 30 * TicksPerMinute), job.Status);
@@ -166,7 +167,7 @@ public class ProductionNetworkTests
         Assert.True(sector.StartJob(game.PlayerCraftId, new HaulJob(depot.Id, "electronics", store.Id, 1_000, keepStockedKg: 2_000)).Done);
         var job = (HaulJob)sector.GetCraft(game.PlayerCraftId).Job!;
 
-        Assert.True(RunUntil(sector, () => job.State == HaulJobState.Waiting && job.ResumeState == HaulJobState.Unloading, 40 * TicksPerMinute), job.Status);
+        Assert.True(RunUntil(sector, () => job.State == HaulJobState.Waiting && job.WaitReason!.Contains("already has"), 40 * TicksPerMinute), job.Status);
         Assert.Equal(2_000, store.Inventory["electronics"]);
         Assert.Contains("already has 2.0 t", job.Status);
         Assert.Equal(8_000, sector.GetCraft(game.PlayerCraftId).Inventory["electronics"]);

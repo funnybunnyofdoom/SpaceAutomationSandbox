@@ -27,7 +27,7 @@ public sealed partial class SectorState
             var material = MiningMaterial(craft);
             if (material is null || craft.FreeCargoKg <= 0) continue;
 
-            var drilled = craft.MiningRemainderKg + craft.Stats.MiningRateKgPerS * FixedStepClock.TickSeconds;
+            var drilled = craft.MiningRemainderKg + craft.Stats.MiningRateKgPerS * Tuning.DrillRateMultiplier * FixedStepClock.TickSeconds;
             var whole = (long)Math.Floor(drilled);
             var taken = GetBody(craft.LandedOnBodyId).Extract(material, Math.Min(whole, craft.FreeCargoKg));
             craft.Inventory.Add(material, taken);

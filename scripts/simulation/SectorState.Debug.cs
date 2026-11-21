@@ -1,0 +1,50 @@
+using System;
+
+namespace SpaceAutomationSandbox.Simulation;
+
+/// <summary>
+/// Development tuning: multipliers applied on top of part stats, so pacing can be tried in game
+/// without editing data files. Part of the simulation state (saved), so a save replays the same way.
+/// Defaults are 1 (no change). Game speed is not here: it only changes how fast ticks are run, not results.
+/// </summary>
+public sealed class SimulationTuning
+{
+    public const double Min = 0.01;
+    public const double Max = 1_000;
+
+    private double _drill = 1, _refining = 1, _fabrication = 1;
+
+    public double DrillRateMultiplier { get => _drill; set => _drill = Clamp(value); }
+    public double RefiningRateMultiplier { get => _refining; set => _refining = Clamp(value); }
+    public double FabricationRateMultiplier { get => _fabrication; set => _fabrication = Clamp(value); }
+
+    public bool IsDefault => _drill == 1 && _refining == 1 && _fabrication == 1;
+
+    public void Reset() => _drill = _refining = _fabrication = 1;
+
+    private static double Clamp(double v) => double.IsFinite(v) ? Math.Clamp(v, Min, Max) : 1;
+
+    public override string ToString() => $"drill ×{_drill:0.##}, refining ×{_refining:0.##}, fabrication ×{_fabrication:0.##}";
+}
+
+/// <summary>
+/// Debug tools for development playtesting. The cheats deliberately break the "no mass created"
+/// rule, so they are only reachable from the debug menu and are named as such.
+/// </summary>
+public sealed partial class SectorState
+{
+    public SimulationTuning Tuning { get; } = new();
+
+    /// <summary>CHEAT: adds material to a craft's inventory out of nothing (ignores capacity).</summary>
+    public void DebugAddStock(CraftId craftId, string materialId, long kg)
+    {
+        if (kg <= 0) throw new ArgumentOutOfRangeException(nameof(kg));
+        GetCraft(craftId).Inventory.Add(materialId, kg);
+    }
+
+    /// <summary>CHEAT: marks every body surveyed.</summary>
+    public void DebugSurveyAll()
+    {
+        foreach (var body in _bodies) body.Surveyed = true;
+    }
+}

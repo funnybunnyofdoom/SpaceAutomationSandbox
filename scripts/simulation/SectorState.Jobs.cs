@@ -22,6 +22,12 @@ public sealed partial class SectorState
     public const double JobAvoidClearanceM = 400;
     public const double JobDetourAltitudeM = 1_500;
 
+    /// <summary>
+    /// A ship blocked at a station (no room to unload, too little to pick up) undocks, waits nearby and
+    /// retries after this long, so it never holds a docking port others need to unblock it.
+    /// </summary>
+    public const double JobStationRetryS = 30;
+
     /// <summary>Gives a craft a mining job, refusing (with the reason) if it or the job can't work.</summary>
     public ActionResult StartJob(CraftId craftId, MiningJob job)
     {
@@ -82,6 +88,7 @@ public sealed partial class SectorState
         switch (job.State)
         {
             case MiningJobState.Waiting:
+                if (Tick < job.RetryAtTick) { craft.Controls = new ShipControls(0, 0, !craft.IsDocked); return; }
                 // Try again from where we were; the step re-enters Waiting if still blocked.
                 job.State = job.ResumeState;
                 job.WaitReason = null;
@@ -161,13 +168,18 @@ public sealed partial class SectorState
                     job.CompletedCycles++;
                     job.State = MiningJobState.ToSource;
                 }
-                else if (amount == 0) Wait(craft, job, MiningJobState.Unloading, $"{destination.Name} is full");
+                else if (amount == 0)
+                {
+                    TryUndock(craft.Id); // don't hold the port while blocked
+                    Wait(craft, job, MiningJobState.ToDestination, $"{destination.Name} is full", JobStationRetryS);
+                }
                 return;
         }
     }
 
-    private static void Wait(CraftState craft, MiningJob job, MiningJobState resume, string reason)
+    private void Wait(CraftState craft, MiningJob job, MiningJobState resume, string reason, double retryAfterS = 0)
     {
+        job.RetryAtTick = Tick + (long)(retryAfterS * FixedStepClock.TicksPerSecond);
         job.ResumeState = resume;
         job.WaitReason = reason;
         job.State = MiningJobState.Waiting;

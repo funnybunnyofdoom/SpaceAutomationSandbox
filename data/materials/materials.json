@@ -6,6 +6,7 @@
     { "id": "composites",  "name": "Composites",  "placeholderColor": "#c9a96e" },
     { "id": "iron_ore",    "name": "Iron ore",    "placeholderColor": "#8c5a46" },
     { "id": "silicate",    "name": "Silicate",    "placeholderColor": "#b8b39a" },
+    { "id": "copper_ore",  "name": "Copper ore",  "placeholderColor": "#c9733e" },
     { "id": "slag",        "name": "Slag",        "placeholderColor": "#55504a" }
   ]
 }

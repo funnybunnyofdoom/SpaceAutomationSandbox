@@ -24,10 +24,11 @@ public static class SaveGameSerializer
     /// Version written. v2 added the landed state; v3 added rail orbits, inventories, build queues
     /// and the order counter; v4 added the anchored flag; v5 added part rotation, craft targets,
     /// docking, and order landing sites; v6 added body deposits, the drill remainder and mining jobs;
-    /// v7 added survey flags, refinery batches and freight jobs. Older files still load (missing parts
-    /// read as empty / none; before v7 every body counts as surveyed).
+    /// v7 added survey flags, refinery batches and freight jobs; v8 added debug tuning and job retry
+    /// times. Older files still load (missing parts read as empty / none / default; before v7 every
+    /// body counts as surveyed).
     /// </summary>
-    public const int SchemaVersion = 7;
+    public const int SchemaVersion = 8;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -51,6 +52,12 @@ public static class SaveGameSerializer
                 Seed = sector.Seed,
                 Tick = sector.Tick,
                 NextOrderId = sector.NextOrderId,
+                Tuning = sector.Tuning.IsDefault ? null : new TuningDto
+                {
+                    DrillRateMultiplier = sector.Tuning.DrillRateMultiplier,
+                    RefiningRateMultiplier = sector.Tuning.RefiningRateMultiplier,
+                    FabricationRateMultiplier = sector.Tuning.FabricationRateMultiplier,
+                },
                 Bodies = sector.Bodies.Select(b => new BodyDto
                 {
                     Id = b.Id.Value,
@@ -95,14 +102,14 @@ public static class SaveGameSerializer
                         {
                             Kind = j.Kind, SourceBodyId = j.SourceBodyId.Value, MaterialId = j.MaterialId, DestinationId = j.DestinationId.Value,
                             ReturnFraction = j.ReturnFraction, Active = j.Active, State = j.State, ResumeState = j.ResumeState,
-                            WaitReason = j.WaitReason, CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg,
+                            WaitReason = j.WaitReason, CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg, RetryAtTick = j.RetryAtTick,
                         },
                         HaulJob h => new JobDto
                         {
                             Kind = h.Kind, PickupId = h.PickupId.Value, MaterialId = h.MaterialId, DestinationId = h.DestinationId.Value,
                             MinPickupKg = h.MinPickupKg, KeepStockedKg = h.KeepStockedKg, Active = h.Active,
                             HaulState = h.State, HaulResumeState = h.ResumeState,
-                            WaitReason = h.WaitReason, CompletedCycles = h.CompletedCycles, DeliveredKg = h.DeliveredKg,
+                            WaitReason = h.WaitReason, CompletedCycles = h.CompletedCycles, DeliveredKg = h.DeliveredKg, RetryAtTick = h.RetryAtTick,
                         },
                         _ => null,
                     },
@@ -142,6 +149,12 @@ public static class SaveGameSerializer
         try
         {
             var sector = new SectorState(dto.Seed, dto.Tick) { Recipes = catalog.Recipes };
+            if (dto.Tuning is { } t)
+            {
+                sector.Tuning.DrillRateMultiplier = t.DrillRateMultiplier;
+                sector.Tuning.RefiningRateMultiplier = t.RefiningRateMultiplier;
+                sector.Tuning.FabricationRateMultiplier = t.FabricationRateMultiplier;
+            }
             AddBodiesParentsFirst(sector, dto.Bodies ?? new List<BodyDto>(), file.SchemaVersion);
 
             foreach (var c in dto.Crafts ?? new List<CraftDto>())
@@ -214,7 +227,7 @@ public static class SaveGameSerializer
                         sector.RestoreJob(restored.Id, new HaulJob(new CraftId(j.PickupId), j.MaterialId!, new CraftId(j.DestinationId), j.MinPickupKg, j.KeepStockedKg)
                         {
                             Active = j.Active, State = j.HaulState, ResumeState = j.HaulResumeState, WaitReason = j.WaitReason,
-                            CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg,
+                            CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg, RetryAtTick = j.RetryAtTick,
                         });
                     }
                     else
@@ -223,7 +236,7 @@ public static class SaveGameSerializer
                         sector.RestoreJob(restored.Id, new MiningJob(new BodyId(j.SourceBodyId), j.MaterialId!, new CraftId(j.DestinationId), j.ReturnFraction)
                         {
                             Active = j.Active, State = j.State, ResumeState = j.ResumeState, WaitReason = j.WaitReason,
-                            CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg,
+                            CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg, RetryAtTick = j.RetryAtTick,
                         });
                     }
                 }
@@ -288,7 +301,7 @@ public static class SaveGameSerializer
     private static Vector2D ToVec(VecDto? v, string what) =>
         v is null ? throw new FormatException($"Craft is missing {what}.") : new Vector2D(v.X, v.Y);
 
-    // --- File shape (schema 7). Change only together with SchemaVersion and docs/08. ---
+    // --- File shape (schema 8). Change only together with SchemaVersion and docs/08. ---
 
     private sealed class SaveFile
     {
@@ -303,6 +316,8 @@ public static class SaveGameSerializer
         public ulong Seed { get; set; }
         public long Tick { get; set; }
         public long NextOrderId { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] // omitted while every multiplier is 1
+        public TuningDto? Tuning { get; set; }
         public List<BodyDto>? Bodies { get; set; }
         public List<CraftDto>? Crafts { get; set; }
     }
@@ -352,6 +367,13 @@ public static class SaveGameSerializer
         public List<OrderDto>? BuildQueue { get; set; }
     }
 
+    private sealed class TuningDto
+    {
+        public double DrillRateMultiplier { get; set; } = 1;
+        public double RefiningRateMultiplier { get; set; } = 1;
+        public double FabricationRateMultiplier { get; set; } = 1;
+    }
+
     private sealed class BatchDto
     {
         public string? RecipeId { get; set; }
@@ -378,6 +400,7 @@ public static class SaveGameSerializer
         public string? WaitReason { get; set; }
         public int CompletedCycles { get; set; }
         public long DeliveredKg { get; set; }
+        public long RetryAtTick { get; set; }
     }
 
     private sealed class OrderDto

@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "recipes": [
+    { "id": "make_electronics", "name": "Make electronics", "inputsKg": { "copper_ore": 600, "silicate": 400 }, "outputsKg": { "electronics": 500, "slag": 500 } },
     { "id": "smelt_iron",  "name": "Smelt iron ore",    "inputsKg": { "iron_ore": 1000 }, "outputsKg": { "metal": 700, "slag": 300 } },
     { "id": "cast_silicate", "name": "Process silicate", "inputsKg": { "silicate": 1000 }, "outputsKg": { "composites": 500, "slag": 500 } }
   ]

@@ -11,7 +11,7 @@
       "materialsKg": { "metal": 300, "electronics": 900, "composites": 300 } },
     { "id": "cargo",    "name": "Cargo bay",    "massKg": 1500, "placeholderColor": "#8a6d4b", "cargoCapacityKg": 20000,
       "materialsKg": { "metal": 1200, "composites": 300 } },
-    { "id": "drill",    "name": "Mining drill", "massKg": 2500, "placeholderColor": "#b0b6bf", "miningRateKgPerS": 25,
+    { "id": "drill",    "name": "Mining drill", "massKg": 2500, "placeholderColor": "#b0b6bf", "miningRateKgPerS": 100,
       "materialsKg": { "metal": 2100, "electronics": 400 } },
     { "id": "fabricator", "name": "Fabricator", "massKg": 6000, "placeholderColor": "#8f6fe0", "fabricationRateKgPerS": 500,
       "materialsKg": { "metal": 4000, "electronics": 1500, "composites": 500 } },
@@ -21,7 +21,7 @@
       "materialsKg": { "metal": 400, "composites": 100 } },
     { "id": "docking_port", "name": "Docking port", "massKg": 600, "placeholderColor": "#4fd1c5", "isDockingPort": true,
       "materialsKg": { "metal": 450, "electronics": 150 } },
-    { "id": "refinery", "name": "Refinery", "massKg": 5000, "placeholderColor": "#d98c4f", "refiningRateKgPerS": 50,
+    { "id": "refinery", "name": "Refinery", "massKg": 5000, "placeholderColor": "#d98c4f", "refiningRateKgPerS": 200,
       "materialsKg": { "metal": 3500, "electronics": 1000, "composites": 500 } }
   ]
 }

@@ -64,6 +64,11 @@ public partial class Main : Node2D
     private FleetPanel? _fleetPanel;
     private CargoPanel? _cargoPanel;
     private JobPanel? _jobPanel;
+    private DebugPanel? _debugPanel;
+
+    // Debug game speed: how many seconds of game time pass per real second. View-only (results don't change).
+    private int _gameSpeed = 1;
+    private const int BaseMaxTicksPerFrame = 8;
 
     private bool EditorOpen => _editor is { Visible: true };
 
@@ -93,6 +98,8 @@ public partial class Main : Node2D
             hudLayer.AddChild(_cargoPanel);
             _jobPanel = new JobPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
             hudLayer.AddChild(_jobPanel);
+            _debugPanel = new DebugPanel(() => _sector, () => _gameSpeed, SetGameSpeed, _catalog.Materials) { Visible = false };
+            hudLayer.AddChild(_debugPanel);
         }
         // Continue where the player left off; a new game only if there's no usable save.
         if (_catalog != null && System.IO.File.Exists(SaveFilePath)) LoadGame(isStartup: true);
@@ -137,6 +144,7 @@ public partial class Main : Node2D
             for (var i = 0; i < 300 * FixedStepClock.TicksPerSecond; i++) _sector.Step();
         }
         if (System.Array.IndexOf(args, "--open-job") >= 0) _jobPanel?.Open();
+        if (System.Array.IndexOf(args, "--open-debug") >= 0) _debugPanel?.Open();
         if (System.Array.IndexOf(args, "--open-editor") >= 0) OpenEditor();
         if (System.Array.IndexOf(args, "--open-cargo") >= 0) _cargoPanel?.Open();
         if (System.Array.IndexOf(args, "--open-shipyard") >= 0) _shipyardPanel?.Open();
@@ -153,6 +161,14 @@ public partial class Main : Node2D
         if (_catalog == null || _player == null || _sector.Crafts.FirstOrDefault(c => c.IsShipyard) is not { } yard) return;
         for (var i = 0; i < 2; i++) _sector.OrderBuild(yard.Id, _player.Design, _catalog);
         for (var i = 0; i < 40 * FixedStepClock.TicksPerSecond; i++) _sector.Step();
+    }
+
+    private void SetGameSpeed(int speed)
+    {
+        _gameSpeed = System.Math.Max(1, speed);
+        // Allow proportionally more ticks per frame, so higher speeds don't silently drop time.
+        _clock.MaxTicksPerAdvance = BaseMaxTicksPerFrame * _gameSpeed;
+        ShowStatus($"Game speed {_gameSpeed}×.");
     }
 
     /// <summary>Hands the flight controls to another craft. The old one keeps its last controls cleared.</summary>
@@ -315,6 +331,9 @@ public partial class Main : Node2D
             case Key.F when _fleetPanel != null:
                 if (_fleetPanel.Visible) _fleetPanel.Visible = false; else _fleetPanel.Open();
                 break;
+            case Key.F3 when _debugPanel != null:
+                if (_debugPanel.Visible) _debugPanel.Visible = false; else _debugPanel.Open();
+                break;
             case Key.J when _jobPanel != null:
                 if (_jobPanel.Visible) _jobPanel.Visible = false; else _jobPanel.Open();
                 break;
@@ -329,6 +348,7 @@ public partial class Main : Node2D
                 if (_fleetPanel != null) _fleetPanel.Visible = false;
                 if (_cargoPanel != null) _cargoPanel.Visible = false;
                 if (_jobPanel != null) _jobPanel.Visible = false;
+                if (_debugPanel != null) _debugPanel.Visible = false;
                 break;
             case Key.F7: StartNewGame(); ShowStatus("New game. The save file is unchanged until you save or quit."); break;
             case Key.Tab when _player != null: CycleTarget(); break;
@@ -367,9 +387,11 @@ public partial class Main : Node2D
         // Input is sampled once per frame and held for every tick run this frame.
         // No flying while the editor is open (typing a name must not fire thrusters).
         // A ship running a job is flown by it; the keyboard only flies ships without one.
-        if (_player is { IsAutomated: false }) _player.Controls = EditorOpen ? ShipControls.Idle : ReadControls();
+        // Typing into a text/number box (e.g. the debug menu) mustn't fly the ship either.
+        var typing = GetViewport().GuiGetFocusOwner() is LineEdit;
+        if (_player is { IsAutomated: false }) _player.Controls = EditorOpen || typing ? ShipControls.Idle : ReadControls();
 
-        var ticks = _clock.Advance(delta);
+        var ticks = _clock.Advance(delta * _gameSpeed);
         for (var i = 0; i < ticks; i++) _sector.Step();
 
         if (_player != null) _camera.Position = ToPixels(InterpolatedPosition(_player));
@@ -394,6 +416,8 @@ public partial class Main : Node2D
                    + $"   zoom {_pixelsPerMetre:0.###} px/m\n";
 
         if (Time.GetTicksMsec() < _statusUntilMs) text += $">> {_status}\n";
+        if (_gameSpeed != 1 || !_sector.Tuning.IsDefault)
+            text += $"DEBUG: speed {_gameSpeed}×{(_sector.Tuning.IsDefault ? "" : $", {_sector.Tuning}")}  (F3)\n";
         if (_player is not { } p) return text + _setupError;
 
         var (nearest, nearestSurface) = _sector.NearestBody(p.Position);
@@ -448,7 +472,7 @@ public partial class Main : Node2D
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
                + "W/Up thrust   A/D turn   S/Space brake (matches target)   G anchor   K dock   Tab cycle target   T target nearest   wheel zoom\n"
-               + "B blueprint editor   Y shipyard   F fleet   C cargo   J job (mining/freight)   F6 save   F9 load   F7 new game   (closing the window autosaves)";
+               + "B blueprint editor   Y shipyard   F fleet   C cargo   J job (mining/freight)   F3 debug   F6 save   F9 load   F7 new game   (closing the window autosaves)";
     }
 
     private string LandedLine(CraftState p)

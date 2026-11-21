@@ -136,7 +136,7 @@ public class MiningJobTests
     }
 
     [Fact]
-    public void FullDestination_WaitsDocked_WithAReason()
+    public void FullDestination_WaitsNearby_WithAReason_LeavingThePortFree()
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
@@ -155,10 +155,11 @@ public class MiningJobTests
         Assert.True(sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "iron_ore", depot.Id, 0.25)).Done);
         var job = (MiningJob)sector.GetCraft(game.PlayerCraftId).Job!;
 
-        Assert.True(RunUntil(sector, () => job.State == MiningJobState.Waiting && job.ResumeState == MiningJobState.Unloading,
+        Assert.True(RunUntil(sector, () => job.State == MiningJobState.Waiting && job.WaitReason!.Contains("is full"),
             60 * TicksPerMinute), job.Status);
         Assert.Contains("Depot is full", job.Status);
-        Assert.True(sector.GetCraft(game.PlayerCraftId).IsDocked);
+        Assert.False(sector.GetCraft(game.PlayerCraftId).IsDocked); // waits nearby: the port stays free
+        Assert.Single(sector.FreePorts(depot));
     }
 
     [Fact]

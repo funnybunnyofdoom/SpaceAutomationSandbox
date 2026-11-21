@@ -29,6 +29,9 @@ public abstract class ShipJob
     /// <summary>Total kg unloaded at the destination.</summary>
     public long DeliveredKg { get; internal set; }
 
+    /// <summary>While waiting: don't retry before this tick (0 = retry every tick).</summary>
+    public long RetryAtTick { get; internal set; }
+
     /// <summary>What it is doing now, in plain words (with the wait reason when blocked).</summary>
     public abstract string Status { get; }
 

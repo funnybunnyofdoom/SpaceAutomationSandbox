@@ -16,7 +16,7 @@ File order is display order. The three current materials (metal, electronics, co
 
 ## `recipes/recipes.json` (schema 1)
 
-Each recipe has an `id`, a `name`, and whole-kg `inputsKg` and `outputsKg` keyed by material ID. **Inputs and outputs must weigh the same** (checked on load), so put waste such as `slag` in the outputs. A refinery tries recipes in file order and starts the first one whose inputs are all in its station's stock.
+Each recipe has an `id`, a `name`, and whole-kg `inputsKg` and `outputsKg` keyed by material ID. **Inputs and outputs must weigh the same** (checked on load), so put waste such as `slag` in the outputs. A refinery tries recipes in file order and starts the first one whose inputs are all in its station's stock, so put recipes with scarcer inputs first (`make_electronics` comes before `cast_silicate`, which also uses silicate).
 
 ## `parts/parts.json` (schema 2)
 

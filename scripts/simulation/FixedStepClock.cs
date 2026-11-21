@@ -29,7 +29,14 @@ public sealed class FixedStepClock
         MaxTicksPerAdvance = maxTicksPerAdvance;
     }
 
-    public int MaxTicksPerAdvance { get; }
+    private int _maxTicksPerAdvance;
+
+    /// <summary>Cap on ticks run per <see cref="Advance"/> call (raised by the debug game speed). At least 1.</summary>
+    public int MaxTicksPerAdvance
+    {
+        get => _maxTicksPerAdvance;
+        set => _maxTicksPerAdvance = value >= 1 ? value : throw new ArgumentOutOfRangeException(nameof(value));
+    }
 
     /// <summary>Whole ticks of real time skipped because of the cap.</summary>
     public long DroppedTicks { get; private set; }
