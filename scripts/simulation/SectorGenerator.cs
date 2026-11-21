@@ -37,4 +37,18 @@ public static class SectorGenerator
 
         return sector;
     }
+
+    /// <summary>Gap between the primary's surface and the player's spawn point. Placeholder.</summary>
+    public const double PlayerSpawnAltitudeM = 300;
+
+    /// <summary>Spawn point straight "above" (−Y) the first fixed body, with the ship facing away from it.</summary>
+    public static Vector2D PlayerSpawnPoint(SectorState sector)
+    {
+        foreach (var body in sector.Bodies)
+        {
+            if (body.Orbit is null)
+                return sector.GetPosition(body.Id) + new Vector2D(0, -(body.RadiusM + PlayerSpawnAltitudeM));
+        }
+        return Vector2D.Zero;
+    }
 }

@@ -12,6 +12,9 @@ public sealed class SectorState
     private readonly List<CelestialBodyState> _bodies = new();
     private readonly Dictionary<BodyId, CelestialBodyState> _byId = new();
     private uint _nextBodyId = 1;
+    private readonly List<CraftState> _crafts = new();
+    private readonly Dictionary<CraftId, CraftState> _craftsById = new();
+    private uint _nextCraftId = 1;
 
     public SectorState(ulong seed) => Seed = seed;
 
@@ -42,8 +45,43 @@ public sealed class SectorState
     public CelestialBodyState GetBody(BodyId id) =>
         _byId.TryGetValue(id, out var body) ? body : throw new KeyNotFoundException($"No {id} in sector.");
 
+    /// <summary>Crafts in id order (deterministic update and iteration).</summary>
+    public IReadOnlyList<CraftState> Crafts => _crafts;
+
+    public CraftId AllocateCraftId() => new(_nextCraftId++);
+
+    public void AddCraft(CraftState craft)
+    {
+        if (_craftsById.ContainsKey(craft.Id)) throw new InvalidOperationException($"Duplicate {craft.Id}.");
+        if (craft.Id.Value >= _nextCraftId) _nextCraftId = craft.Id.Value + 1;
+
+        _crafts.Add(craft);
+        _crafts.Sort((a, b) => a.Id.Value.CompareTo(b.Id.Value));
+        _craftsById.Add(craft.Id, craft);
+    }
+
+    public CraftState GetCraft(CraftId id) =>
+        _craftsById.TryGetValue(id, out var craft) ? craft : throw new KeyNotFoundException($"No {id} in sector.");
+
     /// <summary>Advances the sector by exactly one fixed tick.</summary>
-    public void Step() => Tick++;
+    public void Step()
+    {
+        foreach (var craft in _crafts) FlightModel.Step(craft, FixedStepClock.TickSeconds);
+        Tick++;
+    }
+
+    /// <summary>Body whose surface is closest to <paramref name="point"/>, with that surface distance (negative = inside).</summary>
+    public (CelestialBodyState Body, double SurfaceDistanceM) NearestBody(Vector2D point)
+    {
+        CelestialBodyState? best = null;
+        var bestDistance = double.PositiveInfinity;
+        foreach (var body in _bodies)
+        {
+            var distance = GetPosition(body.Id).DistanceTo(point) - body.RadiusM;
+            if (distance < bestDistance) { best = body; bestDistance = distance; }
+        }
+        return best is null ? throw new InvalidOperationException("Sector has no bodies.") : (best, bestDistance);
+    }
 
     /// <summary>Body centre at the current tick.</summary>
     public Vector2D GetPosition(BodyId id) => GetPositionAt(id, TimeS);

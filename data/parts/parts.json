@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "parts": [
+    { "id": "hull",     "name": "Hull plate",   "massKg": 1000, "placeholderColor": "#5c6370" },
+    { "id": "cockpit",  "name": "Cockpit",      "massKg": 3000, "placeholderColor": "#4fb3d9", "isControlSource": true },
+    { "id": "thruster", "name": "Thruster",     "massKg": 1500, "placeholderColor": "#e07b39", "thrustN": 150000 },
+    { "id": "battery",  "name": "Battery",      "massKg": 1500, "placeholderColor": "#d9c94f", "energyCapacityKJ": 50000 },
+    { "id": "cargo",    "name": "Cargo bay",    "massKg": 1500, "placeholderColor": "#8a6d4b", "cargoCapacityKg": 20000 },
+    { "id": "drill",    "name": "Mining drill", "massKg": 2500, "placeholderColor": "#b0b6bf", "miningRateKgPerS": 25 }
+  ]
+}

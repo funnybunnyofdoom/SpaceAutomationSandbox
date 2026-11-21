@@ -27,6 +27,9 @@ This document keeps an implementation agent from accidentally transforming brain
 | 2026-11-20 | Body motion (Phase 1) | **Approved as a placeholder:** celestial bodies follow fixed circular orbits ("on rails"), and position is a pure function of simulation time. The period is set directly and not derived from gravity. Ship physics is still undecided (open question 1). |
 | 2026-11-20 | Simulation tick | Provisional: fixed 20 ticks/s (`FixedStepClock.TicksPerSecond`), the top of the 5–20 range proposed in docs/02, with render interpolation. Revisit when ship movement needs it. |
 
+| 2026-11-20 | Ship flight (Phase 1) | **Placeholder, pending the creator's review:** Newtonian inertia with no gravity, drag, collisions, fuel or power use. Acceleration is total thrust divided by total mass along the nose, with a fixed turn rate (1.5 rad/s). "Brake" is a flight assist that uses the same thrust against velocity. Ships fly through bodies (open question 3). |
+| 2026-11-20 | Ship grid scale | Placeholder: one design cell is 4 m. Forward is −y. Parts have no rotation, and all thrust acts along the nose. Cells don't need to be connected yet (open question 4). |
+
 ## Recommended defaults, not yet approved
 
 | Topic | Proposal | Why |

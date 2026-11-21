@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "starter_ship",
+  "name": "Starter prospector",
+  "cells": [
+    { "x":  0, "y": -3, "part": "drill" },
+    { "x":  0, "y": -2, "part": "cockpit" },
+    { "x": -1, "y": -1, "part": "hull" },
+    { "x":  0, "y": -1, "part": "battery" },
+    { "x":  1, "y": -1, "part": "hull" },
+    { "x": -1, "y":  0, "part": "cargo" },
+    { "x":  0, "y":  0, "part": "hull" },
+    { "x":  1, "y":  0, "part": "cargo" },
+    { "x": -1, "y":  1, "part": "thruster" },
+    { "x":  0, "y":  1, "part": "hull" },
+    { "x":  1, "y":  1, "part": "thruster" }
+  ]
+}
