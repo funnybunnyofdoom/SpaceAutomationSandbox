@@ -20,6 +20,7 @@ public partial class Main : Node2D
     private const ulong SectorSeed = 20261120;
     private const int StarCount = 220;
 
+    private const string MaterialsPath = "res://data/materials/materials.json";
     private const string PartsPath = "res://data/parts/parts.json";
     private const string StarterDesignPath = "res://data/blueprints/starter_ship.json";
 
@@ -107,7 +108,8 @@ public partial class Main : Node2D
     {
         try
         {
-            var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath));
+            var materials = MaterialCatalog.FromJson(Godot.FileAccess.GetFileAsString(MaterialsPath));
+            var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath), materials);
             var design = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterDesignPath));
             var errors = design.Validate(catalog);
             if (errors.Count > 0)

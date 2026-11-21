@@ -4,7 +4,17 @@ Versioned, data-driven definitions. Code loads these through pure C# parsers in 
 
 Units are kilograms, metres, seconds, newtons and kilojoules.
 
-## `parts/parts.json` (schema 1)
+## `materials/materials.json` (schema 1)
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `id` | yes | Stable string ID used in part costs, and later in inventories. Don't rename it. |
+| `name` | yes | Display name. |
+| `placeholderColor` | no | `#rrggbb` for UI until icons exist. |
+
+File order is display order. The three current materials (metal, electronics, composites) are **placeholders** until the resource taxonomy is designed (docs/06, question 5).
+
+## `parts/parts.json` (schema 2)
 
 | Field | Required | Meaning |
 | --- | --- | --- |
@@ -17,6 +27,7 @@ Units are kilograms, metres, seconds, newtons and kilojoules.
 | `energyCapacityKJ` | no | Battery capacity. Shown in stats only; nothing uses power yet. |
 | `cargoCapacityKg` | no | Cargo capacity by mass. Shown in stats only. |
 | `miningRateKgPerS` | no | Drill rate. Not used until mining (Phase 3). |
+| `materialsKg` | yes (v2) | What one part is built from, as `{ "materialId": kg }`. Every material must exist and be > 0, and the amounts **must add up to `massKg`** (checked on load), so building never creates or destroys mass. |
 
 ## `blueprints/*.json` ship designs (schema 1)
 

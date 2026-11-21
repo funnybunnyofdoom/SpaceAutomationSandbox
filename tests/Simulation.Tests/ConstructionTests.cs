@@ -90,15 +90,16 @@ public class ConstructionTests
 
         Assert.Throws<FormatException>(() => ShipDesign.FromJson(duplicate));
         Assert.Throws<FormatException>(() => ShipDesign.FromJson(future));
-        Assert.Throws<FormatException>(() => PartCatalog.FromJson("""{ "schemaVersion": 2, "parts": [] }"""));
+        Assert.Throws<FormatException>(() => PartCatalog.FromJson("""{ "schemaVersion": 1, "parts": [] }""", TestData.Materials()));
     }
 
     [Fact]
     public void PartCatalog_RejectsDuplicateIdsAndMasslessParts()
     {
         Assert.Throws<FormatException>(() => PartCatalog.FromJson(
-            """{ "schemaVersion": 1, "parts": [ { "id": "a", "massKg": 1 }, { "id": "a", "massKg": 2 } ] }"""));
+            """{ "schemaVersion": 2, "parts": [ { "id": "a", "massKg": 1, "materialsKg": { "metal": 1 } }, { "id": "a", "massKg": 2, "materialsKg": { "metal": 2 } } ] }""",
+            TestData.Materials()));
         Assert.Throws<FormatException>(() => PartCatalog.FromJson(
-            """{ "schemaVersion": 1, "parts": [ { "id": "a", "massKg": 0 } ] }"""));
+            """{ "schemaVersion": 2, "parts": [ { "id": "a", "massKg": 0, "materialsKg": { "metal": 0 } } ] }""", TestData.Materials()));
     }
 }

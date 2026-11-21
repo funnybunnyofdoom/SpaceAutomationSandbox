@@ -16,7 +16,9 @@ internal static class TestData
 
     public static string Read(string relativePath) => File.ReadAllText(Path.Combine(RepoRoot.Value, relativePath));
 
-    public static PartCatalog Catalog() => PartCatalog.FromJson(Read("data/parts/parts.json"));
+    public static MaterialCatalog Materials() => MaterialCatalog.FromJson(Read("data/materials/materials.json"));
+
+    public static PartCatalog Catalog() => PartCatalog.FromJson(Read("data/parts/parts.json"), Materials());
 
     public static ShipDesign StarterShip() => ShipDesign.FromJson(Read("data/blueprints/starter_ship.json"));
 }

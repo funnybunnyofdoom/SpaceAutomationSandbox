@@ -17,12 +17,24 @@ public sealed record PartDefinition
     public double EnergyCapacityKJ { get; init; }
     public double CargoCapacityKg { get; init; }
     public double MiningRateKgPerS { get; init; }
+
+    /// <summary>What one part is built from (kg per material id). Must add up to <see cref="MassKg"/>.</summary>
+    public Dictionary<string, double>? MaterialsKg { get; init; }
+
+    public MaterialBill Bill => new(MaterialsKg ?? new Dictionary<string, double>());
 }
 
-/// <summary>All known parts by stable ID. Immutable after loading.</summary>
+/// <summary>
+/// All known parts by stable ID. Immutable after loading. Every part's materials must be known
+/// and add up exactly to its mass: building a part neither creates nor destroys mass (docs/02).
+/// </summary>
 public sealed class PartCatalog
 {
-    public const int SchemaVersion = 1;
+    /// <summary>v2 added the required <c>materialsKg</c>.</summary>
+    public const int SchemaVersion = 2;
+
+    /// <summary>Allowed rounding gap between a part's mass and the sum of its materials, relative to mass.</summary>
+    private const double MassBalanceTolerance = 1e-9;
 
     internal static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -33,8 +45,9 @@ public sealed class PartCatalog
 
     private readonly Dictionary<string, PartDefinition> _parts;
 
-    public PartCatalog(IEnumerable<PartDefinition> parts)
+    public PartCatalog(IEnumerable<PartDefinition> parts, MaterialCatalog materials)
     {
+        Materials = materials;
         _parts = new Dictionary<string, PartDefinition>(StringComparer.Ordinal);
         foreach (var part in parts)
         {
@@ -42,8 +55,25 @@ public sealed class PartCatalog
             if (!(part.MassKg > 0)) throw new FormatException($"Part '{part.Id}' needs massKg > 0.");
             if (part.ThrustN < 0 || part.CargoCapacityKg < 0 || part.EnergyCapacityKJ < 0 || part.MiningRateKgPerS < 0)
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
+            ValidateMaterials(part, materials);
             if (!_parts.TryAdd(part.Id, part)) throw new FormatException($"Duplicate part id '{part.Id}'.");
         }
+    }
+
+    public MaterialCatalog Materials { get; }
+
+    private static void ValidateMaterials(PartDefinition part, MaterialCatalog materials)
+    {
+        if (part.MaterialsKg is not { Count: > 0 } amounts)
+            throw new FormatException($"Part '{part.Id}' needs materialsKg.");
+        foreach (var (id, kg) in amounts)
+        {
+            if (!materials.Contains(id)) throw new FormatException($"Part '{part.Id}' uses unknown material '{id}'.");
+            if (!(kg > 0) || double.IsInfinity(kg)) throw new FormatException($"Part '{part.Id}' needs a positive amount of '{id}'.");
+        }
+        var sum = amounts.Values.Sum();
+        if (Math.Abs(sum - part.MassKg) > part.MassKg * MassBalanceTolerance)
+            throw new FormatException($"Part '{part.Id}' weighs {part.MassKg} kg but its materials add up to {sum} kg.");
     }
 
     public IReadOnlyCollection<PartDefinition> Parts => _parts.Values;
@@ -53,13 +83,13 @@ public sealed class PartCatalog
     public PartDefinition Get(string id) =>
         _parts.TryGetValue(id, out var part) ? part : throw new KeyNotFoundException($"Unknown part '{id}'.");
 
-    public static PartCatalog FromJson(string json)
+    public static PartCatalog FromJson(string json, MaterialCatalog materials)
     {
         var file = JsonSerializer.Deserialize<PartFile>(json, JsonOptions)
                    ?? throw new FormatException("Part file is empty.");
         if (file.SchemaVersion != SchemaVersion)
             throw new FormatException($"Part file schemaVersion {file.SchemaVersion}, expected {SchemaVersion}.");
-        return new PartCatalog(file.Parts ?? Enumerable.Empty<PartDefinition>());
+        return new PartCatalog(file.Parts ?? Enumerable.Empty<PartDefinition>(), materials);
     }
 
     private sealed class PartFile

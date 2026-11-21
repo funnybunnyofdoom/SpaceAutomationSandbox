@@ -114,6 +114,15 @@ public sealed class ShipDesign
             Math.Sqrt(radiusCellsSq) * CellSizeM);
     }
 
+    /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>
+    public MaterialBill ComputeBillOfMaterials(PartCatalog catalog)
+    {
+        var total = MaterialBill.Empty;
+        foreach (var cell in Cells)
+            if (catalog.TryGet(cell.PartId, out var part)) total = total.Plus(part.Bill);
+        return total;
+    }
+
     public static ShipDesign FromJson(string json)
     {
         var file = JsonSerializer.Deserialize<DesignFile>(json, PartCatalog.JsonOptions)

@@ -125,6 +125,9 @@ public sealed class BlueprintEditor
         }
     }
 
+    /// <summary>Materials to build the current layout (known parts only).</summary>
+    public MaterialBill BillOfMaterials => ToDesign().ComputeBillOfMaterials(_catalog);
+
     /// <summary>Problems that make the design unusable (the same rules as flying a design).</summary>
     public IReadOnlyList<string> Errors
     {

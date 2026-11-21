@@ -43,7 +43,7 @@ public partial class BlueprintGridCanvas : Control
     }
 
     // Parameterless constructor required by Godot for script instances; not used.
-    public BlueprintGridCanvas() : this(new BlueprintEditor(new PartCatalog(Array.Empty<PartDefinition>())),
+    public BlueprintGridCanvas() : this(new BlueprintEditor(new PartCatalog(Array.Empty<PartDefinition>(), new MaterialCatalog(Array.Empty<MaterialDefinition>()))),
         new Dictionary<string, Color>(), () => null) { }
 
     private static GridPos ToCell(Vector2 local) =>

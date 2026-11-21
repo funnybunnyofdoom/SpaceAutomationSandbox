@@ -28,6 +28,7 @@ public partial class BlueprintEditorView : Control
     private BlueprintGridCanvas _grid = null!;
     private LineEdit _name = null!;
     private Label _stats = null!;
+    private Label _bill = null!;
     private Label _problems = null!;
     private Label _status = null!;
     private OptionButton _loadList = null!;
@@ -53,7 +54,7 @@ public partial class BlueprintEditorView : Control
         Build();
     }
 
-    public BlueprintEditorView() : this(new PartCatalog(Array.Empty<PartDefinition>()), new Dictionary<string, Color>(), () => null) { }
+    public BlueprintEditorView() : this(new PartCatalog(Array.Empty<PartDefinition>(), new MaterialCatalog(Array.Empty<MaterialDefinition>())), new Dictionary<string, Color>(), () => null) { }
 
     public BlueprintEditor Model => _model;
 
@@ -146,6 +147,8 @@ public partial class BlueprintEditorView : Control
 
         _stats = new Label();
         right.AddChild(_stats);
+        _bill = new Label();
+        right.AddChild(_bill);
         _problems = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(330, 0) };
         right.AddChild(_problems);
 
@@ -225,6 +228,8 @@ public partial class BlueprintEditorView : Control
               + $"Cargo {s.CargoCapacityKg / 1000:0} t    Battery {s.EnergyCapacityKJ / 1000:0} MJ\n"
               + $"Collision radius {s.BoundingRadiusM:0.0} m";
 
+        _bill.Text = BillText();
+
         var errors = _model.Errors;
         var warnings = _model.Warnings;
         if (errors.Count == 0 && warnings.Count == 0)
@@ -238,6 +243,17 @@ public partial class BlueprintEditorView : Control
             _problems.AddThemeColorOverride("font_color", errors.Count > 0 ? ErrorColor : WarningColor);
         }
         _grid.QueueRedraw();
+    }
+
+    /// <summary>Bill of materials in material-file order, e.g. "Metal 12.6 t".</summary>
+    private string BillText()
+    {
+        var bill = _model.BillOfMaterials;
+        if (bill.TotalKg == 0) return "";
+        var materials = _catalog.Materials;
+        var lines = bill.Kg.OrderBy(kv => materials.OrderOf(kv.Key))
+            .Select(kv => $"  {(materials.Contains(kv.Key) ? materials.Get(kv.Key).Name : kv.Key)}  {kv.Value / 1000:0.0##} t");
+        return "Bill of materials:\n" + string.Join("\n", lines);
     }
 
     private void SetStatus(string text, Color? color = null)
