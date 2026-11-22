@@ -29,6 +29,9 @@ public partial class CargoPanel : PanelContainer
     private Label _header = null!;
     private GridContainer _grid = null!;
     private Label _status = null!;
+    private HBoxContainer _crewRow = null!;
+    private Label _crewLabel = null!;
+    private Button _crewIn = null!, _crewOut = null!;
     private VBoxContainer _kits = null!;
     private string _kitsKey = "";
     private Label _requestsTitle = null!;
@@ -72,6 +75,14 @@ public partial class CargoPanel : PanelContainer
         box.AddChild(_header);
         _grid = new GridContainer { Columns = 3 };
         box.AddChild(_grid);
+        _crewRow = new HBoxContainer();
+        box.AddChild(_crewRow);
+        _crewLabel = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _crewRow.AddChild(_crewLabel);
+        _crewIn = MoveButton("+1 crew", "Move one crew member into the craft you fly", () => MoveCrew(true));
+        _crewOut = MoveButton("−1 crew", "Move one crew member to the other craft", () => MoveCrew(false));
+        _crewRow.AddChild(_crewIn);
+        _crewRow.AddChild(_crewOut);
         box.AddChild(new Label { Text = "Construction kits:", Modulate = Dim });
         _kits = new VBoxContainer();
         box.AddChild(_kits);
@@ -134,6 +145,7 @@ public partial class CargoPanel : PanelContainer
         var self = _ship();
         if (self is null)
         {
+            _crewRow.Visible = false;
             _hint.Text = "";
             _header.Text = "No craft.";
             Rebuild("", null, null, false, new List<string>());
@@ -163,6 +175,20 @@ public partial class CargoPanel : PanelContainer
 
         RebuildKits(self, other, canMove);
         ShowRequests(sector, self, other, canMove);
+
+        var anyCrew = self.Stats.CrewCapacity > 0 || self.Crew > 0 || (other is not null && (other.Stats.CrewCapacity > 0 || other.Crew > 0));
+        _crewRow.Visible = anyCrew;
+        _crewLabel.Text = $"Crew: {self.Name} {self.Crew}/{self.Stats.CrewCapacity}"
+                          + (other is null ? "" : $"   {other.Name} {other.Crew}/{other.Stats.CrewCapacity}");
+        _crewIn.Visible = _crewOut.Visible = canMove;
+    }
+
+    private void MoveCrew(bool intoSelf)
+    {
+        var sector = _sector();
+        if (_ship() is not { } self || Other(sector, self) is not { } other) return;
+        _status.Text = (intoSelf ? sector.TryTransferCrew(other.Id, self.Id, 1) : sector.TryTransferCrew(self.Id, other.Id, 1)).Message;
+        Refresh();
     }
 
     private void Rebuild(string key, CraftState? self, CraftState? other, bool canMove, List<string> ids)

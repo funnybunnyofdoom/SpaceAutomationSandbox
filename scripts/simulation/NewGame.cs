@@ -20,6 +20,9 @@ public static class NewGame
     /// <summary>Fuel in the player's hold at the start: about 10 minutes of cruise for the starter ship.</summary>
     public const long PlayerStartingFuelKg = 150;
 
+    /// <summary>People at the home shipyard at the start (#11). Its habitat holds a few more, so they can grow.</summary>
+    public const int StartingCrew = 4;
+
     /// <summary>Shipyard orbit height above the home planet's surface. Its period is a real circular orbit there (#32).</summary>
     public const double ShipyardAltitudeM = 600; // 300 m above the player's spawn, so it's in view at the start
 
@@ -37,6 +40,8 @@ public static class NewGame
         ["composites"] = 5_000,
         ["slag"] = 5_000, // hull plates contain slag now (#7)
         ["fuel"] = 5_000, // for the cruise drive (#53)
+        ["food"] = 1_000, // for the yard's starting crew (#11): weeks at 3 kg per person per hour
+        ["water"] = 2_000,
     };
 
     public static NewGameResult Create(ulong seed, PartCatalog catalog, ShipDesign starterShip, ShipDesign starterShipyard)
@@ -74,6 +79,7 @@ public static class NewGame
             yard.Inventory.Add(material, kg);
         }
 
+        sector.RestoreCrew(yard.Id, StartingCrew, 0, 0, 0, 0, legacyNoCrew: false);
         return new NewGameResult(sector, player.Id, yard.Id);
     }
 

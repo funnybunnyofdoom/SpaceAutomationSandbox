@@ -1,4 +1,4 @@
-# 08 — Save format (schema 13)
+# 08 — Save format (schema 14)
 
 The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs`.
 
@@ -22,7 +22,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
 
 ```jsonc
 {
-  "schemaVersion": 13,
+  "schemaVersion": 14,
   "game": "SpaceAutomationSandbox",
   "playerCraftId": 1,                 // 0 = no player craft
   "sector": {
@@ -58,6 +58,8 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
         "ejectionRemainderKg": 0.5,                  // v10: ejected fraction of a kg (0..1); omitted when 0
         "cruising": true, "cruiseFuelRemainderKg": 0.4,  // v12: cruise drive on, and burned fuel not yet whole kg; both omitted when off/0
         "partHealth": [ { "x": 0, "y": 2, "health": 0.6 } ], "partsLost": 1,  // v13: damaged parts (omitted when none) and parts broken off
+        "crew": 4, "foodRemainderKg": 0.3, "waterRemainderKg": 0.6, "farmRemainderKg": 0.1, "crewGrowthS": 120.5,  // v14; each omitted when 0
+        "legacyNoCrew": false,                       // v14: only written (true) for craft from older saves: no crew rules
         "refiningBatch": { "recipeId": "smelt_iron", "inputsKg": { "iron_ore": 1000 }, "progressKg": 420.0 },  // v7
         "job": { "sourceBodyId": 2, "materialId": "metal", "destinationId": 2, "returnFraction": 0.25,
                  "active": true, "state": "Mining", "resumeState": "ToSource", "waitReason": null,
@@ -74,7 +76,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
 }
 ```
 
-The load checks for: the right `game`, a `schemaVersion` from 1 to 13, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs (as a ship or as a station; queued designs as ships), known materials in inventories and orders, target, landed-on, rail-orbit parent and player IDs that exist, dock links to real free ports (one ship per port, not also landed or on rails), and anchor states the rules allow (anchored only while landed with a clamp or foundation; a landed foundation always anchored). Any failure raises `FormatException` with a reason.
+The load checks for: the right `game`, a `schemaVersion` from 1 to 14, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs (as a ship or as a station; queued designs as ships), known materials in inventories and orders, target, landed-on, rail-orbit parent and player IDs that exist, dock links to real free ports (one ship per port, not also landed or on rails), and anchor states the rules allow (anchored only while landed with a clamp or foundation; a landed foundation always anchored). Any failure raises `FormatException` with a reason.
 
 ## Changing the format
 
@@ -88,6 +90,7 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 2 | Added `landedOnBodyId` and `landedOffset` per craft (solid bodies) | A v1 file loads with every craft flying. The next save writes v2. |
 | 3 | Added `railOrbit`, `inventoryKg` and `buildQueue` per craft, and `nextOrderId` (shipyards) | v1/v2 files load with empty inventories and no queues. They contain no shipyard; F7 starts a new game that has one. |
 | 4 | Added `anchored` per craft (anchor clamps and foundations) | Older files load with nothing anchored, except a landed foundation, which is always anchored. |
+| 14 | Crew and life support: `crew`, supply and farm remainders, `crewGrowthS` and `legacyNoCrew` per craft. Eaten and drunk supplies go into `sector.ejectedKg` | The migration marks every older craft `legacyNoCrew`, so designs over 15 parts keep working without crew. |
 | 13 | Part health (`partHealth`, `partsLost` per craft; the saved design already lacks broken-off parts, and craft designs no longer need to be valid ships or stations, only made of known parts) and local gravity. Debris goes into `sector.ejectedKg` | Older craft are undamaged; gravity applies from the first tick after loading. |
 | 12 | Star system (new games: body kind `Star`, the home planet orbits it), cruise drive (`cruising`, `cruiseFuelRemainderKg` per craft) and solar power by distance. Burned fuel goes into `sector.ejectedKg["fuel"]` | Nothing to convert: older saves keep their planet-centred sector (no star means full sunlight everywhere) and nothing is cruising. |
 | 11 | Construction kits and station requests. Removes `landingSiteBodyId` from build orders; adds `kits` and `requestsKg` per craft, and serve-requests freight jobs (`job.kind` = "requests", `minPickupKg` = smallest trip, contract in `pickupId`/`destinationId`/`materialId`/`contractAmountKg`, omitted when it has none) | The migration drops landing sites: a queued station order now finishes as a kit in the yard's storage, to be carried and deployed. |

@@ -78,7 +78,7 @@ public class PowerAndSlagTests
 
         for (var i = 0; i < 20 * TicksPerSecond; i++) sector.Step();
         // The yard is idle with a full battery, so all of its solar is spare; the ship adds its own.
-        var expected = 20 * (yard.Stats.PowerGenerationKW + ship.Stats.PowerGenerationKW);
+        var expected = 20 * (yard.Stats.PowerGenerationKW - yard.Stats.HabitatPowerKW + ship.Stats.PowerGenerationKW); // the yard's habitat uses some (#11)
         Assert.Equal(System.Math.Min(expected, ship.Stats.EnergyCapacityKJ), ship.StoredEnergyKJ, 3);
     }
 

@@ -10,6 +10,7 @@
     { "id": "slag",        "name": "Slag",        "placeholderColor": "#55504a" },
     { "id": "ice",         "name": "Ice",         "placeholderColor": "#bfe6ff" },
     { "id": "water",       "name": "Water",       "placeholderColor": "#3f8fd9" },
-    { "id": "fuel",        "name": "Fuel",        "placeholderColor": "#e8d25a" }
+    { "id": "fuel",        "name": "Fuel",        "placeholderColor": "#e8d25a" },
+    { "id": "food",        "name": "Food",        "placeholderColor": "#c9e06b" }
   ]
 }

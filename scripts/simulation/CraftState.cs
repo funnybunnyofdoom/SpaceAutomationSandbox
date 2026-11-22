@@ -63,6 +63,20 @@ public sealed class CraftState
     /// <summary>Set only by the save migration for craft from before power existed: they never run short.</summary>
     public bool LegacyFreePower { get; internal set; }
 
+    /// <summary>Crew aboard (#11). Live in habitats; bigger craft need them to fly and work.</summary>
+    public int Crew { get; internal set; }
+
+    /// <summary>Why the crew can't run the craft this tick ("no food", "needs 3 crew (has 1)"…), or null. Not saved.</summary>
+    public string? CrewShortReason { get; internal set; }
+
+    /// <summary>Craft from saves older than v14: no crew rules apply.</summary>
+    public bool LegacyNoCrew { get; internal set; }
+
+    public double FoodRemainderKg { get; internal set; }
+    public double WaterRemainderKg { get; internal set; }
+    public double FarmRemainderKg { get; internal set; }
+    public double CrewGrowthProgressS { get; internal set; }
+
     /// <summary>Cruise drive engaged (#53): moving at cruise speed along its heading. See SectorState.Cruise.</summary>
     public bool Cruising { get; internal set; }
 

@@ -15,6 +15,7 @@
     { "x":  0, "y": -2, "part": "docking_port" },
     { "x":  0, "y":  2, "part": "docking_port", "rot": 2 },
     { "x": -2, "y":  0, "part": "solar_panel" },
+    { "x": -2, "y": -1, "part": "habitat" },
     { "x":  2, "y": -1, "part": "solar_panel" },
     { "x":  2, "y":  0, "part": "solar_panel" },
     { "x":  2, "y":  1, "part": "solar_panel" }

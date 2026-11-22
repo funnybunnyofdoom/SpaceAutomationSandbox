@@ -190,6 +190,7 @@ public sealed partial class SectorState
         var endS = (Tick + 1) * FixedStepClock.TickSeconds;
         StepJobs(); // automated craft set their controls first, from this tick's state
         BeginPowerTick();
+        StepLifeSupport(); // crew first: a craft without its crew can't fly or work this tick (#11)
         List<(CraftState, Vector2D)>? docked = null;
         foreach (var craft in _crafts)
         {
@@ -198,7 +199,7 @@ public sealed partial class SectorState
                 : !craft.TargetBodyId.IsNone ? GetVelocityAt(craft.TargetBodyId, midTickS)
                 : Vector2D.Zero;
             var velocityBefore = craft.Velocity;
-            var thrustPowered = TryUsePower(craft, ThrustEnergyKJ(craft, reference));
+            var thrustPowered = Operational(craft) && TryUsePower(craft, ThrustEnergyKJ(craft, reference));
             // Gravity pulls free-flying craft only; landed, docked and parked ones are held in place.
             var gravity = craft.IsDocked || craft.IsLanded || craft.IsOnRails ? Vector2D.Zero : GravityAt(craft.Position, TimeS);
             FlightModel.Step(craft, FixedStepClock.TickSeconds, reference, thrustPowered, gravity);

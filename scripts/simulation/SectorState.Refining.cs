@@ -55,6 +55,7 @@ public sealed partial class SectorState
 
             var batch = craft.RefiningBatch;
             if (!Recipes.TryGet(batch.RecipeId, out var running)) continue; // unknown after a data change: hold it untouched
+            if (batch.ProgressKg < running.BatchKg && !Operational(craft)) continue;
             if (batch.ProgressKg < running.BatchKg && !TryUsePower(craft, craft.Stats.RefineryPowerKW * FixedStepClock.TickSeconds)) continue;
             batch.ProgressKg = Math.Min(running.BatchKg,
                 batch.ProgressKg + craft.Stats.RefiningRateKgPerS * Tuning.RefiningRateMultiplier * FixedStepClock.TickSeconds);

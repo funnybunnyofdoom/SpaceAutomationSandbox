@@ -90,6 +90,7 @@ public sealed partial class SectorState
             if (yard.BuildQueueList.Count == 0 || !yard.IsShipyard) continue;
             var order = yard.BuildQueueList[0];
             if (order.ProgressKg >= order.TotalKg) { (finished ??= new()).Add((yard, order)); continue; } // a kit waiting for room
+            if (!Operational(yard)) continue; // no crew (or no supplies): no progress (#11)
             if (!TryUsePower(yard, yard.Stats.FabricatorPowerKW * FixedStepClock.TickSeconds)) continue; // no power: no progress
             order.ProgressKg = Math.Min(order.TotalKg,
                 order.ProgressKg + yard.Stats.FabricationRateKgPerS * Tuning.FabricationRateMultiplier * FixedStepClock.TickSeconds);

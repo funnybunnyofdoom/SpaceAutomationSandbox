@@ -28,6 +28,10 @@
     { "id": "refinery", "name": "Refinery", "massKg": 5000, "placeholderColor": "#d98c4f", "refiningRateKgPerS": 200, "powerUseKW": 100,
       "materialsKg": { "metal": 3500, "electronics": 1000, "composites": 500 } },
     { "id": "slag_ejector", "name": "Slag ejector", "massKg": 1500, "placeholderColor": "#6b4f3a", "ejectionRateKgPerS": 100, "powerUseKW": 20,
-      "materialsKg": { "metal": 1100, "electronics": 400 } }
+      "materialsKg": { "metal": 1100, "electronics": 400 } },
+    { "id": "habitat",  "name": "Habitat",      "massKg": 2000, "placeholderColor": "#7fd1b9", "crewCapacity": 6, "powerUseKW": 10,
+      "materialsKg": { "metal": 1200, "composites": 500, "electronics": 300 } },
+    { "id": "farm",     "name": "Farm",         "massKg": 3000, "placeholderColor": "#6abf4b", "foodRateKgPerS": 0.02, "powerUseKW": 30,
+      "materialsKg": { "metal": 1500, "composites": 1000, "electronics": 500 } }
   ]
 }

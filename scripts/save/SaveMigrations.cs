@@ -31,6 +31,7 @@ public static class SaveMigrations
         [10] = ("v11 replaced landing sites with construction kits: queued station orders now finish as kits; requests and kits start empty", DropLandingSites),
         [11] = ("v12 added the star system (new games only), the cruise drive and solar power by distance: older saves keep their sector, nothing cruises, full sunlight without a star", (_, _) => { }),
         [12] = ("v13 added part health and local gravity: older craft are undamaged; gravity simply applies from now on", (_, _) => { }),
+        [13] = ("v14 added crew and life support: craft from older games need no crew, so they keep working", ExemptLegacyCraftFromCrew),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>
@@ -89,6 +90,11 @@ public static class SaveMigrations
             craft["legacyFreePower"] = true;
             craft["storedEnergyKJ"] = Parts(craft, catalog).Sum(p => p.EnergyCapacityKJ);
         }
+    }
+
+    private static void ExemptLegacyCraftFromCrew(JsonObject root, PartCatalog catalog)
+    {
+        foreach (var craft in Crafts(root)) craft["legacyNoCrew"] = true;
     }
 
     private static void DropLandingSites(JsonObject root, PartCatalog catalog)

@@ -69,10 +69,23 @@ public sealed record ShipStats(
     double RightThrustN = 0,
     double ReversePowerKW = 0,
     double LeftPowerKW = 0,
-    double RightPowerKW = 0)
+    double RightPowerKW = 0,
+    int CrewCapacity = 0,
+    double FoodRateKgPerS = 0,
+    double HabitatPowerKW = 0,
+    double FarmPowerKW = 0)
 {
+    /// <summary>Craft up to this many parts run without crew (#11).</summary>
+    public const int UncrewedMaxParts = 15;
+
+    /// <summary>Above that, one crew member per this many parts (rounded up).</summary>
+    public const int PartsPerCrew = 10;
+
+    /// <summary>Crew needed aboard to fly or work (#11): none for small craft.</summary>
+    public int CrewRequired => CellCount <= UncrewedMaxParts ? 0 : (CellCount + PartsPerCrew - 1) / PartsPerCrew;
+
     /// <summary>Everything running at once (full throttle, drilling, refining, building, ejecting), kW.</summary>
-    public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW;
+    public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW + HabitatPowerKW + FarmPowerKW;
 
     /// <summary>Can lock onto a body once landed (clamps release again; foundations never do).</summary>
     public bool CanAnchor => AnchorClampCount > 0 || FoundationCount > 0;
@@ -132,7 +145,8 @@ public sealed class ShipDesign
     }
 
     private static bool IsStationFacility(PartDefinition p) =>
-        p.FabricationRateKgPerS > 0 || p.IsDockingPort || p.CargoCapacityKg > 0 || p.RefiningRateKgPerS > 0;
+        p.FabricationRateKgPerS > 0 || p.IsDockingPort || p.CargoCapacityKg > 0 || p.RefiningRateKgPerS > 0
+        || p.CrewCapacity > 0 || p.FoodRateKgPerS > 0;
 
     /// <summary>Human-readable problems for the given role; empty means the design is usable in that role.</summary>
     /// <param name="requireConnected">
@@ -214,6 +228,8 @@ public sealed class ShipDesign
         double mass = 0, thrust = 0, otherThrust = 0, cargo = 0, energy = 0, fabrication = 0, mining = 0, refining = 0, momentX = 0, momentY = 0;
         double generation = 0, thrustPower = 0, drillPower = 0, refineryPower = 0, fabricatorPower = 0, ejectorPower = 0, ejection = 0;
         double reverse = 0, left = 0, right = 0, reversePower = 0, leftPower = 0, rightPower = 0;
+        double food = 0, habitatPower = 0, farmPower = 0;
+        var crew = 0;
         int clamps = 0, foundations = 0;
         var ports = new List<DockingPortInfo>();
         foreach (var cell in Cells)
@@ -237,6 +253,8 @@ public sealed class ShipDesign
             refining += part.RefiningRateKgPerS * h;
             generation += part.PowerGenerationKW * h;
             ejection += part.EjectionRateKgPerS * h;
+            crew += part.CrewCapacity;
+            food += part.FoodRateKgPerS * h;
             // Each part's power use goes to the activity it powers; thrusters by the direction they push.
             if (part.ThrustN > 0)
             {
@@ -252,6 +270,8 @@ public sealed class ShipDesign
             else if (part.RefiningRateKgPerS > 0) refineryPower += part.PowerUseKW;
             else if (part.FabricationRateKgPerS > 0) fabricatorPower += part.PowerUseKW;
             else if (part.EjectionRateKgPerS > 0) ejectorPower += part.PowerUseKW;
+            else if (part.CrewCapacity > 0) habitatPower += part.PowerUseKW;
+            else if (part.FoodRateKgPerS > 0) farmPower += part.PowerUseKW;
             if (part.IsAnchorClamp) clamps++;
             if (part.IsFoundation) foundations++;
             if (part.IsDockingPort) ports.Add(new DockingPortInfo(cell.Pos, cell.Rotation));
@@ -274,7 +294,7 @@ public sealed class ShipDesign
         return new ShipStats(Cells.Count, mass, thrust, cargo, energy, comX, comY,
             Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations, otherThrust, ports, mining, refining,
             generation, thrustPower, drillPower, refineryPower, fabricatorPower, ejectorPower, ejection,
-            reverse, left, right, reversePower, leftPower, rightPower);
+            reverse, left, right, reversePower, leftPower, rightPower, crew, food, habitatPower, farmPower);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

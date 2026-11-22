@@ -29,11 +29,11 @@ public static class SaveGameSerializer
     /// times; v9 limited storage to storage parts; v10 added power and slag ejection; v11 replaced order
     /// landing sites with construction kits and added station requests and serve-requests freight.
     /// v12 added the star system (new games), the cruise drive and solar power by distance; v13 added
-    /// part health (impact damage) and local gravity.
+    /// part health (impact damage) and local gravity; v14 added crew and life support.
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 13;
+    public const int SchemaVersion = 14;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -106,6 +106,12 @@ public static class SaveGameSerializer
                             .Select(kv => new HealthDto { X = kv.Key.X, Y = kv.Key.Y, Health = kv.Value }).ToList()
                         : null,
                     PartsLost = c.PartsLost,
+                    Crew = c.Crew,
+                    FoodRemainderKg = c.FoodRemainderKg,
+                    WaterRemainderKg = c.WaterRemainderKg,
+                    FarmRemainderKg = c.FarmRemainderKg,
+                    CrewGrowthS = c.CrewGrowthProgressS,
+                    LegacyNoCrew = c.LegacyNoCrew,
                     CruiseFuelRemainderKg = c.CruiseFuelRemainderKg,
                     MiningRemainderKg = c.MiningRemainderKg,
                     RefiningBatch = c.RefiningBatch is { } rb
@@ -231,6 +237,7 @@ public static class SaveGameSerializer
                 craft.EjectionRemainderKg = c.EjectionRemainderKg;
                 if (c.CruiseFuelRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has a cruise fuel remainder of {c.CruiseFuelRemainderKg} kg.");
                 craft.Cruising = c.Cruising;
+                sector.RestoreCrew(craft.Id, c.Crew, c.FoodRemainderKg, c.WaterRemainderKg, c.FarmRemainderKg, c.CrewGrowthS, c.LegacyNoCrew);
                 sector.RestoreHealth(craft.Id,
                     (c.PartHealth ?? new List<HealthDto>()).ToDictionary(h => new GridPos(h.X, h.Y), h => h.Health), c.PartsLost);
                 craft.CruiseFuelRemainderKg = c.CruiseFuelRemainderKg;
@@ -468,6 +475,24 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int PartsLost { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int Crew { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double FoodRemainderKg { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double WaterRemainderKg { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double FarmRemainderKg { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double CrewGrowthS { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool LegacyNoCrew { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double CruiseFuelRemainderKg { get; set; }

@@ -56,7 +56,8 @@ public class ShipLoopTests
         var game = TestData.NewGame();
         var sector = game.Sector;
         var yard = sector.GetCraft(game.ShipyardId);
-        yard.Inventory.TryRemove(yard.Inventory.Kg.ToDictionary(kv => kv.Key, kv => kv.Value)); // no starting stock at all
+        // No starting stock at all, except the crew's food and water (the yard needs its crew, #11).
+        yard.Inventory.TryRemove(yard.Inventory.Kg.Where(kv => kv.Key is not ("food" or "water")).ToDictionary(kv => kv.Key, kv => kv.Value));
         var design = TestData.StarterShip();
         var bill = design.ComputeBillOfMaterials(Catalog).ToWholeKg();
 

@@ -31,6 +31,8 @@ Each recipe has an `id`, a `name`, and whole-kg `inputsKg` and `outputsKg` keyed
 | `energyCapacityKJ` | no | Battery capacity in kJ. Stores spare power for later ticks. |
 | `powerGenerationKW` | no | Power the part makes every second (solar panel). Constant for now. |
 | `powerUseKW` | no | Power the part draws while working: thrusters at full throttle, drills while drilling, refineries while refining, fabricators while building, ejectors while ejecting. Without enough power it doesn't run that tick. |
+| `crewCapacity` | no | Crew the part houses (habitat). Craft over 15 parts need 1 crew per 10 parts to fly or work. |
+| `foodRateKgPerS` | no | Farm: kg of water turned into food per second (needs power). |
 | `ejectionRateKgPerS` | no | Slag ejector: kg of slag thrown out of the sector per second, above a 20 t reserve. |
 | `cargoCapacityKg` | no | Cargo capacity by mass (cargo bays, storage silos). A craft holds at most the sum of its parts' capacity. |
 | `miningRateKgPerS` | no | Drill rate. Not used until mining (Phase 3). |

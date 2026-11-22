@@ -21,6 +21,7 @@ dotnet run -c Release --project tools/Benchmarks -- 500   # any counts
 | 10,000 | 0.91 s | 100 | 11.697 | 12.688 | 23.4% |
 
 **Reading it:**
+- **Re-run 2026-11-21 after crew and life support (#11):** 10,000 ships 18.4 ms per tick mean (37% of budget); 1,000 ships 1.7 ms.
 - **Re-run 2026-11-21 after gravity and collisions (#32, #34):** 10,000 ships **16.6 ms per tick mean** (33% of budget), 37.7 ms worst 1%; 1,000 ships 1.4 ms. Every free craft now gets gravity, and automated ones station avoidance and a collision check against the craft that can collide with them (stations, player ships); automated craft don't collide with each other, which keeps the collision grid small when thousands crowd a station. A first version that scanned every craft for stations ran at 218 ms.
 - **Re-run 2026-11-21 after the star system (#53):** 24 bodies instead of 7 first doubled the cost (27 ms per tick at 10,000 ships), because every craft checks every body each tick. Body positions are now cached per tick in flat arrays and the autopilot checks for cruise once a second: **10,000 ships 11.1 ms per tick mean, 15.7 ms worst 1% (22% of budget)**; 1,000 ships 1.2 ms. The benchmark mines the home neighbourhood only (as before), so it stays comparable.
 - **Re-run 2026-11-21 after power, kits, requests and job history (#7, #10, #8, #1, #19):** 10,000 ships 13.3 ms per tick mean, 14.8 ms worst 1% (26.6% of budget), up from 11.7 ms.

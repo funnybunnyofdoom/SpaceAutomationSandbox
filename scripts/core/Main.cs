@@ -536,6 +536,7 @@ public partial class Main : Node2D
                 + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
                 + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
                 + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
+                + (SectorState.CrewStatus(p) is { Length: > 0 } crew ? crew + "\n" : "")
                 + (p.PartHealth.Count > 0 || p.PartsLost > 0
                     ? $"DAMAGE: {p.PartHealth.Count} part(s) damaged"
                       + (p.PartHealth.Count > 0 ? $" (worst {p.PartHealth.Values.Min() * 100:0}%)" : "")
@@ -619,6 +620,7 @@ public partial class Main : Node2D
             + (y.Kits.Count > 0 ? $"   kits {y.Kits.Count}" : "")
             + (y.HasCargoLimit ? $"   storage {y.CargoKg / 1000.0:0.0}/{y.CargoCapacityKg / 1000.0:0} t" : "")
             + (y.PowerShort && !y.LegacyFreePower ? "   NO POWER" : "")
+            + (SectorState.CrewStatus(y) is { Length: > 0 } crew ? $"   {crew}" : "")
             + (y.Stats.EjectionRateKgPerS > 0 && _sector.EjectedKg.TryGetValue("slag", out var ejected) ? $"   slag ejected {ejected / 1000.0:0.0} t" : "") + "\n"));
     }
 

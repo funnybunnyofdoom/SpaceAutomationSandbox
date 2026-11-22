@@ -67,7 +67,7 @@ public sealed partial class SectorState
     {
         foreach (var craft in _crafts)
         {
-            if (craft.Stats.EjectionRateKgPerS <= 0) continue;
+            if (craft.Stats.EjectionRateKgPerS <= 0 || !Operational(craft)) continue;
             var surplus = craft.Inventory["slag"] - SlagReserveKg;
             if (surplus <= 0) { craft.EjectionRemainderKg = 0; continue; }
             if (!TryUsePower(craft, craft.Stats.EjectorPowerKW * FixedStepClock.TickSeconds)) continue;
