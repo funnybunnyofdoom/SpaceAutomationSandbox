@@ -628,8 +628,9 @@ public partial class Main : Node2D
     private static string Describe(CelestialBodyState body) =>
         $"{body.Name} ({body.Kind}"
         + (!body.IsMineable ? "" : !body.Surveyed ? $", unsurveyed - fly within {SectorState.SurveyRangeM / 1000:0} km"
-            : body.DepositsKg.Count == 0 ? ", mined out"
-            : ", " + string.Join(", ", body.DepositsKg.Select(kv => $"{kv.Key} {kv.Value / 1000.0:0} t")))
+            : body.DepositsKg.Count == 0 && body.BulkKg == 0 ? ", mined out"
+            : ", " + string.Join(", ", body.DepositsKg.Select(kv => $"{kv.Key} {kv.Value / 1000.0:0} t")
+                .Concat(body.BulkKg > 0 ? new[] { $"bulk {body.BulkMaterialId} {body.BulkKg / 1e9:0.###} Mt" } : System.Array.Empty<string>())))
         + ")";
 
     private static string FormatDistance(double metres) =>

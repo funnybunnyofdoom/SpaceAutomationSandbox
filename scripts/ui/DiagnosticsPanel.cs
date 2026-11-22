@@ -163,7 +163,7 @@ public partial class DiagnosticsPanel : PanelContainer
     {
         static string T(long kg) => $"{kg / 1000.0:#,0.0} t";
         text.AppendLine("MASS LEDGER");
-        text.AppendLine($"  deposits {T(ledger.DepositsKg)}   stock {T(ledger.StockKg)}");
+        text.AppendLine($"  bodies (mineable) {T(ledger.DepositsKg)}   stock {T(ledger.StockKg)}");
         text.AppendLine($"  kits {T(ledger.KitsKg)}   build orders {T(ledger.OrdersKg)}   refining {T(ledger.RefiningKg)}");
         text.AppendLine($"  craft (their parts) {T(ledger.CraftKg)}   ejected, burned or debris {T(ledger.EjectedKg)}");
         text.AppendLine($"  total {ledger.TotalKg:#,0} kg");

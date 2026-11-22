@@ -29,7 +29,7 @@ public class BodiesAndIceTests
 
         var moon = sector.Bodies.Single(b => b.Name == "Moon");
         Assert.True(moon.Deposit("iron_ore") > 0 && moon.Deposit("silicate") > 0);
-        Assert.Equal(SectorGenerator.IceIceKg, sector.Bodies.Single(b => b.Name == "Ice-1").Deposit("ice"));
+        Assert.Equal(SectorGenerator.IceIceKg, sector.Bodies.Single(b => b.Name == "Ice-1").DepositsKg["ice"]); // the deposit; its bulk is ice too (#27)
         Assert.True(sector.Bodies.Single(b => b.Name == "Rime").Deposit("ice") > 0);
 
         // Orbits around the same parent never overlap, and every orbit clears its parent.

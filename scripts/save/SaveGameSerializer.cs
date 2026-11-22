@@ -61,6 +61,7 @@ public static class SaveGameSerializer
                 Tick = sector.Tick,
                 NextOrderId = sector.NextOrderId,
                 NextCraftId = sector.NextCraftId,
+                NextBodyId = sector.NextBodyId,
                 EjectedKg = sector.EjectedKg.Count > 0
                     ? new SortedDictionary<string, long>(sector.EjectedKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal)
                     : null,
@@ -76,6 +77,7 @@ public static class SaveGameSerializer
                     Name = b.Name,
                     Kind = b.Kind,
                     MassKg = b.MassKg,
+                    OriginalMassKg = b.OriginalMassKg != b.MassKg ? b.OriginalMassKg : 0,
                     DensityKgPerM3 = b.DensityKgPerM3,
                     IsMineable = b.IsMineable,
                     DepositsKg = b.DepositsKg.Count > 0
@@ -312,6 +314,7 @@ public static class SaveGameSerializer
             }
             if (dto.NextOrderId > 0) sector.RestoreNextOrderId(dto.NextOrderId);
             if (dto.NextCraftId > 0) sector.RestoreNextCraftId(dto.NextCraftId);
+            if (dto.NextBodyId > 0) sector.RestoreNextBodyId(dto.NextBodyId);
             foreach (var (material, kg) in dto.EjectedKg ?? new SortedDictionary<string, long>())
             {
                 if (!catalog.Materials.Contains(material)) throw new FormatException($"Unknown ejected material '{material}'.");
@@ -360,7 +363,7 @@ public static class SaveGameSerializer
                 }
                 if (c.Job is { Kind: "survey" } sj)
                 {
-                    if (sj.SourceBodyId != 0) sector.GetBody(new BodyId(sj.SourceBodyId));
+                    // The target may have been mined away since (#27): the scout picks another.
                     sector.RestoreJob(restored.Id, new SurveyJob
                     {
                         Active = sj.Active, State = sj.SurveyState, TargetBodyId = new BodyId(sj.SourceBodyId), WaitReason = sj.WaitReason,
@@ -396,7 +399,7 @@ public static class SaveGameSerializer
                     }
                     else
                     {
-                        sector.GetBody(new BodyId(j.SourceBodyId));
+                        // The source may have been mined away entirely (#27): the job waits with that reason.
                         sector.RestoreJob(restored.Id, new MiningJob(new BodyId(j.SourceBodyId), j.MaterialId!, new CraftId(j.DestinationId), j.ReturnFraction)
                         {
                             Active = j.Active, State = j.State, ResumeState = j.ResumeState, WaitReason = j.WaitReason,
@@ -433,6 +436,7 @@ public static class SaveGameSerializer
                 var orbit = b.Orbit is { } o ? new CircularOrbit(new BodyId(o.ParentId), o.RadiusM, o.PeriodS, o.PhaseAtZeroRad) : null;
                 sector.AddBody(new CelestialBodyState(new BodyId(b.Id), b.Name ?? "", b.Kind, b.MassKg, b.DensityKgPerM3, b.IsMineable, orbit,
                     b.DepositsKg));
+                if (b.OriginalMassKg > 0) sector.GetBody(new BodyId(b.Id)).OriginalMassKg = b.OriginalMassKg;
                 if (b.Surveyed) sector.MarkSurveyed(new BodyId(b.Id));
                 added.Add(b.Id);
                 pending.Remove(b);
@@ -484,6 +488,10 @@ public static class SaveGameSerializer
         /// <summary>v17: next craft id (ids of dismantled craft are never reused). 0 in older files: derived from the craft.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public uint NextCraftId { get; set; }
+
+        /// <summary>#27 (still v17, optional): next body id (bodies mined away entirely are gone; their ids are never reused).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint NextBodyId { get; set; }
         public SortedDictionary<string, long>? EjectedKg { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] // omitted while every multiplier is 1
         public TuningDto? Tuning { get; set; }
@@ -497,6 +505,11 @@ public static class SaveGameSerializer
         public string? Name { get; set; }
         public BodyKind Kind { get; set; }
         public double MassKg { get; set; }
+
+        /// <summary>#27 (still v17, optional): mass when the sector was made, if mining has changed it. 0: the same as massKg.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double OriginalMassKg { get; set; }
+
         public double DensityKgPerM3 { get; set; }
         public bool IsMineable { get; set; }
         public OrbitDto? Orbit { get; set; }

@@ -29,9 +29,9 @@ public partial class CargoPanel : PanelContainer
     private Label _header = null!;
     private GridContainer _grid = null!;
     private Label _status = null!;
-    private HBoxContainer _crewRow = null!;
+    private VBoxContainer _crewRow = null!;
     private Label _crewLabel = null!;
-    private Button _crewIn = null!, _crewOut = null!;
+    private Button _crewIn = null!, _crewOut = null!, _recruit = null!;
     private VBoxContainer _kits = null!;
     private string _kitsKey = "";
     private Label _requestsTitle = null!;
@@ -75,21 +75,33 @@ public partial class CargoPanel : PanelContainer
         box.AddChild(_header);
         _grid = new GridContainer { Columns = 3 };
         box.AddChild(_grid);
-        _crewRow = new HBoxContainer();
+        // Crew: the counts on one line, the buttons under them (so the panel never grows past its frame).
+        _crewRow = new VBoxContainer();
         box.AddChild(_crewRow);
-        _crewLabel = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _crewLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(400, 0) };
         _crewRow.AddChild(_crewLabel);
+        var crewButtons = new HBoxContainer();
+        _crewRow.AddChild(crewButtons);
         _crewIn = MoveButton("+1 crew", "Move one crew member into the craft you fly", () => MoveCrew(true));
         _crewOut = MoveButton("−1 crew", "Move one crew member to the other craft", () => MoveCrew(false));
-        _crewRow.AddChild(_crewIn);
-        _crewRow.AddChild(_crewOut);
+        crewButtons.AddChild(_crewIn);
+        crewButtons.AddChild(_crewOut);
+        _recruit = MoveButton("Recruit 1",
+            $"Take on one crew member now, for {SectorState.RecruitFoodKg} kg food and {SectorState.RecruitWaterKg} kg water from that craft's stock",
+            () =>
+            {
+                if (RecruitAt() is not { } at) return;
+                _status.Text = _sector().TryRecruit(at.Id, 1).Message;
+                Refresh();
+            });
+        crewButtons.AddChild(_recruit);
         box.AddChild(new Label { Text = "Construction kits:", Modulate = Dim });
         _kits = new VBoxContainer();
         box.AddChild(_kits);
 
         _requestsTitle = new Label { Modulate = Dim, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(400, 0) };
         box.AddChild(_requestsTitle);
-        _requests = new Label();
+        _requests = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(400, 0) };
         box.AddChild(_requests);
         _requestRow = new HBoxContainer();
         box.AddChild(_requestRow);
@@ -181,6 +193,16 @@ public partial class CargoPanel : PanelContainer
         _crewLabel.Text = $"Crew: {self.Name} {self.Crew}/{self.Stats.CrewCapacity}"
                           + (other is null ? "" : $"   {other.Name} {other.Crew}/{other.Stats.CrewCapacity}");
         _crewIn.Visible = _crewOut.Visible = canMove;
+        _recruit.Visible = RecruitAt() is { } at;
+        if (RecruitAt() is { } where) _recruit.Text = $"Recruit 1 at {where.Name}";
+    }
+
+    /// <summary>Where "Recruit" hires (#12): the craft you fly if it has habitats, else the station beside you.</summary>
+    private CraftState? RecruitAt()
+    {
+        if (_ship() is not { } self) return null;
+        if (self.Stats.CrewCapacity > 0 && !self.LegacyNoCrew) return self;
+        return Other(_sector(), self) is { Stats.CrewCapacity: > 0, LegacyNoCrew: false } other ? other : null;
     }
 
     private void MoveCrew(bool intoSelf)
@@ -274,10 +296,15 @@ public partial class CargoPanel : PanelContainer
         }
         _requestsTitle.Text = $"{station.Name} requests (serve-requests freighters keep at least this much here)"
                               + (editable ? ":" : " - dock there to change them:");
-        _requests.Text = station.Requests.Count == 0 ? "  (none)"
-            : string.Join("\n", station.Requests.Select(kv =>
-                $"  {MaterialName(kv.Key)}: keep {kv.Value / 1000.0:0.0} t, has {station.Inventory[kv.Key] / 1000.0:0.0} t, "
-                + $"on the way {sector.IncomingKg(station.Id, kv.Key) / 1000.0:0.0} t"));
+        // Its own requests and the automatic food and water for its crew (#14), whichever is more.
+        var wanted = station.Requests.Keys
+            .Concat(SectorState.AutoSupplyKg(station, SectorState.FoodMaterial) > 0 ? new[] { SectorState.FoodMaterial, SectorState.WaterMaterial } : Array.Empty<string>())
+            .Distinct().OrderBy(m => m, StringComparer.Ordinal).ToList();
+        _requests.Text = wanted.Count == 0 ? "  (none)"
+            : string.Join("\n", wanted.Select(m =>
+                $"  {MaterialName(m)}: keep {SectorState.WantedKg(station, m) / 1000.0:0.0##} t"
+                + (SectorState.AutoSupplyKg(station, m) >= station.Requests.GetValueOrDefault(m) ? $" (auto: {SectorState.AutoSupplyHours:0} h for the crew)" : "")
+                + $", has {station.Inventory[m] / 1000.0:0.0} t, on the way {sector.IncomingKg(station.Id, m) / 1000.0:0.0} t"));
     }
 
     private void SetRequest()

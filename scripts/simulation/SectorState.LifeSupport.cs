@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace SpaceAutomationSandbox.Simulation;
 
@@ -18,6 +19,9 @@ namespace SpaceAutomationSandbox.Simulation;
 /// <item>Robots (#13) in robot bays count as crew for running a craft. They need no food, water or
 /// habitat, only power (drawn first, before anything else); without it they stop. No other upkeep.</item>
 /// <item>Crew move between craft docked together (<see cref="TryTransferCrew"/>).</item>
+/// <item>Recruiting (#12): a craft with habitat room takes on crew at once for a one-off
+/// <see cref="RecruitFoodKg"/> of food and <see cref="RecruitWaterKg"/> of water each from its own
+/// stock (counted as consumed), on top of the slow growth.</item>
 /// </list>
 /// Craft from saves older than v14 have <see cref="CraftState.LegacyNoCrew"/>: no crew rules apply to them.
 /// </summary>
@@ -121,6 +125,32 @@ public sealed partial class SectorState
             craft.Inventory.Add(FoodMaterial, whole);
         }
         craft.FarmRemainderKg = due - Math.Floor(due);
+    }
+
+    /// <summary>Food one recruit costs (taken once, from the craft's own stock).</summary>
+    public const long RecruitFoodKg = 50;
+
+    /// <summary>Water one recruit costs.</summary>
+    public const long RecruitWaterKg = 100;
+
+    /// <summary>Takes on <paramref name="count"/> crew at once, for food and water from the craft's stock (#12).</summary>
+    public ActionResult TryRecruit(CraftId craftId, int count)
+    {
+        var craft = GetCraft(craftId);
+        if (count <= 0) return new(false, "Recruit at least one.");
+        if (craft.LegacyNoCrew) return new(false, $"{craft.Name} is from an old save and doesn't use crew.");
+        var room = craft.Stats.CrewCapacity - craft.Crew;
+        if (room <= 0) return new(false, $"{craft.Name} has no habitat room{(craft.Stats.CrewCapacity == 0 ? " (no habitat)" : "")}.");
+        if (count > room) return new(false, $"{craft.Name} has habitat room for {room} more.");
+        var cost = new Dictionary<string, long> { [FoodMaterial] = RecruitFoodKg * count, [WaterMaterial] = RecruitWaterKg * count };
+        var shortfall = craft.Inventory.Shortfall(cost);
+        if (shortfall.Count > 0)
+            return new(false, $"Recruiting {count} needs {RecruitFoodKg * count} kg food and {RecruitWaterKg * count} kg water: "
+                              + string.Join(", ", shortfall.Select(kv => $"{kv.Key} short by {kv.Value} kg")) + ".");
+        craft.Inventory.TryRemove(cost);
+        foreach (var (material, kg) in cost) _ejectedKg[material] = _ejectedKg.GetValueOrDefault(material) + kg;
+        craft.Crew += count;
+        return new(true, $"{craft.Name}: recruited {count} crew ({craft.Crew}/{craft.Stats.CrewCapacity}).");
     }
 
     /// <summary>Moves crew between two craft docked together, if the receiver has habitat room.</summary>

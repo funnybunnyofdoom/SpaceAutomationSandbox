@@ -20,6 +20,38 @@ namespace SpaceAutomationSandbox.Simulation;
 /// </summary>
 public sealed partial class SectorState
 {
+    /// <summary>Crewed stations keep this many hours of food and water requested automatically (#14).</summary>
+    public const double AutoSupplyHours = 24;
+
+    /// <summary>
+    /// The automatic supply request (#14) of a crewed station: food and water for its crew for
+    /// <see cref="AutoSupplyHours"/>, plus water for its farms. 0 for ships, uncrewed craft, craft
+    /// without docking ports and craft from saves without crew rules.
+    /// </summary>
+    public static long AutoSupplyKg(CraftState station, string materialId)
+    {
+        if (station.LegacyNoCrew || station.Crew <= 0 || station.Stats.DockingPorts.Count == 0 || Movable(station)) return 0;
+        var seconds = AutoSupplyHours * 3600;
+        return materialId switch
+        {
+            FoodMaterial => (long)Math.Ceiling(station.Crew * FoodKgPerCrewPerS * seconds),
+            WaterMaterial => (long)Math.Ceiling(station.Crew * WaterKgPerCrewPerS * seconds + station.Stats.FoodRateKgPerS * seconds),
+            _ => 0,
+        };
+    }
+
+    /// <summary>What a station wants kept in stock: its own request or its automatic supply request, whichever is more.</summary>
+    public static long WantedKg(CraftState station, string materialId) =>
+        Math.Max(station.Requests.GetValueOrDefault(materialId), AutoSupplyKg(station, materialId));
+
+    /// <summary>Materials a station wants (its requests and automatic supplies), A–Z.</summary>
+    private static IEnumerable<string> WantedMaterials(CraftState station)
+    {
+        var auto = AutoSupplyKg(station, FoodMaterial) > 0;
+        if (!auto) return station.Requests.Keys;
+        return station.Requests.Keys.Concat(new[] { FoodMaterial, WaterMaterial }).Distinct().OrderBy(m => m, StringComparer.Ordinal);
+    }
+
     /// <summary>A serve-requests freighter with nothing to do looks again after this long.</summary>
     public const double RequestRetryS = 10;
 
@@ -40,6 +72,25 @@ public sealed partial class SectorState
         return new(true, $"{station.Name}: keep at least {kg / 1000.0:0.0} t of {materialId}.");
     }
 
+    /// <summary>
+    /// A crewed automated ship docked at a station tops up food and water to <see cref="AutoSupplyHours"/>
+    /// for its crew from the station's spare stock (what it holds beyond what it wants for itself), #14.
+    /// </summary>
+    private void TopUpSupplies(CraftState ship)
+    {
+        if (!ship.IsAutomated || !ship.IsDocked || ship.Crew <= 0 || ship.LegacyNoCrew) return;
+        if (!_craftsById.TryGetValue(ship.DockedToCraftId, out var station)) return;
+        var seconds = AutoSupplyHours * 3600;
+        foreach (var (material, rate) in new[] { (FoodMaterial, FoodKgPerCrewPerS), (WaterMaterial, WaterKgPerCrewPerS) })
+        {
+            var need = (long)Math.Ceiling(ship.Crew * rate * seconds) - ship.Inventory[material];
+            if (need <= 0) continue;
+            var spare = station.Inventory[material] - WantedKg(station, material);
+            var amount = Math.Min(Math.Min(need, spare), MaxTransferKg(station.Id, ship.Id, material));
+            if (amount > 0) TryTransfer(station.Id, ship.Id, material, amount);
+        }
+    }
+
     /// <summary>Restores a saved request (no checks beyond the basics).</summary>
     public void RestoreRequest(CraftId stationId, string materialId, long kg)
     {
@@ -55,9 +106,8 @@ public sealed partial class SectorState
     public long OpenRequestKg(CraftId stationId, string materialId)
     {
         var station = GetCraft(stationId);
-        return station.Requests.TryGetValue(materialId, out var want)
-            ? Math.Max(0, want - station.Inventory[materialId] - IncomingKg(stationId, materialId))
-            : 0;
+        var want = WantedKg(station, materialId);
+        return want > 0 ? Math.Max(0, want - station.Inventory[materialId] - IncomingKg(stationId, materialId)) : 0;
     }
 
     /// <summary>Active contracts of every serve-requests freighter except <paramref name="except"/>, in craft id order.</summary>
@@ -104,7 +154,7 @@ public sealed partial class SectorState
         foreach (var station in _crafts)
         {
             if (ReferenceEquals(station, ship)) continue;
-            foreach (var (material, _) in station.Requests)
+            foreach (var material in WantedMaterials(station))
             {
                 var need = OpenRequestKg(station.Id, material);
                 if (need <= 0) continue;
@@ -115,7 +165,7 @@ public sealed partial class SectorState
                 foreach (var source in _crafts)
                 {
                     if (ReferenceEquals(source, ship) || ReferenceEquals(source, station) || source.Stats.DockingPorts.Count == 0) continue;
-                    var spare = source.Inventory[material] - source.Requests.GetValueOrDefault(material)
+                    var spare = source.Inventory[material] - WantedKg(source, material)
                                 - outgoing.GetValueOrDefault((source.Id, material));
                     var amount = Math.Min(Math.Min(need, spare), ship.FreeCargoKg);
                     if (amount <= 0 || amount < Math.Min(minLoadKg, need)) continue;

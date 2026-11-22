@@ -227,6 +227,7 @@ public sealed partial class SectorState
         if (docked != null) UpdateDocked(docked);
         ResolveCraftCollisions(); // after everything moved (#34)
         StepMining();
+        StepBodiesGone(); // a body mined down to its remnant breaks up (#27)
         StepRefining();
         StepSurvey();
 

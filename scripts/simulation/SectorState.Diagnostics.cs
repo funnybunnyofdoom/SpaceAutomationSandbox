@@ -30,7 +30,11 @@ public sealed partial class SectorState
     public MassLedger ComputeMassLedger()
     {
         long deposits = 0, stock = 0, kits = 0, orders = 0, refining = 0, craftKg = 0;
-        foreach (var body in _bodies) foreach (var kg in body.DepositsKg.Values) deposits += kg;
+        foreach (var body in _bodies)
+        {
+            if (body.IsDismantlable) deposits += body.WholeMassKg; // all of it can be mined (#27)
+            else foreach (var kg in body.DepositsKg.Values) deposits += kg;
+        }
         foreach (var craft in _crafts)
         {
             stock += craft.Inventory.TotalKg;

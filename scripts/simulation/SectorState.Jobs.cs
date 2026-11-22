@@ -95,6 +95,7 @@ public sealed partial class SectorState
                 case HaulJob { Active: true } haul: StepHaul(craft, haul, allowResume: true); break;
                 case ServeRequestsJob { Active: true } serve: StepServe(craft, serve, allowResume: true); break;
             }
+            TopUpSupplies(craft); // crewed ships take food and water when docked (#14)
             craft.Job?.NoteTick(Tick);
         }
     }

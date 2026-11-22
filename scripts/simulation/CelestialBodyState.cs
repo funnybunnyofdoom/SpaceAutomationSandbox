@@ -49,24 +49,68 @@ public sealed class CelestialBodyState
             if (kg > 0) _deposits[material] = kg;
         }
         if (_deposits.Values.Sum() > massKg) throw new ArgumentException("Deposits can't exceed the body's mass.", nameof(depositsKg));
+        OriginalMassKg = massKg;
     }
+
+    // --- Complete dismantling (#27) ---
+
+    /// <summary>A body is taken apart down to this share of its starting mass; the last of it then scatters and the body is gone.</summary>
+    public const double RemnantFraction = 0.01;
+
+    /// <summary>The material a body's bulk is mined as: ice for icy bodies, rock otherwise.</summary>
+    public const string RockMaterial = "rock";
+    public const string IceMaterial = "ice";
+
+    /// <summary>Mass when the sector was made (saved), for the remnant at which the body is gone.</summary>
+    public double OriginalMassKg { get; internal set; }
+
+    /// <summary>Mineable rocky or icy bodies (planets, moons, asteroids) can be mined away entirely (#27).</summary>
+    public bool IsDismantlable => IsMineable && Kind is BodyKind.Planet or BodyKind.Moon or BodyKind.Asteroid;
+
+    /// <summary>What the bulk of the body is mined as.</summary>
+    public string BulkMaterialId => DensityKgPerM3 <= 1000 ? IceMaterial : RockMaterial;
+
+    /// <summary>Kg kept back as the remnant (only removed all at once when the body goes).</summary>
+    public long RemnantKg => (long)Math.Floor(OriginalMassKg * RemnantFraction);
+
+    /// <summary>The body's mass as whole kg (mass is kept in whole kg).</summary>
+    public long WholeMassKg => (long)Math.Round(MassKg);
+
+    /// <summary>Bulk left to mine beyond the deposits, down to the remnant (0 for bodies that can't be dismantled).</summary>
+    public long BulkKg => IsDismantlable ? Math.Max(0, WholeMassKg - _deposits.Values.Sum() - RemnantKg) : 0;
+
+    /// <summary>Everything that can be mined here now: the deposits and the bulk (A–Z).</summary>
+    public IReadOnlyList<string> MineableMaterials =>
+        (BulkKg > 0 ? _deposits.Keys.Append(BulkMaterialId) : _deposits.Keys).Distinct().OrderBy(m => m, StringComparer.Ordinal).ToList();
+
+    /// <summary>True when nothing is left to mine and only the remnant remains.</summary>
+    public bool MinedOut => IsDismantlable && _deposits.Count == 0 && BulkKg == 0;
 
     private readonly SortedDictionary<string, long> _deposits = new(StringComparer.Ordinal);
 
     /// <summary>Minable material left, whole kg by material id. Part of <see cref="MassKg"/>.</summary>
     public IReadOnlyDictionary<string, long> DepositsKg => _deposits;
 
-    public long Deposit(string materialId) => _deposits.TryGetValue(materialId, out var kg) ? kg : 0;
+    /// <summary>Kg of a material that can be mined here: its deposit, plus the bulk if it's the bulk material (#27).</summary>
+    public long Deposit(string materialId) =>
+        (_deposits.TryGetValue(materialId, out var kg) ? kg : 0) + (materialId == BulkMaterialId ? BulkKg : 0);
 
-    /// <summary>Removes up to <paramref name="kg"/> of a deposit and the same mass from the body. Returns what was removed.</summary>
+    /// <summary>
+    /// Removes up to <paramref name="kg"/> of a material (from its deposit first, then the bulk) and the
+    /// same mass from the body. Returns what was removed.
+    /// </summary>
     internal long Extract(string materialId, long kg)
     {
         var taken = Math.Min(kg, Deposit(materialId));
         if (taken <= 0) return 0;
-        var left = Deposit(materialId) - taken;
-        if (left == 0) _deposits.Remove(materialId);
-        else _deposits[materialId] = left;
-        MassKg -= taken;
+        var had = _deposits.TryGetValue(materialId, out var d) ? d : 0;
+        var fromDeposit = Math.Min(taken, had);
+        if (fromDeposit > 0)
+        {
+            if (had - fromDeposit == 0) _deposits.Remove(materialId);
+            else _deposits[materialId] = had - fromDeposit;
+        }
+        MassKg -= taken; // the rest came from the bulk, which is simply the body's mass
         return taken;
     }
 
