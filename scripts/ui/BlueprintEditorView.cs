@@ -40,6 +40,9 @@ public partial class BlueprintEditorView : Control
 
     public event Action? CloseRequested;
 
+    /// <summary>The tech a part still needs (#37), or null if it can be built. Locked parts can still be designed with.</summary>
+    public Func<string, string?> LockedBy { get; set; } = _ => null;
+
     public BlueprintEditorView(PartCatalog catalog, IReadOnlyDictionary<string, Color> colors, Func<ShipDesign?> currentShipDesign)
     {
         _catalog = catalog;
@@ -64,6 +67,14 @@ public partial class BlueprintEditorView : Control
             _loadedFromId = null;
         }
         RefreshLoadList();
+        // Research changes over time: mark the parts that can't be built yet (they can still be planned with).
+        for (var i = 0; i < _palette.Count && i < _paletteButtons.Count; i++)
+        {
+            var part = _palette[i];
+            var tech = LockedBy(part.Id);
+            _paletteButtons[i].Text = $"{KeyLabel(i)}  {part.Name}  {part.MassKg / 1000:0.#} t{PartSummary(part)}" + (tech is null ? "" : $"  [needs {tech}]");
+            _paletteButtons[i].Modulate = tech is null ? Colors.White : new Color(1, 1, 1, 0.55f);
+        }
         Visible = true;
         Refresh();
     }
@@ -200,6 +211,7 @@ public partial class BlueprintEditorView : Control
         : p.CrewCapacity > 0 ? $", {p.CrewCapacity} crew"
         : p.RobotCount > 0 ? $", {p.RobotCount} robots, {p.PowerUseKW:0} kW"
         : p.IsWarpGate ? ", warp gate"
+        : p.ResearchRatePerS > 0 ? $", {p.ResearchRatePerS * 60:0.#} research/min"
         : p.FoodRateKgPerS > 0 ? $", {p.FoodRateKgPerS * 3600:0} kg food/h"
         : p.IsControlSource ? ", control" : "";
 

@@ -17,6 +17,17 @@ public enum BodyKind
     Star,
 }
 
+/// <summary>A star's type (#25): sets how much sunlight its system gets.</summary>
+public enum StarClass
+{
+    /// <summary>Like the home star: full sunlight.</summary>
+    Yellow,
+    /// <summary>A red dwarf: half the sunlight.</summary>
+    Red,
+    /// <summary>A bright blue star: double the sunlight.</summary>
+    Blue,
+}
+
 /// <summary>
 /// Authoritative state of one celestial body. Mass is the stored quantity, and radius is
 /// derived from mass at fixed bulk density (docs/02: r = cbrt(3M / 4πρ)), so removing mass
@@ -115,6 +126,12 @@ public sealed class CelestialBodyState
     }
 
     public BodyId Id { get; }
+
+    /// <summary>For a star: its type (#25). Yellow for the home star and older saves.</summary>
+    public StarClass StarClass { get; internal set; }
+
+    /// <summary>Sunlight compared with a yellow star at the same distance.</summary>
+    public double SunlightFactor => StarClass switch { StarClass.Red => 0.5, StarClass.Blue => 2.0, _ => 1.0 };
 
     /// <summary>
     /// Whether the player has visited it (a piloted ship within <see cref="SectorState.SurveyRangeM"/>).

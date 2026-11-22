@@ -23,6 +23,7 @@ public partial class Main : Node2D
     private const string MaterialsPath = "res://data/materials/materials.json";
     private const string PartsPath = "res://data/parts/parts.json";
     private const string RecipesPath = "res://data/recipes/recipes.json";
+    private const string ResearchPath = "res://data/research/research.json";
     private const string StarterDesignPath = "res://data/blueprints/starter_ship.json";
     private const string StarterShipyardPath = "res://data/blueprints/starter_shipyard.json";
 
@@ -40,6 +41,12 @@ public partial class Main : Node2D
     /// <summary>World point at the centre of the screen. Drawing is relative to it, so it stays sharp far from the star (#53).</summary>
     private Vector2D _viewCentre;
     private bool _mapMode;
+
+    /// <summary>In the map: the galaxy view (G, #21) instead of one system.</summary>
+    private bool _galaxyView;
+
+    /// <summary>In the map: the system picked in the map panel ("View"), instead of the one you're in.</summary>
+    private BodyId _mapSystem = BodyId.None;
     private float _zoomBeforeMap = 1f;
     private MapPanel? _mapPanel;
     private static readonly Color MoonColor = new(0.62f, 0.62f, 0.66f);
@@ -82,6 +89,7 @@ public partial class Main : Node2D
     private JobPanel? _jobPanel;
     private DebugPanel? _debugPanel;
     private DiagnosticsPanel? _diagnosticsPanel;
+    private ResearchPanel? _researchPanel;
 
     // Debug game speed: how many seconds of game time pass per real second. View-only (results don't change).
 
@@ -108,6 +116,7 @@ public partial class Main : Node2D
         if (_catalog != null)
         {
             _editor = new BlueprintEditorView(_catalog, _partColors, () => _player?.Design) { Visible = false };
+            _editor.LockedBy = partId => _sector.IsPartUnlocked(partId) ? null : _catalog.Research.TechFor(partId)?.Name; // research (#37)
             _editor.CloseRequested += CloseEditor;
             _uiRoot.AddChild(_editor);
 
@@ -128,11 +137,14 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_jobPanel);
             _mapPanel = new MapPanel(() => _sector, () => _player,
                 body => { if (_player != null) { _sector.SetTarget(_player.Id, body); ShowStatus($"Target: {_sector.GetBody(body).Name}."); } },
-                craft => { if (_player != null && craft != _player.Id) { _sector.SetTargetCraft(_player.Id, craft); ShowStatus($"Target: {_sector.GetCraft(craft).Name}."); } })
+                craft => { if (_player != null && craft != _player.Id) { _sector.SetTargetCraft(_player.Id, craft); ShowStatus($"Target: {_sector.GetCraft(craft).Name}."); } },
+                ViewSystem)
             { Visible = false };
             _uiRoot.AddChild(_mapPanel);
             _diagnosticsPanel = new DiagnosticsPanel(() => _sector, _warp, _tickCost) { Visible = false };
             _uiRoot.AddChild(_diagnosticsPanel);
+            _researchPanel = new ResearchPanel(() => _sector, _catalog) { Visible = false };
+            _uiRoot.AddChild(_researchPanel);
             _debugPanel = new DebugPanel(() => _sector, () => _warp.Speed, SetGameSpeed, _catalog.Materials) { Visible = false };
             _uiRoot.AddChild(_debugPanel);
         }
@@ -189,6 +201,8 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-diagnostics") >= 0) _diagnosticsPanel?.Open();
         if (System.Array.IndexOf(args, "--open-settings") >= 0) _settingsPanel?.Open();
         if (System.Array.IndexOf(args, "--open-map") >= 0) ToggleMap();
+        if (System.Array.IndexOf(args, "--open-research") >= 0) _researchPanel?.Open();
+        if (System.Array.IndexOf(args, "--open-galaxy") >= 0) { if (!_mapMode) ToggleMap(); _galaxyView = true; }
         if (System.Array.IndexOf(args, "--open-help") >= 0) _hud.ToggleHelp();
         if (System.Array.IndexOf(args, "--demo-crash") >= 0 && _player != null)
         {
@@ -276,7 +290,8 @@ public partial class Main : Node2D
         {
             var materials = MaterialCatalog.FromJson(Godot.FileAccess.GetFileAsString(MaterialsPath));
             var recipes = RecipeCatalog.FromJson(Godot.FileAccess.GetFileAsString(RecipesPath), materials);
-            var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath), materials, recipes);
+            var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath), materials, recipes)
+                .WithResearch(ResearchCatalog.FromJson(Godot.FileAccess.GetFileAsString(ResearchPath)));
             var design = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterDesignPath));
             var shipyard = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterShipyardPath));
             var errors = design.Validate(catalog, DesignRole.Ship)
@@ -435,6 +450,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Cargo)) Toggle(_cargoPanel, () => _cargoPanel!.Open());
         else if (Pressed(InputActions.Diagnostics)) Toggle(_diagnosticsPanel, () => _diagnosticsPanel!.Open());
         else if (Pressed(InputActions.Settings)) Toggle(_settingsPanel, () => _settingsPanel!.Open());
+        else if (Pressed(InputActions.Research)) Toggle(_researchPanel, () => _researchPanel!.Open());
         else if (Pressed(InputActions.Map)) ToggleMap();
         else if (Pressed(InputActions.Help)) _hud.ToggleHelp();
         else if (Pressed(InputActions.Fullscreen)) ToggleFullscreen();
@@ -445,11 +461,12 @@ public partial class Main : Node2D
         {
             if (_mapMode) ToggleMap();
             _hud.CloseHelp();
-            foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel })
+            foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel })
                 if (panel != null) panel.Visible = false;
         }
         else if (_player == null) return;
         else if (Pressed(InputActions.Jump)) ShowStatus(_sector.RequestJump(_player.Id).Message);
+        else if (_mapMode && Pressed(InputActions.Anchor)) _galaxyView = !_galaxyView; // in the map, G is the galaxy view (#21)
         else if (Pressed(InputActions.Dock))
             ShowStatus((_player.IsDocked ? _sector.TryUndock(_player.Id) : _sector.TryDock(_player.Id)).Message);
         else if (Pressed(InputActions.Cruise))
@@ -649,7 +666,12 @@ public partial class Main : Node2D
             $"{g.Name}: warp gate to " + (_sector.Crafts.FirstOrDefault(c => c.Id == g.GateLinkId) is { } far
                 ? $"{far.Name} ({_sector.StarAt(far.Position)?.Name} system)"
                 : "nowhere yet (its first jump opens a new star system)") + "\n");
-        return string.Concat(gates) + string.Concat(yards.Select(y => (y.BuildQueue.Count == 0
+        var labs = _sector.Crafts.Where(c => c.Stats.ResearchRatePerS > 0).ToList();
+        var research = labs.Count > 0 || _sector.ResearchPoints > 0
+            ? $"Research: {_sector.ResearchPoints:0} points, +{_sector.ResearchRateNow * 60:0.#}/min from {labs.Count} lab(s)"
+              + string.Concat(labs.Where(l => l.LabStatus is not null && !l.LabStatus.StartsWith("lab:")).Select(l => $"   {l.Name}: {l.LabStatus}")) + " - R to research\n"
+            : "";
+        return research + string.Concat(gates) + string.Concat(yards.Select(y => (y.BuildQueue.Count == 0
             ? $"{y.Name}: idle"
             : $"{y.Name}: building {y.BuildQueue[0].ShipName} {y.BuildQueue[0].Fraction * 100:0}%"
               + (y.BuildQueue.Count > 1 ? $" (+{y.BuildQueue.Count - 1} queued)" : ""))
@@ -675,6 +697,7 @@ public partial class Main : Node2D
     public override void _Draw()
     {
         DrawStarfield();
+        if (_mapMode && _galaxyView) { DrawGalaxy(); return; }
 
         // Interpolated time: smooth motion between 20 Hz ticks without touching the state.
         var renderTimeS = (_sector.Tick + _warp.Alpha) * FixedStepClock.TickSeconds;
@@ -736,7 +759,7 @@ public partial class Main : Node2D
         if (centre.Length() - radiusPx > 4 * GetViewportRect().Size.Length()) return; // far off-screen
         var color = body.Kind switch
         {
-            BodyKind.Star => StarColor,
+            BodyKind.Star => body.StarClass switch { StarClass.Red => new Color(1f, 0.55f, 0.4f), StarClass.Blue => new Color(0.6f, 0.75f, 1f), _ => StarColor },
             BodyKind.Planet => PlanetColor,
             BodyKind.Moon => MoonColor,
             BodyKind.GasGiant => GasGiantColor,
@@ -811,12 +834,9 @@ public partial class Main : Node2D
         if (_mapMode)
         {
             _zoomBeforeMap = _pixelsPerMetre;
-            // The system you're in (#54): its star's own planets and belt set the zoom.
-            var star = MapStar();
-            var extent = _sector.Bodies.Where(b => b.Kind != BodyKind.Star && b.Orbit is { } o && star is not null && o.Parent == star.Id)
-                .Select(b => b.Orbit!.RadiusM + b.RadiusM).DefaultIfEmpty(100_000).Max() * 1.1;
-            var screen = _uiRoot.GetViewportRect().Size;
-            _pixelsPerMetre = Mathf.Clamp((float)(Mathf.Min(screen.X - 420, screen.Y) / 2 / extent), MinPixelsPerMetre, MaxPixelsPerMetre);
+            _mapSystem = BodyId.None;
+            _galaxyView = false;
+            FitMapZoom();
             _mapPanel?.Open();
         }
         else
@@ -828,7 +848,77 @@ public partial class Main : Node2D
 
     /// <summary>The star of the system shown on the map: the one you're in (#54).</summary>
     private CelestialBodyState? MapStar() =>
-        _player is { } p ? _sector.StarAt(p.Position) : _sector.Bodies.FirstOrDefault(b => b.Orbit is null);
+        _sector.Bodies.FirstOrDefault(b => b.Id == _mapSystem)
+        ?? (_player is { } p ? _sector.StarAt(p.Position) : _sector.Bodies.FirstOrDefault(b => b.Orbit is null));
+
+    /// <summary>Shows another system's map (from the map panel), at a zoom that fits it.</summary>
+    private void ViewSystem(BodyId star)
+    {
+        _mapSystem = star;
+        _galaxyView = false;
+        FitMapZoom();
+    }
+
+    private void FitMapZoom()
+    {
+        var star = MapStar();
+        var extent = _sector.Bodies.Where(b => b.Kind != BodyKind.Star && b.Orbit is { } o && star is not null && o.Parent == star.Id)
+            .Select(b => b.Orbit!.RadiusM + b.RadiusM).DefaultIfEmpty(100_000).Max() * 1.1;
+        var screen = _uiRoot.GetViewportRect().Size;
+        _pixelsPerMetre = Mathf.Clamp((float)(Mathf.Min(screen.X - 420, screen.Y) / 2 / extent), MinPixelsPerMetre, MaxPixelsPerMetre);
+    }
+
+    /// <summary>
+    /// The galaxy view (#21): every known star system around the screen centre at its real direction
+    /// and (scaled) distance, coloured by star type, with its warp gate links, what it holds, and how
+    /// many of your craft are there.
+    /// </summary>
+    private void DrawGalaxy()
+    {
+        DrawRect(new Rect2(-GetViewportRect().Size, GetViewportRect().Size * 2), new Color(0.01f, 0.01f, 0.03f, 0.92f));
+        var stars = _sector.Stars;
+        if (stars.Count == 0) return;
+        var centre = new Vector2D(stars.Average(s => _sector.GetPosition(s.Id).X), stars.Average(s => _sector.GetPosition(s.Id).Y));
+        var far = stars.Max(s => _sector.GetPosition(s.Id).DistanceTo(centre));
+        var size = GetViewportRect().Size;
+        var ui = _uiRoot.Scale.X; // text follows the interface scale
+        var font = (int)Mathf.Round(15 * ui);
+        var scale = far > 0 ? 0.35 * Mathf.Min(size.X - 420 * ui, size.Y) / far : 0;
+        Vector2 At(CelestialBodyState s)
+        {
+            var d = _sector.GetPosition(s.Id) - centre;
+            return new Vector2((float)(d.X * scale), (float)(d.Y * scale)) - new Vector2(210 * ui, 0);
+        }
+        foreach (var gate in _sector.Crafts.Where(SectorState.IsGate))
+        {
+            if (_sector.Crafts.FirstOrDefault(c => c.Id == gate.GateLinkId) is not { } other) continue;
+            if (_sector.StarAt(gate.Position) is { } a && _sector.StarAt(other.Position) is { } b && a.Id.Value < b.Id.Value)
+                DrawLine(At(a), At(b), new Color(0.75f, 0.5f, 1f, 0.8f), 2);
+        }
+        var here = _player is { } me ? _sector.StarAt(me.Position)?.Id : null;
+        foreach (var star in stars)
+        {
+            var at = At(star);
+            var colour = star.StarClass switch { StarClass.Red => new Color(1f, 0.55f, 0.4f), StarClass.Blue => new Color(0.6f, 0.75f, 1f), _ => StarColor };
+            DrawCircle(at, (star.Id == here ? 12 : 9) * ui, colour);
+            if (star.Id == here) DrawArc(at, 18 * ui, 0, Mathf.Tau, 48, Colors.White, 1.5f * ui);
+            var bodies = _sector.Bodies.Where(b => b.Id != star.Id && _sector.StarOf(b.Id)?.Id == star.Id).ToList();
+            var craft = _sector.Crafts.Count(c => _sector.StarAt(c.Position)?.Id == star.Id);
+            var type = star.StarClass switch { StarClass.Red => "red dwarf", StarClass.Blue => "blue star", _ => "yellow star" };
+            var exotic = bodies.Any(b => b.DepositsKg.ContainsKey("exotic_ore")) ? ", exotic ore" : "";
+            var lines = $"{star.Name}{(star.Id == here ? "  (you are here)" : "")}\n{type}, {bodies.Count} bodies{exotic}\n{craft} of your craft";
+            var y = at.Y + 26 * ui;
+            foreach (var line in lines.Split('\n'))
+            {
+                DrawString(ThemeDB.FallbackFont, new Vector2(at.X - 70 * ui, y), line, HorizontalAlignment.Left, -1, font, NameColor);
+                y += font + 4 * ui;
+            }
+        }
+        // The legend along the top, between the HUD on the left and the panel on the right.
+        DrawString(ThemeDB.FallbackFont, new Vector2(-size.X / 2 + 560 * ui, -size.Y / 2 + 30 * ui),
+            "GALAXY  (G: back to the system)   Purple: warp gate links.  Pick a system in the panel to see its map.",
+            HorizontalAlignment.Left, -1, font, NameColor);
+    }
 
     private static Vector2[] CirclePoints(Vector2 centre, float radius, int count)
     {

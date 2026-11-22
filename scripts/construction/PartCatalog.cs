@@ -39,6 +39,9 @@ public sealed record PartDefinition
     /// <summary>Crew this part houses (habitat, #11).</summary>
     public int CrewCapacity { get; init; }
 
+    /// <summary>Research points made per second (research lab, #37), using power and a little electronics.</summary>
+    public double ResearchRatePerS { get; init; }
+
     /// <summary>A warp gate (#22): the station it's on can send craft to its linked gate in another star system.</summary>
     public bool IsWarpGate { get; init; }
 
@@ -94,7 +97,7 @@ public sealed class PartCatalog
             if (part.ThrustN < 0 || part.CargoCapacityKg < 0 || part.EnergyCapacityKJ < 0 || part.MiningRateKgPerS < 0
                 || part.FabricationRateKgPerS < 0 || part.RefiningRateKgPerS < 0
                 || part.PowerUseKW < 0 || part.PowerGenerationKW < 0 || part.EjectionRateKgPerS < 0
-                || part.CrewCapacity < 0 || part.FoodRateKgPerS < 0 || part.RobotCount < 0)
+                || part.CrewCapacity < 0 || part.FoodRateKgPerS < 0 || part.RobotCount < 0 || part.ResearchRatePerS < 0)
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
             ValidateMaterials(part, materials);
             if (!_parts.TryAdd(part.Id, part)) throw new FormatException($"Duplicate part id '{part.Id}'.");
@@ -106,6 +109,17 @@ public sealed class PartCatalog
 
     /// <summary>Refining recipes, carried with the parts so every loader gets the same definitions.</summary>
     public RecipeCatalog Recipes { get; }
+
+    /// <summary>The tech tree (#37), carried with the parts. Empty: nothing is locked.</summary>
+    public ResearchCatalog Research { get; private set; } = ResearchCatalog.Empty;
+
+    /// <summary>Attaches the tech tree (checked against these parts). Returns this catalog.</summary>
+    public PartCatalog WithResearch(ResearchCatalog research)
+    {
+        research.Validate(this);
+        Research = research;
+        return this;
+    }
 
     private static void ValidateMaterials(PartDefinition part, MaterialCatalog materials)
     {

@@ -15,7 +15,7 @@ public class MaterialTests
     {
         var materials = TestData.Materials();
 
-        Assert.Equal(new[] { "metal", "electronics", "composites", "iron_ore", "silicate", "rock", "copper_ore", "slag", "ice", "water", "fuel", "food" }, materials.Materials.Select(m => m.Id));
+        Assert.Equal(new[] { "metal", "electronics", "composites", "iron_ore", "silicate", "rock", "copper_ore", "slag", "ice", "water", "fuel", "food", "exotic_ore", "superconductors" }, materials.Materials.Select(m => m.Id));
         Assert.Equal(0, materials.OrderOf("metal"));
         Assert.Equal(int.MaxValue, materials.OrderOf("unobtainium"));
     }

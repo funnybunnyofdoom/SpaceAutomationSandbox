@@ -129,8 +129,10 @@ public static class SectorGenerator
     /// Generates star system number <paramref name="index"/> (1 = the first beyond home), deterministically
     /// from the sector's seed: a star placed <see cref="SystemSpacingM"/>-scale away on a fixed orbit around
     /// the home star (it effectively doesn't move), two or three planets (one icy) with a moon, and a
-    /// small belt. Deposits are richer than at home: a reason to go. Returns the star and the planet a
-    /// warp gate is placed at. Mineable bodies start unsurveyed.
+    /// small belt. Deposits are richer than at home: a reason to go. Variety (#25): the star is a red
+    /// dwarf (40%, half the sunlight), yellow (35%) or blue (25%, double); exotic ore, found nowhere at
+    /// home, is on the first system's moon and on about half of the others'. Returns the star and the
+    /// planet a warp gate is placed at. Mineable bodies start unsurveyed.
     /// </summary>
     public static (CelestialBodyState Star, CelestialBodyState GatePlanet) GenerateSystem(SectorState sector, int index)
     {
@@ -142,6 +144,9 @@ public static class SectorGenerator
         // A fixed place among the stars: a huge orbit with a period so long the star never moves in practice.
         var place = new CircularOrbit(home.Id, SystemSpacingM * (1 + 0.15 * index), 1e18, rng.Range(0, 2 * Math.PI));
         var star = Body(sector, name, BodyKind.Star, rng.Range(25_000, 40_000), StarDensityKgPerM3, false, place);
+        var roll = rng.Range(0, 1);
+        star.StarClass = roll < 0.4 ? StarClass.Red : roll < 0.75 ? StarClass.Yellow : StarClass.Blue;
+        var exotic = index == 1 || rng.Range(0, 1) < 0.5;
 
         var phase = rng.Range(0, 2 * Math.PI);
         var first = Body(sector, $"{name} I", BodyKind.Planet, rng.Range(3_500, 6_000), PlanetDensityKgPerM3, true,
@@ -152,8 +157,10 @@ public static class SectorGenerator
                 ["copper_ore"] = 1_500_000 + 500_000 * (long)rng.Range(0, 4),
                 ["silicate"] = 1_000_000 + 500_000 * (long)rng.Range(0, 4),
             });
+        var moonDeposits = new Dictionary<string, long> { ["iron_ore"] = 1_000_000, ["silicate"] = 800_000 };
+        if (exotic) moonDeposits["exotic_ore"] = 300_000 + 100_000 * (long)rng.Range(0, 4);
         AddBody(sector, rng, first.Id, $"{name} I-a", BodyKind.Moon, MoonDensityKgPerM3, 900, 1_400, 15_000, 25_000, 1_000, 1_800, true,
-            new Dictionary<string, long> { ["iron_ore"] = 1_000_000, ["silicate"] = 800_000 });
+            moonDeposits);
 
         Body(sector, $"{name} II", BodyKind.Planet, rng.Range(4_000, 5_500), IceDensityKgPerM3, true,
             AroundStar(star.Id, rng.Range(900_000, 1_100_000), phase + rng.Range(-0.3, 0.3)),

@@ -165,6 +165,7 @@ public sealed partial class SectorState
         if (errors.Count > 0) return new(false, $"Design '{target.Name}': {string.Join("; ", errors)}");
         var (remove, add) = RefitDiff(craft.Design, target);
         if (remove.Count == 0 && add.Count == 0) return new(false, $"{craft.Name} already matches {target.Name}.");
+        if (LockedPartsReason(add.Select(c => c.PartId)) is { } locked) return new(false, locked); // research (#37)
         if (remove.Count == craft.Design.Cells.Count) return new(false, "A refit must keep at least one part as it is (otherwise build a new craft).");
         var stats = target.ComputeStats(parts);
         if (craft.HasCargoLimit && craft.CargoKg > stats.CargoCapacityKg)

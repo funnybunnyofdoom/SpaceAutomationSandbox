@@ -33,11 +33,12 @@ public static class SaveGameSerializer
     /// transit legs for craft far from the player; v16 added repairs (intact design, repair progress,
     /// servicing) and survey jobs; v17 added refit/dismantle/pack orders and the craft id counter
     /// (removed craft's ids are never reused, and jobs may still name them); v18 added warp gates and
-    /// further star systems (their bodies are ordinary bodies; gates record their link and queue).
+    /// further star systems (their bodies are ordinary bodies; gates record their link and queue); v19
+    /// added research (points, techs done; older saves have everything unlocked) and star types.
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 18;
+    public const int SchemaVersion = 19;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -64,6 +65,9 @@ public static class SaveGameSerializer
                 NextCraftId = sector.NextCraftId,
                 NextBodyId = sector.NextBodyId,
                 DiscoveredKg = sector.DiscoveredKg,
+                ResearchPoints = sector.ResearchPoints,
+                UnlockedTech = sector.UnlockedTech.Count > 0 ? sector.UnlockedTech.ToList() : null,
+                ResearchAllUnlocked = sector.ResearchAllUnlocked,
                 EjectedKg = sector.EjectedKg.Count > 0
                     ? new SortedDictionary<string, long>(sector.EjectedKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal)
                     : null,
@@ -80,6 +84,7 @@ public static class SaveGameSerializer
                     Kind = b.Kind,
                     MassKg = b.MassKg,
                     OriginalMassKg = b.OriginalMassKg != b.MassKg ? b.OriginalMassKg : 0,
+                    StarClass = b.StarClass,
                     DensityKgPerM3 = b.DensityKgPerM3,
                     IsMineable = b.IsMineable,
                     DepositsKg = b.DepositsKg.Count > 0
@@ -125,6 +130,7 @@ public static class SaveGameSerializer
                     GateReadyTick = c.GateReadyTick,
                     JumpRequestTick = c.JumpRequestTick,
                     Jumps = c.Jumps,
+                    LabRemainderKg = c.LabRemainderKg,
                     Crew = c.Crew,
                     DockClaimStationId = c.DockClaimStation.Value,
                     Transit = c.Transit is { } leg
@@ -323,6 +329,8 @@ public static class SaveGameSerializer
             if (dto.NextBodyId > 0) sector.RestoreNextBodyId(dto.NextBodyId);
             if (dto.DiscoveredKg < 0) throw new FormatException("Negative discovered mass.");
             sector.RestoreDiscovered(dto.DiscoveredKg);
+            if (!(dto.ResearchPoints >= 0)) throw new FormatException("Negative research points.");
+            sector.RestoreResearch(dto.ResearchPoints, dto.UnlockedTech ?? new List<string>(), dto.ResearchAllUnlocked);
             foreach (var (material, kg) in dto.EjectedKg ?? new SortedDictionary<string, long>())
             {
                 if (!catalog.Materials.Contains(material)) throw new FormatException($"Unknown ejected material '{material}'.");
@@ -358,6 +366,8 @@ public static class SaveGameSerializer
                 if (c.RepairProgressKg < 0) throw new FormatException($"Craft {c.Id} has negative repair progress.");
                 sector.RestoreRepair(restored.Id, intactDesign, c.RepairProgressKg, new CraftId(c.ServiceAtId));
                 if (c.GateReadyTick < 0 || c.JumpRequestTick < 0 || c.Jumps < 0) throw new FormatException($"Craft {c.Id} has invalid warp gate data.");
+                if (c.LabRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has a lab remainder of {c.LabRemainderKg} kg.");
+                restored.LabRemainderKg = c.LabRemainderKg;
                 sector.RestoreGate(restored.Id, new CraftId(c.GateLinkId), c.GateReadyTick, c.JumpRequestTick, c.Jumps);
                 if (c.YardOrder is { } yod)
                 {
@@ -447,6 +457,7 @@ public static class SaveGameSerializer
                 sector.AddBody(new CelestialBodyState(new BodyId(b.Id), b.Name ?? "", b.Kind, b.MassKg, b.DensityKgPerM3, b.IsMineable, orbit,
                     b.DepositsKg));
                 if (b.OriginalMassKg > 0) sector.GetBody(new BodyId(b.Id)).OriginalMassKg = b.OriginalMassKg;
+                sector.GetBody(new BodyId(b.Id)).StarClass = b.StarClass;
                 if (b.Surveyed) sector.MarkSurveyed(new BodyId(b.Id));
                 added.Add(b.Id);
                 pending.Remove(b);
@@ -506,6 +517,16 @@ public static class SaveGameSerializer
         /// <summary>v18: mineable mass of the star systems generated since the start (keeps the mass ledger balanced).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public long DiscoveredKg { get; set; }
+
+        /// <summary>v19: research points to spend, techs researched, and (older saves) everything open.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double ResearchPoints { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string>? UnlockedTech { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool ResearchAllUnlocked { get; set; }
         public SortedDictionary<string, long>? EjectedKg { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] // omitted while every multiplier is 1
         public TuningDto? Tuning { get; set; }
@@ -523,6 +544,10 @@ public static class SaveGameSerializer
         /// <summary>#27 (still v17, optional): mass when the sector was made, if mining has changed it. 0: the same as massKg.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double OriginalMassKg { get; set; }
+
+        /// <summary>v19: a star's type (#25); omitted for yellow.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public StarClass StarClass { get; set; }
 
         public double DensityKgPerM3 { get; set; }
         public bool IsMineable { get; set; }
@@ -588,6 +613,9 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int Jumps { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double LabRemainderKg { get; set; }
 
         /// <summary>v17: a refit, dismantle or pack order a shipyard is working on.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

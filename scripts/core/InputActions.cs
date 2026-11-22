@@ -44,6 +44,7 @@ public static class InputActions
     public const string NewGame = "game_new";
     public const string Help = "open_help";
     public const string Jump = "ship_warp_jump";
+    public const string Research = "open_research";
 
     public static void EnsureDefaults()
     {
@@ -81,6 +82,7 @@ public static class InputActions
         Add(NewGame, 0.5f, Keys(Key.F7));
         Add(Help, 0.5f, Keys(Key.H, Key.F1));
         Add(Jump, 0.5f, Keys(Key.N));
+        Add(Research, 0.5f, Keys(Key.R));
     }
 
     /// <summary>Throttle 0..1 (analog on a trigger), turn −1..1 (analog on the stick), brake on/off.</summary>

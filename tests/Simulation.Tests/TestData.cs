@@ -20,7 +20,10 @@ internal static class TestData
 
     public static RecipeCatalog Recipes() => RecipeCatalog.FromJson(Read("data/recipes/recipes.json"), Materials());
 
-    public static PartCatalog Catalog() => PartCatalog.FromJson(Read("data/parts/parts.json"), Materials(), Recipes());
+    public static PartCatalog Catalog() =>
+        PartCatalog.FromJson(Read("data/parts/parts.json"), Materials(), Recipes()).WithResearch(Research());
+
+    public static ResearchCatalog Research() => ResearchCatalog.FromJson(Read("data/research/research.json"));
 
     public static ShipDesign StarterShip() => ShipDesign.FromJson(Read("data/blueprints/starter_ship.json"));
 

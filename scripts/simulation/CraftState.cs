@@ -135,6 +135,12 @@ public sealed class CraftState
     /// <summary>What repairs on this craft are doing this tick, for display. Not saved.</summary>
     public string? RepairStatus { get; internal set; }
 
+    /// <summary>Fraction of a kg of electronics the lab has used but not yet taken from stock (#37). Saved.</summary>
+    public double LabRemainderKg { get; internal set; }
+
+    /// <summary>What the lab is doing this tick, for display. Not saved.</summary>
+    public string? LabStatus { get; internal set; }
+
     /// <summary>For a warp gate (#22): the gate it sends craft to (in another system); None until its first jump. Saved.</summary>
     public CraftId GateLinkId { get; internal set; }
 

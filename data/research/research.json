@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "_comment": "Tech tree (#37). Research labs make points; a tech unlocks once its prerequisites are done and you spend its cost. Parts listed under a tech can't be built or refitted in until it's researched; parts no tech lists are open from the start. Placeholder costs: one lab makes 0.1 points per second (6 per minute).",
+  "techs": [
+    { "id": "photovoltaics", "name": "Better photovoltaics", "cost": 40, "requires": [], "parts": ["solar_panel_mk2"],
+      "description": "Solar panels with twice the output." },
+    { "id": "dense_batteries", "name": "Dense batteries", "cost": 40, "requires": [], "parts": ["battery_mk2"],
+      "description": "Batteries holding twice the energy." },
+    { "id": "improved_engines", "name": "Improved engines", "cost": 60, "requires": [], "parts": ["thruster_mk2"],
+      "description": "Thrusters with twice the thrust." },
+    { "id": "deep_drilling", "name": "Deep drilling", "cost": 60, "requires": [], "parts": ["drill_mk2"],
+      "description": "Drills that mine twice as fast." },
+    { "id": "automation", "name": "Automation", "cost": 80, "requires": ["dense_batteries"], "parts": ["robot_bay"],
+      "description": "Robot bays: robots that run craft on power alone." },
+    { "id": "industrial_refining", "name": "Industrial refining", "cost": 100, "requires": ["deep_drilling"], "parts": ["refinery_mk2"],
+      "description": "Refineries that work twice as fast." },
+    { "id": "advanced_fabrication", "name": "Advanced fabrication", "cost": 120, "requires": ["industrial_refining"], "parts": ["fabricator_mk2"],
+      "description": "Fabricators that build twice as fast." },
+    { "id": "warp_theory", "name": "Warp theory", "cost": 200, "requires": ["automation", "photovoltaics"], "parts": ["warp_gate"],
+      "description": "Warp gates: the way to other star systems." },
+    { "id": "superconductors", "name": "Superconductors", "cost": 300, "requires": ["warp_theory", "improved_engines"], "parts": ["thruster_mk3", "drill_mk3", "solar_panel_mk3"],
+      "description": "Mk3 parts built with superconductors, refined from exotic ore found only in some other systems." }
+  ]
+}

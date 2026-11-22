@@ -19,14 +19,16 @@ public partial class MapPanel : PanelContainer
     private readonly Func<CraftState?> _pilot;
     private readonly Action<BodyId> _targetBody;
     private readonly Action<CraftId> _targetCraft;
+    private readonly Action<BodyId> _viewSystem;
     private VBoxContainer _rows = null!;
     private Label _title = null!;
     private readonly List<(Label Label, Func<string> Text)> _labels = new();
     private string _layoutKey = "";
     private double _sinceRefresh;
 
-    public MapPanel(Func<SectorState> sector, Func<CraftState?> pilot, Action<BodyId> targetBody, Action<CraftId> targetCraft)
+    public MapPanel(Func<SectorState> sector, Func<CraftState?> pilot, Action<BodyId> targetBody, Action<CraftId> targetCraft, Action<BodyId>? viewSystem = null)
     {
+        _viewSystem = viewSystem ?? (_ => { });
         _sector = sector;
         _pilot = pilot;
         _targetBody = targetBody;
@@ -51,7 +53,7 @@ public partial class MapPanel : PanelContainer
         box.AddChild(_title);
         box.AddChild(new Label
         {
-            Text = "Distances and rough travel times from the craft you fly (cruise V for long trips). Wheel zooms.",
+            Text = "Distances and rough travel times from the craft you fly (cruise V for long trips). Wheel zooms. G: galaxy view.",
             AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(360, 0), Modulate = new Color(1, 1, 1, 0.6f),
         });
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
@@ -124,7 +126,20 @@ public partial class MapPanel : PanelContainer
         foreach (var star in sector.Stars.OrderBy(s => s.Id == here?.Id ? 0 : 1).ThenBy(s => s.Id.Value))
         {
             if (sector.Stars.Count > 1)
-                _rows.AddChild(new Label { Text = star.Id == here?.Id ? $"{star.Name} system (you are here)" : $"{star.Name} system (by warp)", Modulate = new Color(0.75f, 0.85f, 1f) });
+            {
+                var header = new HBoxContainer();
+                var kind = star.StarClass switch { StarClass.Red => "red dwarf", StarClass.Blue => "blue star", _ => "yellow star" };
+                header.AddChild(new Label
+                {
+                    Text = $"{star.Name} system, {kind}" + (star.Id == here?.Id ? " (you are here)" : " (by warp)"),
+                    Modulate = new Color(0.75f, 0.85f, 1f), SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                });
+                var view = new Button { Text = "View map", FocusMode = FocusModeEnum.None };
+                var starId = star.Id;
+                view.Pressed += () => _viewSystem(starId);
+                header.AddChild(view);
+                _rows.AddChild(header);
+            }
             AddBody(star, 0);
         }
 

@@ -12,6 +12,8 @@
     { "id": "ice",         "name": "Ice",         "placeholderColor": "#bfe6ff" },
     { "id": "water",       "name": "Water",       "placeholderColor": "#3f8fd9" },
     { "id": "fuel",        "name": "Fuel",        "placeholderColor": "#e8d25a" },
-    { "id": "food",        "name": "Food",        "placeholderColor": "#c9e06b" }
+    { "id": "food",        "name": "Food",        "placeholderColor": "#c9e06b" },
+    { "id": "exotic_ore",  "name": "Exotic ore",  "placeholderColor": "#d05fd9" },
+    { "id": "superconductors", "name": "Superconductors", "placeholderColor": "#7fe0e6" }
   ]
 }

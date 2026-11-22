@@ -48,6 +48,14 @@
     { "id": "fabricator_mk2", "name": "Fabricator Mk2", "massKg": 7000, "placeholderColor": "#a98bf0", "fabricationRateKgPerS": 1000, "powerUseKW": 300,
       "materialsKg": { "metal": 4000, "electronics": 2200, "composites": 800 } },
     { "id": "warp_gate", "name": "Warp gate", "massKg": 30000, "placeholderColor": "#c86bf0", "isWarpGate": true,
-      "materialsKg": { "metal": 15000, "electronics": 10000, "composites": 5000 } }
+      "materialsKg": { "metal": 15000, "electronics": 10000, "composites": 5000 } },
+    { "id": "research_lab", "name": "Research lab", "massKg": 4000, "placeholderColor": "#e0d27f", "researchRatePerS": 0.1, "powerUseKW": 80,
+      "materialsKg": { "metal": 2000, "electronics": 1500, "composites": 500 } },
+    { "id": "thruster_mk3", "name": "Thruster Mk3", "massKg": 2000, "placeholderColor": "#ffb46b", "thrustN": 450000, "powerUseKW": 200,
+      "materialsKg": { "metal": 1100, "electronics": 400, "superconductors": 300, "composites": 200 } },
+    { "id": "drill_mk3", "name": "Mining drill Mk3", "massKg": 3300, "placeholderColor": "#e4e9ef", "miningRateKgPerS": 300, "powerUseKW": 180,
+      "materialsKg": { "metal": 2100, "electronics": 600, "superconductors": 400, "composites": 200 } },
+    { "id": "solar_panel_mk3", "name": "Solar panel Mk3", "massKg": 800, "placeholderColor": "#7aa8ff", "powerGenerationKW": 350,
+      "materialsKg": { "metal": 200, "electronics": 250, "superconductors": 200, "composites": 150 } }
   ]
 }

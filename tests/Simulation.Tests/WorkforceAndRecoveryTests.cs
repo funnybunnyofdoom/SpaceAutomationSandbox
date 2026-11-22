@@ -107,6 +107,7 @@ public class WorkforceAndRecoveryTests
         ship.Position = sector.BerthPosition(yard, 0, ship.CollisionRadiusM, yard.Position);
         ship.Velocity = yard.Velocity;
         Assert.True(sector.TryDock(ship.Id).Done);
+        sector.DebugUnlockAllResearch(); // Mk2 parts need research (#37)
         var before = ship.Stats.MiningRateKgPerS;
         var target = new ShipDesign("mk2_miner", "Mk2 miner", ship.Design.Cells.Select(c => c.PartId == "drill" ? c with { PartId = "drill_mk2" } : c));
         Assert.True(sector.OrderRefit(yard.Id, ship.Id, target).Done);

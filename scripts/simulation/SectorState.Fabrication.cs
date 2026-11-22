@@ -32,6 +32,7 @@ public sealed partial class SectorState
         var yard = GetCraft(yardId);
         if (!yard.IsShipyard) return BuildOrderResult.Rejected($"{yard.Name} has no fabricator.");
 
+        if (LockedPartsReason(design.Cells.Select(c => c.PartId)) is { } locked) return BuildOrderResult.Rejected(locked); // research (#37)
         var role = design.SuggestedRole(catalog);
         var errors = design.Validate(catalog, role);
         if (errors.Count > 0) return BuildOrderResult.Rejected(errors.Select(e => $"Design '{design.Name}': {e}").ToArray());

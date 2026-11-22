@@ -183,7 +183,7 @@ public partial class Hud : Control
 
         Panels  (they open on the right; Esc closes them)
            blueprint editor: B      shipyard: Y      fleet: F      cargo: C      job: J      map: M
-           settings: F2      debug: F3      diagnostics: F4      fullscreen: F11
+           research: R      settings: F2      debug: F3      diagnostics: F4      fullscreen: F11
 
         Time and game
            slower: [      faster: ]      pause: P

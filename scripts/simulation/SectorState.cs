@@ -231,6 +231,7 @@ public sealed partial class SectorState
         StepMining();
         StepBodiesGone(); // a body mined down to its remnant breaks up (#27)
         StepRefining();
+        StepResearch(); // labs make research points (#37)
         StepSurvey();
 
         // Shipyards advance after movement, so a finished craft is placed against the yard's new position.
