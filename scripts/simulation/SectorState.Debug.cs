@@ -33,6 +33,9 @@ public sealed class SimulationTuning
 /// </summary>
 public sealed partial class SectorState
 {
+    /// <summary>Mass added by debug cheats since this sector was created or loaded (not saved), so diagnostics can tell it apart from a leak.</summary>
+    public long DebugAddedKg { get; private set; }
+
     public SimulationTuning Tuning { get; } = new();
 
     /// <summary>CHEAT: adds material to a craft's inventory out of nothing (ignores capacity).</summary>
@@ -40,6 +43,7 @@ public sealed partial class SectorState
     {
         if (kg <= 0) throw new ArgumentOutOfRangeException(nameof(kg));
         GetCraft(craftId).Inventory.Add(materialId, kg);
+        DebugAddedKg += kg;
     }
 
     /// <summary>CHEAT: marks every body surveyed.</summary>

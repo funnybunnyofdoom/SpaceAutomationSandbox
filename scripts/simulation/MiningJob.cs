@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace SpaceAutomationSandbox.Simulation;
 
@@ -50,7 +51,36 @@ public abstract class ShipJob
 
     /// <summary>Short kind name for UI and saves.</summary>
     public abstract string Kind { get; }
+
+    // --- Recent history (#19): what the job did lately, for "why did it stop?" questions. ---
+
+    /// <summary>How many recent events a job keeps.</summary>
+    public const int HistoryLength = 12;
+
+    private readonly Queue<JobEvent> _history = new();
+    private int _lastKey = int.MinValue;
+    private string? _lastWait;
+
+    /// <summary>Recent state changes, oldest first. Kept in memory only (not saved).</summary>
+    public IReadOnlyCollection<JobEvent> History => _history;
+
+    /// <summary>A number that changes whenever the job's state (or trip) changes; wait reasons are compared separately.</summary>
+    protected abstract int StateKey { get; }
+
+    /// <summary>Called once per tick after the job ran: logs the new status when the state or wait reason changed. Cheap otherwise.</summary>
+    internal void NoteTick(long tick)
+    {
+        var key = Active ? StateKey : -1;
+        if (key == _lastKey && string.Equals(WaitReason, _lastWait, StringComparison.Ordinal)) return;
+        _lastKey = key;
+        _lastWait = WaitReason;
+        if (_history.Count == HistoryLength) _history.Dequeue();
+        _history.Enqueue(new JobEvent(tick, Status));
+    }
 }
+
+/// <summary>One line of a job's recent history: when (tick) and what it was doing from then on.</summary>
+public readonly record struct JobEvent(long Tick, string Text);
 
 /// <summary>Where a mining job is in its cycle.</summary>
 public enum MiningJobState
@@ -91,6 +121,8 @@ public sealed class MiningJob : ShipJob
     public MiningJobState ResumeState { get; internal set; } = MiningJobState.ToSource;
 
     public override string Kind => "mining";
+
+    protected override int StateKey => (int)State;
 
     public override string Status => !Active ? "stopped"
         : State == MiningJobState.Waiting ? $"waiting: {WaitReason}"
@@ -147,6 +179,8 @@ public sealed class HaulJob : ShipJob
     public HaulJobState ResumeState { get; internal set; } = HaulJobState.ToPickup;
 
     public override string Kind => "freight";
+
+    protected override int StateKey => (int)State;
 
     public override string Status => !Active ? "stopped"
         : State == HaulJobState.Waiting ? $"waiting: {WaitReason}"

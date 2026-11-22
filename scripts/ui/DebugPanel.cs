@@ -13,7 +13,7 @@ namespace SpaceAutomationSandbox.UI;
 /// </summary>
 public partial class DebugPanel : PanelContainer
 {
-    private static readonly int[] Speeds = { 1, 2, 5, 10, 25, 50 };
+    private static readonly int[] Speeds = TimeWarp.Levels;
     private static readonly long[] StockAmounts = { 1_000, 10_000, 50_000 };
 
     private readonly Func<SectorState> _sector;

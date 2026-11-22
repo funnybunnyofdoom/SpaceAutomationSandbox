@@ -76,6 +76,7 @@ public sealed partial class SectorState
                 case HaulJob { Active: true } haul: StepHaul(craft, haul, allowResume: true); break;
                 case ServeRequestsJob { Active: true } serve: StepServe(craft, serve, allowResume: true); break;
             }
+            craft.Job?.NoteTick(Tick);
         }
     }
 

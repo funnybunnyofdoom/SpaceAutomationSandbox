@@ -17,6 +17,10 @@ public static class InputActions
     public const string Anchor = "ship_anchor";
     public const string Dock = "ship_dock";
     public const string Deploy = "ship_deploy_kit";
+    public const string TimeFaster = "time_faster";
+    public const string TimeSlower = "time_slower";
+    public const string TimePause = "time_pause";
+    public const string Diagnostics = "open_diagnostics";
     public const string TargetCycle = "target_cycle";
     public const string TargetNearest = "target_nearest";
     public const string ZoomIn = "view_zoom_in";
@@ -41,6 +45,10 @@ public static class InputActions
         Add(Anchor, 0.5f, Keys(Key.G), Pad(JoyButton.X));
         Add(Dock, 0.5f, Keys(Key.K), Pad(JoyButton.Y));
         Add(Deploy, 0.5f, Keys(Key.U));
+        Add(TimeFaster, 0.5f, Keys(Key.Bracketright));
+        Add(TimeSlower, 0.5f, Keys(Key.Bracketleft));
+        Add(TimePause, 0.5f, Keys(Key.P));
+        Add(Diagnostics, 0.5f, Keys(Key.F4));
         Add(TargetCycle, 0.5f, Keys(Key.Tab), Pad(JoyButton.RightShoulder));
         Add(TargetNearest, 0.5f, Keys(Key.T), Pad(JoyButton.LeftShoulder));
         Add(ZoomIn, 0.5f, new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp }, Pad(JoyButton.DpadUp));

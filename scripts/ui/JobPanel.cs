@@ -53,15 +53,18 @@ public partial class JobPanel : PanelContainer
 
     private void Build()
     {
-        SetAnchorsPreset(LayoutPreset.CenterTop);
-        OffsetLeft = -220;
-        OffsetRight = 220;
-        OffsetTop = 370; // below the HUD text
-        OffsetBottom = 710;
+        // Right side, full height, scrolling (settings, state and recent history don't fit under the HUD).
+        SetAnchorsPreset(LayoutPreset.RightWide);
+        OffsetLeft = -450;
+        OffsetRight = -12;
+        OffsetTop = 12;
+        OffsetBottom = -12;
 
-        var box = new VBoxContainer();
+        var scroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        AddChild(scroll);
+        var box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         box.AddThemeConstantOverride("separation", 6);
-        AddChild(box);
+        scroll.AddChild(box);
         _title = new Label();
         _title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(_title);
@@ -262,8 +265,16 @@ public partial class JobPanel : PanelContainer
         };
         _state.Text = $"{what}\nState: {job.Status}{(craft.PowerShort && !craft.LegacyFreePower ? "  (NO POWER)" : "")}\n"
                       + $"Cycles: {job.CompletedCycles}    Delivered: {job.DeliveredKg / 1000.0:0.0} t    "
-                      + $"Hold: {craft.CargoKg / 1000.0:0.0} / {craft.CargoCapacityKg / 1000.0:0} t";
+                      + $"Hold: {craft.CargoKg / 1000.0:0.0} / {craft.CargoCapacityKg / 1000.0:0} t"
+                      + (job.History.Count == 0 ? "" : "\nRecent (newest first):\n" + string.Join("\n", job.History.Reverse().Take(6).Select(e =>
+                          $"  {FormatTime(e.Tick)}  {e.Text}")));
         _state.AddThemeColorOverride("font_color", job.Status.StartsWith("waiting") ? ErrorColor : new Color(1, 1, 1));
+    }
+
+    private static string FormatTime(long tick)
+    {
+        var seconds = (long)(tick * FixedStepClock.TickSeconds);
+        return $"{seconds / 3600}:{seconds / 60 % 60:00}:{seconds % 60:00}";
     }
 
     private void Start()

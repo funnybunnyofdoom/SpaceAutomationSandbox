@@ -47,7 +47,8 @@ public partial class Main : Node2D
     private const string SavePath = "user://savegame.json";
     private const ulong StatusShowMs = 4000;
 
-    private readonly FixedStepClock _clock = new();
+    private readonly TimeWarp _warp = new();
+    private readonly TickCostMeter _tickCost = new();
     private readonly Dictionary<string, Color> _partColors = new();
     private PartCatalog? _catalog;
     private ShipDesign? _starterDesign;
@@ -65,10 +66,9 @@ public partial class Main : Node2D
     private CargoPanel? _cargoPanel;
     private JobPanel? _jobPanel;
     private DebugPanel? _debugPanel;
+    private DiagnosticsPanel? _diagnosticsPanel;
 
     // Debug game speed: how many seconds of game time pass per real second. View-only (results don't change).
-    private int _gameSpeed = 1;
-    private const int BaseMaxTicksPerFrame = 8;
 
     private bool EditorOpen => _editor is { Visible: true };
 
@@ -105,7 +105,9 @@ public partial class Main : Node2D
             hudLayer.AddChild(_cargoPanel);
             _jobPanel = new JobPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
             hudLayer.AddChild(_jobPanel);
-            _debugPanel = new DebugPanel(() => _sector, () => _gameSpeed, SetGameSpeed, _catalog.Materials) { Visible = false };
+            _diagnosticsPanel = new DiagnosticsPanel(() => _sector, _warp, _tickCost) { Visible = false };
+            hudLayer.AddChild(_diagnosticsPanel);
+            _debugPanel = new DebugPanel(() => _sector, () => _warp.Speed, SetGameSpeed, _catalog.Materials) { Visible = false };
             hudLayer.AddChild(_debugPanel);
         }
         // Continue where the player left off; a new game only if there's no usable save.
@@ -156,6 +158,9 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-cargo") >= 0) _cargoPanel?.Open();
         if (System.Array.IndexOf(args, "--open-shipyard") >= 0) _shipyardPanel?.Open();
         if (System.Array.IndexOf(args, "--open-fleet") >= 0) _fleetPanel?.Open();
+        if (System.Array.IndexOf(args, "--open-diagnostics") >= 0) _diagnosticsPanel?.Open();
+        if (args.FirstOrDefault(a => a.StartsWith("--speed=")) is { } speedArg && int.TryParse(speedArg["--speed=".Length..], out var speed))
+            _warp.Speed = speed;
         foreach (var arg in args) // --zoom=0.2
             if (arg.StartsWith("--zoom=") && float.TryParse(arg[7..], System.Globalization.CultureInfo.InvariantCulture, out var zoom))
                 _pixelsPerMetre = Mathf.Clamp(zoom, MinPixelsPerMetre, MaxPixelsPerMetre);
@@ -172,10 +177,8 @@ public partial class Main : Node2D
 
     private void SetGameSpeed(int speed)
     {
-        _gameSpeed = System.Math.Max(1, speed);
-        // Allow proportionally more ticks per frame, so higher speeds don't silently drop time.
-        _clock.MaxTicksPerAdvance = BaseMaxTicksPerFrame * _gameSpeed;
-        ShowStatus($"Game speed {_gameSpeed}×.");
+        _warp.Speed = speed;
+        ShowStatus($"Time {_warp}.");
     }
 
     /// <summary>Hands the flight controls to another craft. The old one keeps its last controls cleared.</summary>
@@ -335,9 +338,13 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Debug)) Toggle(_debugPanel, () => _debugPanel!.Open());
         else if (Pressed(InputActions.Job)) Toggle(_jobPanel, () => _jobPanel!.Open());
         else if (Pressed(InputActions.Cargo)) Toggle(_cargoPanel, () => _cargoPanel!.Open());
+        else if (Pressed(InputActions.Diagnostics)) Toggle(_diagnosticsPanel, () => _diagnosticsPanel!.Open());
+        else if (Pressed(InputActions.TimeFaster)) { _warp.Paused = false; _warp.Faster(); ShowStatus($"Time {_warp}."); }
+        else if (Pressed(InputActions.TimeSlower)) { _warp.Paused = false; _warp.Slower(); ShowStatus($"Time {_warp}."); }
+        else if (Pressed(InputActions.TimePause)) { _warp.Paused = !_warp.Paused; ShowStatus(_warp.Paused ? "Paused (P to resume)." : $"Time {_warp}."); }
         else if (Pressed(InputActions.ClosePanels))
         {
-            foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel })
+            foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel })
                 if (panel != null) panel.Visible = false;
         }
         else if (_player == null) return;
@@ -390,8 +397,19 @@ public partial class Main : Node2D
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit;
         if (_player is { IsAutomated: false }) _player.Controls = EditorOpen || typing ? ShipControls.Idle : ReadControls();
 
-        var ticks = _clock.Advance(delta * _gameSpeed);
-        for (var i = 0; i < ticks; i++) _sector.Step();
+        // Run the ticks due, within a frame budget: at high warp a heavy sector runs slower rather than freezing.
+        var due = _warp.TicksDue(delta);
+        var frameStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        var ran = 0;
+        while (ran < due)
+        {
+            var tickStart = System.Diagnostics.Stopwatch.GetTimestamp();
+            _sector.Step();
+            ran++;
+            _tickCost.Add(System.Diagnostics.Stopwatch.GetElapsedTime(tickStart).TotalMilliseconds);
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(frameStart).TotalMilliseconds > TimeWarp.FrameBudgetMs) break;
+        }
+        _warp.RecordFrame(delta, ran, due);
 
         if (_player != null) _camera.Position = ToPixels(InterpolatedPosition(_player));
         _hud.Text = BuildHud();
@@ -409,12 +427,12 @@ public partial class Main : Node2D
     {
         var text = "SpaceAutomationSandbox (working title) - Phase 4\n"
                    + $"seed {_sector.Seed}   tick {_sector.Tick} ({FixedStepClock.TicksPerSecond}/s)   t={_sector.TimeS:0.0}s"
-                   + (_clock.DroppedTicks > 0 ? $"   dropped {_clock.DroppedTicks}" : "")
+
                    + $"   zoom {_pixelsPerMetre:0.###} px/m\n";
 
         if (Time.GetTicksMsec() < _statusUntilMs) text += $">> {_status}\n";
-        if (_gameSpeed != 1 || !_sector.Tuning.IsDefault)
-            text += $"DEBUG: speed {_gameSpeed}×{(_sector.Tuning.IsDefault ? "" : $", {_sector.Tuning}")}  (F3)\n";
+        if (_warp.Speed != 1 || _warp.Paused) text += $"TIME {_warp}   ([ slower, ] faster, P pause)\n";
+        if (!_sector.Tuning.IsDefault) text += $"DEBUG: {_sector.Tuning}  (F3)\n";
         if (_player is not { } p) return text + _setupError;
 
         var (nearest, nearestSurface) = _sector.NearestBody(p.Position);
@@ -474,7 +492,7 @@ public partial class Main : Node2D
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
                + "W/Up thrust   A/D turn   S/Space brake (matches target)   G anchor   K dock   U deploy kit   Tab cycle target   T target nearest   wheel zoom\n"
-               + "B blueprint editor   Y shipyard   F fleet   C cargo   J job (mining/freight)   F3 debug   F6 save   F9 load   F7 new game   (closing the window autosaves)";
+               + "B blueprint editor   Y shipyard   F fleet   C cargo   J job   [ ] P time   F3 debug   F4 diagnostics   F6 save   F9 load   F7 new game   (closing the window autosaves)";
     }
 
     private string LandedLine(CraftState p)
@@ -518,7 +536,7 @@ public partial class Main : Node2D
         DrawStarfield();
 
         // Interpolated time: smooth motion between 20 Hz ticks without touching the state.
-        var renderTimeS = (_sector.Tick + _clock.Alpha) * FixedStepClock.TickSeconds;
+        var renderTimeS = (_sector.Tick + _warp.Alpha) * FixedStepClock.TickSeconds;
         foreach (var body in _sector.Bodies) DrawBody(body, renderTimeS);
         if (_player is { TargetBodyId.IsNone: false } || _player is { TargetCraftId.IsNone: false }) DrawTargetMarker(_player, renderTimeS);
         foreach (var craft in _sector.Crafts.Where(c => c.IsShipyard && c.RailOrbit != null))
@@ -583,7 +601,7 @@ public partial class Main : Node2D
     private void DrawCraft(CraftState craft)
     {
         var centre = ToPixels(InterpolatedPosition(craft));
-        var heading = (float)Mathf.LerpAngle(craft.PreviousHeadingRad, craft.HeadingRad, _clock.Alpha);
+        var heading = (float)Mathf.LerpAngle(craft.PreviousHeadingRad, craft.HeadingRad, _warp.Alpha);
         var cellPx = (float)ShipDesign.CellSizeM * _pixelsPerMetre;
 
         // Too small to see the grid: draw a heading marker instead.
@@ -620,7 +638,7 @@ public partial class Main : Node2D
     }
 
     private Vector2D InterpolatedPosition(CraftState craft) =>
-        craft.PreviousPosition + (craft.Position - craft.PreviousPosition) * _clock.Alpha;
+        craft.PreviousPosition + (craft.Position - craft.PreviousPosition) * _warp.Alpha;
 
     private Vector2 ToPixels(Vector2D metres) =>
         new((float)(metres.X * _pixelsPerMetre), (float)(metres.Y * _pixelsPerMetre));
