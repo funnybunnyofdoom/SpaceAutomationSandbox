@@ -20,6 +20,8 @@ public static class InputActions
     public const string Anchor = "ship_anchor";
     public const string Dock = "ship_dock";
     public const string Deploy = "ship_deploy_kit";
+    public const string Cruise = "ship_cruise";
+    public const string Map = "open_map";
     public const string TimeFaster = "time_faster";
     public const string TimeSlower = "time_slower";
     public const string TimePause = "time_pause";
@@ -53,6 +55,8 @@ public static class InputActions
         Add(Anchor, 0.5f, Keys(Key.G), Pad(JoyButton.X));
         Add(Dock, 0.5f, Keys(Key.K), Pad(JoyButton.Y));
         Add(Deploy, 0.5f, Keys(Key.U));
+        Add(Cruise, 0.5f, Keys(Key.V));
+        Add(Map, 0.5f, Keys(Key.M));
         Add(TimeFaster, 0.5f, Keys(Key.Bracketright));
         Add(TimeSlower, 0.5f, Keys(Key.Bracketleft));
         Add(TimePause, 0.5f, Keys(Key.P));

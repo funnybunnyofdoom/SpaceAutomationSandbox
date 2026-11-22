@@ -24,17 +24,16 @@ public class SectorTests
     }
 
     [Fact]
-    public void StarterSector_HasOneFixedPlanet_AndMineableBodiesOrbitingIt()
+    public void StarterSector_HasAHomePlanet_WithMineableBodiesOrbitingIt()
     {
         var sector = SectorGenerator.Generate(Seed);
 
-        Assert.Equal(7, sector.Bodies.Count);
-        var planet = Assert.Single(sector.Bodies, b => b.Kind == BodyKind.Planet);
-        Assert.Equal(new[] { "Rock-1", "Rock-2", "Rock-3", "Moon", "Ice-1" }, sector.Bodies.Where(b => b.IsMineable).Select(b => b.Name));
-        Assert.All(sector.Bodies.Where(b => b.IsMineable), b => Assert.Equal(planet.Id, b.Orbit!.Parent));
+        var planet = SectorGenerator.HomePlanet(sector);
+        Assert.Equal(SectorGenerator.HomeName, planet.Name);
+        Assert.Equal(new[] { "Rock-1", "Rock-2", "Rock-3", "Moon", "Ice-1" }, TestData.HomeRocks(sector).Select(b => b.Name));
         Assert.True(sector.Bodies.First(b => b.Name == "Rock-2").Deposit("silicate") > 0);
         var rock = sector.Bodies.First(b => b.IsMineable);
-        Assert.Null(planet.Orbit);
+        Assert.Equal(BodyKind.Star, sector.GetBody(planet.Orbit!.Parent).Kind);
         Assert.Equal(planet.Id, rock.Orbit!.Parent);
         Assert.True(rock.Orbit.RadiusM > planet.RadiusM + rock.RadiusM, "Orbit must clear the planet surface.");
     }
@@ -65,10 +64,12 @@ public class SectorTests
     {
         var sector = SectorGenerator.Generate(Seed);
         var rock = sector.Bodies.First(b => b.IsMineable);
-        var start = sector.GetPositionAt(rock.Id, 0);
+        // Relative to its parent (the home planet itself orbits the star).
+        Vector2D Offset(double t) => sector.GetPositionAt(rock.Id, t) - sector.GetPositionAt(rock.Orbit!.Parent, t);
+        var start = Offset(0);
 
-        var afterPeriod = sector.GetPositionAt(rock.Id, rock.Orbit!.PeriodS);
-        var halfway = sector.GetPositionAt(rock.Id, rock.Orbit.PeriodS / 2);
+        var afterPeriod = Offset(rock.Orbit!.PeriodS);
+        var halfway = Offset(rock.Orbit.PeriodS / 2);
 
         Assert.True(start.DistanceTo(afterPeriod) < 1e-6);
         Assert.Equal(rock.Orbit.RadiusM * 2, start.DistanceTo(halfway), 6);

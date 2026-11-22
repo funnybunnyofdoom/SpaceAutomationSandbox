@@ -13,12 +13,12 @@ public class CollisionTests
         var sector = SectorGenerator.Generate(seed);
         var design = TestData.StarterShip();
         var craft = new CraftState(sector.AllocateCraftId(), "Test", design, design.ComputeStats(TestData.Catalog()),
-            SectorGenerator.PlayerSpawnPoint(sector), 0);
+            SectorGenerator.PlayerSpawnPoint(sector), 0) { Velocity = SectorGenerator.PlayerSpawnVelocity(sector) };
         sector.AddCraft(craft);
         return (sector, craft);
     }
 
-    private static CelestialBodyState Primary(SectorState s) => s.Bodies.First(b => b.Orbit is null);
+    private static CelestialBodyState Primary(SectorState s) => SectorGenerator.HomePlanet(s);
     private static CelestialBodyState Rock(SectorState s) => s.Bodies.First(b => b.IsMineable);
 
     private static void Run(SectorState sector, CraftState craft, ShipControls controls, int ticks)
@@ -58,7 +58,7 @@ public class CollisionTests
         Assert.True(craft.IsLanded);
         Assert.Equal(planet.Id, craft.LandedOnBodyId);
         Assert.InRange(sector.SurfaceGap(craft, planet), -1e-6, 1e-6); // resting on its lowest cell
-        Assert.Equal(Vector2D.Zero, craft.Velocity); // the primary doesn't move
+        Assert.Equal(sector.GetVelocityAt(planet.Id, sector.TimeS), craft.Velocity); // moves with the home planet (it orbits the star)
     }
 
     [Fact]
@@ -68,11 +68,11 @@ public class CollisionTests
         var planet = Primary(sector);
         craft.HeadingRad = Math.PI;
         Run(sector, craft, new ShipControls(1, 0, false), 200);
-        var landedAt = craft.Position;
+        var landedAt = craft.LandedOffset;
 
         Run(sector, craft, new ShipControls(1, 0, false), 100); // still pushing down
         Assert.True(craft.IsLanded);
-        Assert.Equal(landedAt, craft.Position);
+        Assert.Equal(landedAt, craft.LandedOffset); // same spot on the (moving) planet
 
         Run(sector, craft, new ShipControls(0, 1, false), 42); // turning on the ground is allowed
         Assert.True(craft.IsLanded);
@@ -110,7 +110,7 @@ public class CollisionTests
     {
         var (sector, craft) = Setup();
         var planet = Primary(sector);
-        craft.Velocity = new Vector2D(0, 2000); // 2 km/s straight down: 100 m per tick
+        craft.Velocity = SectorGenerator.PlayerSpawnVelocity(sector) + new Vector2D(0, 2000); // 2 km/s straight down: 100 m per tick
         Run(sector, craft, ShipControls.Idle, 5);
 
         Assert.True(craft.IsLanded);
@@ -193,9 +193,9 @@ public class CollisionTests
         craft.HeadingRad = Math.PI;
         Run(sector, craft, new ShipControls(1, 0, false), 200);
         var json = SaveGameSerializer.ToJson(sector, craft.Id);
-        Assert.Contains("\"landedOnBodyId\": 1", json);
+        Assert.Contains("\"landedOnBodyId\": 2", json); // the home planet (the star is body 1)
 
         Assert.Throws<FormatException>(() =>
-            SaveGameSerializer.FromJson(json.Replace("\"landedOnBodyId\": 1", "\"landedOnBodyId\": 9"), TestData.Catalog()));
+            SaveGameSerializer.FromJson(json.Replace("\"landedOnBodyId\": 2", "\"landedOnBodyId\": 99"), TestData.Catalog()));
     }
 }

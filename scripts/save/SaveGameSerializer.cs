@@ -28,10 +28,11 @@ public static class SaveGameSerializer
     /// v7 added survey flags, refinery batches and freight jobs; v8 added debug tuning and job retry
     /// times; v9 limited storage to storage parts; v10 added power and slag ejection; v11 replaced order
     /// landing sites with construction kits and added station requests and serve-requests freight.
+    /// v12 added the star system (new games), the cruise drive and solar power by distance.
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 11;
+    public const int SchemaVersion = 12;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -98,6 +99,8 @@ public static class SaveGameSerializer
                     StoredEnergyKJ = c.StoredEnergyKJ,
                     LegacyFreePower = c.LegacyFreePower,
                     EjectionRemainderKg = c.EjectionRemainderKg,
+                    Cruising = c.Cruising,
+                    CruiseFuelRemainderKg = c.CruiseFuelRemainderKg,
                     MiningRemainderKg = c.MiningRemainderKg,
                     RefiningBatch = c.RefiningBatch is { } rb
                         ? new BatchDto
@@ -218,6 +221,9 @@ public static class SaveGameSerializer
                 craft.StoredEnergyKJ = c.StoredEnergyKJ;
                 if (c.EjectionRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has an ejection remainder of {c.EjectionRemainderKg} kg.");
                 craft.EjectionRemainderKg = c.EjectionRemainderKg;
+                if (c.CruiseFuelRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has a cruise fuel remainder of {c.CruiseFuelRemainderKg} kg.");
+                craft.Cruising = c.Cruising;
+                craft.CruiseFuelRemainderKg = c.CruiseFuelRemainderKg;
                 if (c.RailOrbit is { } rail) sector.RestoreRails(craft.Id, OrbitFromDto(rail));
                 foreach (var (material, kg) in c.InventoryKg ?? new SortedDictionary<string, long>())
                 {
@@ -444,6 +450,12 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double EjectionRemainderKg { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool Cruising { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double CruiseFuelRemainderKg { get; set; }
         public double MiningRemainderKg { get; set; }
         public BatchDto? RefiningBatch { get; set; }
         public JobDto? Job { get; set; }

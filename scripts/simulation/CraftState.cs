@@ -63,6 +63,18 @@ public sealed class CraftState
     /// <summary>Set only by the save migration for craft from before power existed: they never run short.</summary>
     public bool LegacyFreePower { get; internal set; }
 
+    /// <summary>Cruise drive engaged (#53): moving at cruise speed along its heading. See SectorState.Cruise.</summary>
+    public bool Cruising { get; internal set; }
+
+    /// <summary>Cruise fuel burned but not yet whole kg (0..1).</summary>
+    public double CruiseFuelRemainderKg { get; internal set; }
+
+    /// <summary>Why cruise last ended ("arrived near Home", "out of fuel"…), for the HUD. Not saved.</summary>
+    public string? CruiseStopReason { get; internal set; }
+
+    /// <summary>Solar output share at this craft's distance from the star, set each tick (1 = Home's distance). Not saved.</summary>
+    public double SolarFactor { get; internal set; } = 1;
+
     /// <summary>Ejected slag not yet whole kg (0..1).</summary>
     public double EjectionRemainderKg { get; internal set; }
 

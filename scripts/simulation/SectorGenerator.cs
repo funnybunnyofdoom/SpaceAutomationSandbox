@@ -1,22 +1,37 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace SpaceAutomationSandbox.Simulation;
 
 /// <summary>
-/// Builds the starter sector from a seed: one central planet fixed at the origin, three mineable
-/// asteroids, and (#16) a moon, an ice asteroid and a distant gas giant, all on circular orbits.
-/// All numbers are placeholders at game scale (far smaller than real bodies) and are expected to
-/// be tuned. Bodies are drawn in a fixed order, so adding new ones at the end keeps earlier ones
-/// unchanged for a given seed.
+/// Builds the home solar system from a seed (#53): a star at the origin and, around it, a compact
+/// system of four planets plus a belt:
+/// <list type="bullet">
+/// <item>Cinder, an inner rocky planet (~250 km out);</item>
+/// <item>Home (~500 km out) with its neighbourhood: Rock-1..3, the Moon and Ice-1 (unchanged from
+/// before the star existed, for a given seed);</item>
+/// <item>an asteroid belt (~750–850 km out);</item>
+/// <item>the Giant, a gas giant (~1,100 km out) with two moons;</item>
+/// <item>Rime, an outer ice world (~1,500 km out).</item>
+/// </list>
+/// Planets move slowly (about 6–14 m/s), so the home neighbourhood feels as before. A trip to a
+/// neighbouring planet takes about 5–10 minutes with the cruise drive. All numbers are placeholders
+/// at game scale and are expected to be tuned.
+/// <para>Random draws: the home neighbourhood uses the seed's own stream in the same order as
+/// before; everything new uses a second stream, so the neighbourhood is unchanged for a seed.</para>
 /// </summary>
 public static class SectorGenerator
 {
+    public const double StarDensityKgPerM3 = 1400;
     public const double PlanetDensityKgPerM3 = 5500;
     public const double AsteroidDensityKgPerM3 = 2500;
     public const double MoonDensityKgPerM3 = 3300;
     public const double IceDensityKgPerM3 = 1000;
     public const double GasGiantDensityKgPerM3 = 1300;
+
+    /// <summary>Home planet's distance from the star. Solar power is 100% here (#53).</summary>
+    public const double HomeOrbitRadiusM = 500_000;
 
     /// <summary>Placeholder deposits (docs/06, Phase 4). Finite, so they can run out.</summary>
     public const long Rock1IronOreKg = 500_000;
@@ -29,48 +44,100 @@ public static class SectorGenerator
     public const long MoonSilicateKg = 600_000;
     public const long IceIceKg = 400_000;
     public const long IceSilicateKg = 50_000;
+    public const int BeltAsteroidCount = 12;
+
+    public const string StarName = "Star";
+    public const string HomeName = "Home";
 
     public static SectorState Generate(ulong seed)
     {
-        var rng = new DeterministicRandom(seed);
+        var rng = new DeterministicRandom(seed);                       // home neighbourhood, same draws as before
+        var system = new DeterministicRandom(seed ^ 0x5DEECE66DUL);    // everything added by #53
         var sector = new SectorState(seed);
 
+        // The star is added first (parents before children).
+        var star = Body(sector, StarName, BodyKind.Star, system.Range(28_000, 32_000), StarDensityKgPerM3, false, null);
+
+        // The planets start roughly lined up on Home's side of the star, so neighbours are close
+        // (Cinder and the belt ~5 min of cruise, the Giant ~10). They drift apart over many hours.
+        var homePhase = system.Range(0, 2 * Math.PI);
         var planetRadiusM = rng.Range(5_000, 7_000);
-        var planet = new CelestialBodyState(
-            sector.AllocateBodyId(), "Primary", BodyKind.Planet,
-            Math.Round(CelestialBodyState.MassFromRadius(planetRadiusM, PlanetDensityKgPerM3)), // whole kg: exact ledger
-            PlanetDensityKgPerM3, isMineable: false, orbit: null);
-        sector.AddBody(planet);
+        var home = Body(sector, HomeName, BodyKind.Planet, planetRadiusM, PlanetDensityKgPerM3, false,
+            AroundStar(star.Id, HomeOrbitRadiusM, homePhase));
 
         var asteroidRadiusM = rng.Range(500, 900);
-        var orbit = new CircularOrbit(
-            planet.Id,
+        var rock1Orbit = new CircularOrbit(
+            home.Id,
             RadiusM: rng.Range(22_000, 30_000),
             // 20–40 min per orbit gives ~60–150 m/s and under 1 m/s² of curvature, so a starter
-            // ship (≈17 m/s²) can catch it and hold position with the brake. Was 3–5 min (too fast).
+            // ship (≈17 m/s²) can catch it and hold position with the brake.
             PeriodS: rng.Range(1_200, 2_400),
             PhaseAtZeroRad: rng.Range(0, 2 * Math.PI));
         sector.AddBody(new CelestialBodyState(
             sector.AllocateBodyId(), "Rock-1", BodyKind.Asteroid,
             Math.Round(CelestialBodyState.MassFromRadius(asteroidRadiusM, AsteroidDensityKgPerM3)),
-            AsteroidDensityKgPerM3, isMineable: true, orbit,
+            AsteroidDensityKgPerM3, isMineable: true, rock1Orbit,
             new Dictionary<string, long> { ["iron_ore"] = Rock1IronOreKg, ["copper_ore"] = Rock1CopperOreKg }));
 
-        // More asteroids further out (drawn after Rock-1, so Rock-1 is unchanged for a given seed).
-        AddAsteroid(sector, rng, planet.Id, "Rock-2", 34_000, 40_000, 2_400, 3_600,
+        AddAsteroid(sector, rng, home.Id, "Rock-2", 34_000, 40_000, 2_400, 3_600,
             new Dictionary<string, long> { ["silicate"] = Rock2SilicateKg, ["iron_ore"] = Rock2IronOreKg });
-        AddAsteroid(sector, rng, planet.Id, "Rock-3", 44_000, 50_000, 3_000, 4_200,
+        AddAsteroid(sector, rng, home.Id, "Rock-3", 44_000, 50_000, 3_000, 4_200,
             new Dictionary<string, long> { ["iron_ore"] = Rock3IronOreKg, ["copper_ore"] = Rock3CopperOreKg });
-
-        // #16: drawn after the asteroids, so the bodies above are unchanged for a given seed.
-        AddBody(sector, rng, planet.Id, "Moon", BodyKind.Moon, MoonDensityKgPerM3, 1_200, 1_600, 14_000, 18_000, 900, 1_500, true,
+        AddBody(sector, rng, home.Id, "Moon", BodyKind.Moon, MoonDensityKgPerM3, 1_200, 1_600, 14_000, 18_000, 900, 1_500, true,
             new Dictionary<string, long> { ["iron_ore"] = MoonIronOreKg, ["silicate"] = MoonSilicateKg });
-        AddBody(sector, rng, planet.Id, "Ice-1", BodyKind.Asteroid, IceDensityKgPerM3, 500, 800, 56_000, 64_000, 3_600, 4_800, true,
+        AddBody(sector, rng, home.Id, "Ice-1", BodyKind.Asteroid, IceDensityKgPerM3, 500, 800, 56_000, 64_000, 3_600, 4_800, true,
             new Dictionary<string, long> { ["ice"] = IceIceKg, ["silicate"] = IceSilicateKg });
-        AddBody(sector, rng, planet.Id, "Giant", BodyKind.GasGiant, GasGiantDensityKgPerM3, 9_000, 11_000, 120_000, 140_000, 9_000, 12_000, false,
-            new Dictionary<string, long>());
+
+        // The rest of the system orbits the star.
+        Body(sector, "Cinder", BodyKind.Planet, system.Range(3_000, 4_000), PlanetDensityKgPerM3, true,
+            AroundStar(star.Id, system.Range(240_000, 260_000), homePhase + system.Range(-0.3, 0.3)),
+            new Dictionary<string, long> { ["iron_ore"] = 2_000_000, ["copper_ore"] = 1_000_000 });
+
+        for (var i = 1; i <= BeltAsteroidCount; i++)
+        {
+            var deposits = new Dictionary<string, long> { ["iron_ore"] = 50_000 + 10_000 * (long)system.Range(0, 10) };
+            deposits[i % 3 == 0 ? "copper_ore" : i % 3 == 1 ? "silicate" : "ice"] = 30_000 + 10_000 * (long)system.Range(0, 8);
+            // Evenly spread around the belt with some jitter, so the rocks never overlap.
+            var orbit = new CircularOrbit(star.Id, system.Range(750_000, 850_000), 0, 2 * Math.PI * (i - 1) / BeltAsteroidCount + system.Range(0, 0.3));
+            Body(sector, $"Belt-{i}", BodyKind.Asteroid, system.Range(200, 500), AsteroidDensityKgPerM3, true,
+                orbit with { PeriodS = SlowPeriod(orbit.RadiusM) }, deposits);
+        }
+
+        var giant = Body(sector, "Giant", BodyKind.GasGiant, system.Range(9_000, 11_000), GasGiantDensityKgPerM3, false,
+            AroundStar(star.Id, system.Range(1_080_000, 1_120_000), homePhase + system.Range(-0.15, 0.15)));
+        AddBody(sector, system, giant.Id, "Giant-a", BodyKind.Moon, MoonDensityKgPerM3, 900, 1_200, 25_000, 30_000, 1_500, 2_400, true,
+            new Dictionary<string, long> { ["silicate"] = 500_000, ["copper_ore"] = 300_000 });
+        AddBody(sector, system, giant.Id, "Giant-b", BodyKind.Moon, IceDensityKgPerM3, 1_000, 1_300, 40_000, 50_000, 2_800, 3_600, true,
+            new Dictionary<string, long> { ["ice"] = 600_000 });
+
+        Body(sector, "Rime", BodyKind.Planet, system.Range(4_000, 5_000), IceDensityKgPerM3, true,
+            AroundStar(star.Id, system.Range(1_480_000, 1_520_000), homePhase + system.Range(-0.15, 0.15)),
+            new Dictionary<string, long> { ["ice"] = 3_000_000, ["silicate"] = 500_000 });
 
         return sector;
+    }
+
+    /// <summary>
+    /// A slow orbit around the star: speed falls with distance like real orbits (about 10 m/s at
+    /// Home's distance), so planets barely move on a human timescale. Placeholder (no gravity, #32).
+    /// </summary>
+    private static double SlowPeriod(double radiusM)
+    {
+        var speed = 10 * Math.Sqrt(HomeOrbitRadiusM / radiusM);
+        return 2 * Math.PI * radiusM / speed;
+    }
+
+    private static CircularOrbit AroundStar(BodyId star, double radiusM, double phaseRad) =>
+        new(star, radiusM, SlowPeriod(radiusM), phaseRad);
+
+    private static CelestialBodyState Body(SectorState sector, string name, BodyKind kind, double radiusM, double density,
+        bool mineable, CircularOrbit? orbit, Dictionary<string, long>? deposits = null)
+    {
+        var body = new CelestialBodyState(sector.AllocateBodyId(), name, kind,
+            Math.Round(CelestialBodyState.MassFromRadius(radiusM, density)), density, mineable, orbit,
+            deposits ?? new Dictionary<string, long>());
+        sector.AddBody(body);
+        return body;
     }
 
     private static void AddBody(SectorState sector, DeterministicRandom rng, BodyId parent, string name, BodyKind kind, double density,
@@ -93,17 +160,19 @@ public static class SectorGenerator
             AsteroidDensityKgPerM3, isMineable: true, orbit, deposits));
     }
 
-    /// <summary>Gap between the primary's surface and the player's spawn point. Placeholder.</summary>
+    /// <summary>The player's home planet: the first planet (in saves from before #53, the fixed "Primary").</summary>
+    public static CelestialBodyState HomePlanet(SectorState sector) => sector.Bodies.First(b => b.Kind == BodyKind.Planet);
+
+    /// <summary>Gap between the home planet's surface and the player's spawn point. Placeholder.</summary>
     public const double PlayerSpawnAltitudeM = 300;
 
-    /// <summary>Spawn point straight "above" (−Y) the first fixed body, with the ship facing away from it.</summary>
+    /// <summary>Spawn point straight "above" (−Y) the home planet, with the ship facing away from it.</summary>
     public static Vector2D PlayerSpawnPoint(SectorState sector)
     {
-        foreach (var body in sector.Bodies)
-        {
-            if (body.Orbit is null)
-                return sector.GetPosition(body.Id) + new Vector2D(0, -(body.RadiusM + PlayerSpawnAltitudeM));
-        }
-        return Vector2D.Zero;
+        var home = HomePlanet(sector);
+        return sector.GetPosition(home.Id) + new Vector2D(0, -(home.RadiusM + PlayerSpawnAltitudeM));
     }
+
+    /// <summary>Velocity to give something spawned near home, so it stays put relative to the home planet.</summary>
+    public static Vector2D PlayerSpawnVelocity(SectorState sector) => sector.GetVelocityAt(HomePlanet(sector).Id, sector.TimeS);
 }

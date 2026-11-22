@@ -40,7 +40,7 @@ public class FabricationTests
     {
         var game = TestData.NewGame();
         var yard = game.Sector.GetCraft(game.ShipyardId);
-        var primary = game.Sector.Bodies.First(b => b.Orbit is null);
+        var primary = SectorGenerator.HomePlanet(game.Sector);
 
         Assert.True(yard.IsShipyard);
         Assert.True(yard.IsOnRails);

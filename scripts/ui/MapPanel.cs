@@ -1,0 +1,151 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Godot;
+using SpaceAutomationSandbox.Simulation;
+
+namespace SpaceAutomationSandbox.UI;
+
+/// <summary>
+/// System map target list (M, #53): every body (moons indented under their planet) and every
+/// station, with distance and rough travel time from the craft you're flying, and a Target button.
+/// Shown while the main view is zoomed out to the whole system.
+/// </summary>
+public partial class MapPanel : PanelContainer
+{
+    private const double RefreshSeconds = 0.5;
+
+    private readonly Func<SectorState> _sector;
+    private readonly Func<CraftState?> _pilot;
+    private readonly Action<BodyId> _targetBody;
+    private readonly Action<CraftId> _targetCraft;
+    private VBoxContainer _rows = null!;
+    private Label _title = null!;
+    private readonly List<(Label Label, Func<string> Text)> _labels = new();
+    private string _layoutKey = "";
+    private double _sinceRefresh;
+
+    public MapPanel(Func<SectorState> sector, Func<CraftState?> pilot, Action<BodyId> targetBody, Action<CraftId> targetCraft)
+    {
+        _sector = sector;
+        _pilot = pilot;
+        _targetBody = targetBody;
+        _targetCraft = targetCraft;
+        Build();
+    }
+
+    public MapPanel() : this(() => new SectorState(0), () => null, _ => { }, _ => { }) { }
+
+    private void Build()
+    {
+        SetAnchorsPreset(LayoutPreset.RightWide);
+        OffsetLeft = -400;
+        OffsetRight = -12;
+        OffsetTop = 12;
+        OffsetBottom = -12;
+
+        var box = new VBoxContainer();
+        AddChild(box);
+        _title = new Label { Text = "SYSTEM MAP  (M to close)" };
+        _title.AddThemeFontSizeOverride("font_size", 18);
+        box.AddChild(_title);
+        box.AddChild(new Label
+        {
+            Text = "Distances and rough travel times from the craft you fly (cruise V for long trips). Wheel zooms.",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(360, 0), Modulate = new Color(1, 1, 1, 0.6f),
+        });
+        var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        box.AddChild(scroll);
+        _rows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        scroll.AddChild(_rows);
+    }
+
+    public void Open()
+    {
+        Visible = true;
+        _layoutKey = "";
+        Refresh();
+    }
+
+    public override void _Process(double delta)
+    {
+        if (!Visible) return;
+        _sinceRefresh += delta;
+        if (_sinceRefresh >= RefreshSeconds) Refresh();
+    }
+
+    /// <summary>Rough door-to-door time: cruise for long legs, the job autopilot's speed for short ones.</summary>
+    public static string TravelTime(double distanceM)
+    {
+        var seconds = distanceM > SectorState.AutopilotCruiseMinDistanceM
+            ? (distanceM - SectorState.AutopilotCruiseArriveM) / SectorState.CruiseSpeedMps + SectorState.AutopilotCruiseArriveM / SectorState.JobCruiseSpeedMps + 60
+            : distanceM / SectorState.JobCruiseSpeedMps;
+        return seconds < 90 ? $"{seconds:0} s" : $"{seconds / 60:0} min";
+    }
+
+    private static string Distance(double m) => m >= 1_000_000 ? $"{m / 1e6:0.00} Mm" : m >= 1000 ? $"{m / 1000:0} km" : $"{m:0} m";
+
+    private void Refresh()
+    {
+        _sinceRefresh = 0;
+        var sector = _sector();
+        var pilot = _pilot();
+        var stations = sector.Crafts.Where(c => c.Stats.DockingPorts.Count > 0).Select(c => c.Id).ToList();
+        var key = $"{sector.Bodies.Count}|{string.Join(",", stations)}";
+        if (key != _layoutKey) Rebuild(sector, stations, key);
+        foreach (var (label, text) in _labels) label.Text = text();
+        _title.Text = pilot is null ? "SYSTEM MAP  (M to close)" : $"SYSTEM MAP from {pilot.Name}  (M to close)";
+    }
+
+    private void Rebuild(SectorState sector, List<CraftId> stations, string key)
+    {
+        _layoutKey = key;
+        _labels.Clear();
+        foreach (var child in _rows.GetChildren()) { _rows.RemoveChild(child); child.QueueFree(); }
+
+        void AddBody(CelestialBodyState body, int depth)
+        {
+            var id = body.Id;
+            AddRow(new string(' ', depth * 3), () =>
+            {
+                var s = _sector();
+                var pilot = _pilot();
+                var b = s.GetBody(id);
+                var what = b.Kind == BodyKind.Asteroid ? "" : $" ({b.Kind})";
+                if (pilot is null) return b.Name + what;
+                var d = Math.Max(0, s.GetPosition(id).DistanceTo(pilot.Position) - b.RadiusM);
+                return $"{b.Name}{what}  {Distance(d)}, ~{TravelTime(d)}";
+            }, () => _targetBody(id));
+            foreach (var child in sector.Bodies.Where(b => b.Orbit?.Parent == body.Id)) AddBody(child, depth + 1);
+        }
+        foreach (var root in sector.Bodies.Where(b => b.Orbit is null)) AddBody(root, 0);
+
+        if (stations.Count > 0) _rows.AddChild(new Label { Text = "Stations", Modulate = new Color(1, 1, 1, 0.6f) });
+        foreach (var id in stations)
+        {
+            AddRow("", () =>
+            {
+                var s = _sector();
+                var pilot = _pilot();
+                var c = s.Crafts.FirstOrDefault(x => x.Id == id);
+                if (c is null) return "(gone)";
+                if (pilot is null || pilot.Id == id) return c.Name;
+                var d = c.Position.DistanceTo(pilot.Position);
+                return $"{c.Name}  {Distance(d)}, ~{TravelTime(d)}";
+            }, () => _targetCraft(id));
+        }
+    }
+
+    private void AddRow(string indent, Func<string> text, Action target)
+    {
+        var row = new HBoxContainer();
+        var label = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipText = true };
+        row.AddChild(new Label { Text = indent });
+        row.AddChild(label);
+        var button = new Button { Text = "Target", FocusMode = FocusModeEnum.None };
+        button.Pressed += target;
+        row.AddChild(button);
+        _rows.AddChild(row);
+        _labels.Add((label, text));
+    }
+}

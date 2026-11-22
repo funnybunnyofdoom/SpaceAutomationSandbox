@@ -29,6 +29,7 @@ public static class SaveMigrations
         [8] = ("v9 limited storage to storage parts: stations that held stock without any keep unlimited storage", KeepLegacyStationsUnlimited),
         [9] = ("v10 added power: craft from older games have no solar panels, so they get free power and full batteries", GiveLegacyCraftFreePower),
         [10] = ("v11 replaced landing sites with construction kits: queued station orders now finish as kits; requests and kits start empty", DropLandingSites),
+        [11] = ("v12 added the star system (new games only), the cruise drive and solar power by distance: older saves keep their sector, nothing cruises, full sunlight without a star", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

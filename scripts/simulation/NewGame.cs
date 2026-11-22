@@ -17,6 +17,9 @@ public static class NewGame
 {
     public const ulong DefaultSeed = 20261120;
 
+    /// <summary>Fuel in the player's hold at the start: about 10 minutes of cruise for the starter ship.</summary>
+    public const long PlayerStartingFuelKg = 150;
+
     /// <summary>Shipyard orbit height above the primary's surface, and its period.</summary>
     public const double ShipyardAltitudeM = 600; // 300 m above the player's spawn, so it's in view at the start
     public const double ShipyardOrbitPeriodS = 1_800;
@@ -31,6 +34,7 @@ public static class NewGame
         ["electronics"] = 7_000,
         ["composites"] = 5_000,
         ["slag"] = 5_000, // hull plates contain slag now (#7)
+        ["fuel"] = 5_000, // for the cruise drive (#53)
     };
 
     public static NewGameResult Create(ulong seed, PartCatalog catalog, ShipDesign starterShip, ShipDesign starterShipyard)
@@ -41,12 +45,13 @@ public static class NewGame
         var sector = SectorGenerator.Generate(seed);
         sector.Recipes = catalog.Recipes;
         sector.Parts = catalog;
-        var primary = sector.Bodies.First(b => b.Orbit is null);
+        var primary = SectorGenerator.HomePlanet(sector);
 
         var player = new CraftState(sector.AllocateCraftId(), "Player", starterShip, starterShip.ComputeStats(catalog),
-            SectorGenerator.PlayerSpawnPoint(sector), headingRad: 0);
+            SectorGenerator.PlayerSpawnPoint(sector), headingRad: 0) { Velocity = SectorGenerator.PlayerSpawnVelocity(sector) };
         sector.AddCraft(player);
         sector.SetTarget(player.Id, primary.Id);
+        player.Inventory.Add(SectorState.FuelMaterial, PlayerStartingFuelKg);
         sector.PilotCraftId = player.Id;
 
         var yard = new CraftState(sector.AllocateCraftId(), "Shipyard", starterShipyard, starterShipyard.ComputeStats(catalog),

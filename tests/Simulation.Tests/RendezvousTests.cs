@@ -30,7 +30,7 @@ public class RendezvousTests
         var analytic = sector.GetVelocityAt(rock.Id, t);
 
         Assert.True((numeric - analytic).Length < 1e-4);
-        Assert.Equal(rock.Orbit!.SpeedMps, analytic.Length, 6);
+        Assert.Equal(rock.Orbit!.SpeedMps, (analytic - sector.GetVelocityAt(rock.Orbit.Parent, t)).Length, 6); // relative to the planet it circles
         Assert.Equal(Vector2D.Zero, sector.GetVelocityAt(sector.Bodies.First(b => b.Orbit is null).Id, t));
     }
 

@@ -34,7 +34,8 @@ public sealed partial class SectorState
         foreach (var craft in _crafts)
         {
             craft.PowerShort = false;
-            craft.EnergyPoolKJ = craft.StoredEnergyKJ + craft.Stats.PowerGenerationKW * FixedStepClock.TickSeconds;
+            craft.SolarFactor = craft.Stats.PowerGenerationKW > 0 ? SolarFactorAt(craft.Position) : 1;
+            craft.EnergyPoolKJ = craft.StoredEnergyKJ + craft.Stats.PowerGenerationKW * craft.SolarFactor * FixedStepClock.TickSeconds;
         }
     }
 
@@ -109,7 +110,8 @@ public sealed partial class SectorState
         if (craft.LegacyFreePower) return "power: unlimited (old save)";
         var stats = craft.Stats;
         if (stats.EnergyCapacityKJ <= 0 && stats.PowerGenerationKW <= 0 && stats.TotalPowerUseKW <= 0) return "";
-        return $"power {craft.StoredEnergyKJ / 1000:0.0}/{stats.EnergyCapacityKJ / 1000:0} MJ, solar {stats.PowerGenerationKW:0} kW, "
+        return $"power {craft.StoredEnergyKJ / 1000:0.0}/{stats.EnergyCapacityKJ / 1000:0} MJ, solar {stats.PowerGenerationKW * craft.SolarFactor:0} kW"
+               + (craft.SolarFactor != 1 ? $" ({craft.SolarFactor * 100:0}% sunlight)" : "") + ", "
                + $"max use {stats.TotalPowerUseKW:0} kW" + (craft.PowerShort ? "  NO POWER" : "");
     }
 }

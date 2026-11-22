@@ -52,7 +52,86 @@ public sealed partial class SectorState
         _bodies.Add(body);
         _bodies.Sort((a, b) => a.Id.Value.CompareTo(b.Id.Value));
         _byId.Add(body.Id, body);
+        ResetMotionCache();
     }
+
+    // --- Body motion cache (#53). A body's position is its parent chain's offsets at a time; with a
+    // star at the centre most chains are 2–3 deep and every craft asks about every body each tick
+    // (contact, autopilot, cruise). Values are cached per body index for the few times a tick uses.
+    // Computed the same way every time, so results are deterministic and identical after a load.
+    private sealed class MotionSlot
+    {
+        public double TimeS = double.NaN;
+        public Vector2D[] Position = Array.Empty<Vector2D>();
+        public Vector2D[] Velocity = Array.Empty<Vector2D>();
+        public bool[] Done = Array.Empty<bool>();
+    }
+
+    private readonly MotionSlot[] _motionSlots = { new(), new(), new(), new() };
+    private int _nextMotionSlot;
+    private readonly Dictionary<BodyId, int> _bodyIndex = new();
+    private int[] _parentIndex = Array.Empty<int>();
+
+    private void ResetMotionCache()
+    {
+        _bodyIndex.Clear();
+        for (var i = 0; i < _bodies.Count; i++) _bodyIndex[_bodies[i].Id] = i;
+        _parentIndex = new int[_bodies.Count];
+        for (var i = 0; i < _bodies.Count; i++)
+            _parentIndex[i] = _bodies[i].Orbit is { } orbit ? _bodyIndex[orbit.Parent] : -1;
+        foreach (var slot in _motionSlots)
+        {
+            slot.TimeS = double.NaN;
+            slot.Position = new Vector2D[_bodies.Count];
+            slot.Velocity = new Vector2D[_bodies.Count];
+            slot.Done = new bool[_bodies.Count];
+        }
+    }
+
+    private MotionSlot SlotAt(double timeS)
+    {
+        foreach (var slot in _motionSlots)
+            if (slot.TimeS == timeS) return slot;
+        var fresh = _motionSlots[_nextMotionSlot];
+        _nextMotionSlot = (_nextMotionSlot + 1) % _motionSlots.Length;
+        fresh.TimeS = timeS;
+        Array.Clear(fresh.Done);
+        return fresh;
+    }
+
+    private void Fill(MotionSlot slot, int index)
+    {
+        if (slot.Done[index]) return;
+        var position = Vector2D.Zero;
+        var velocity = Vector2D.Zero;
+        if (_bodies[index].Orbit is { } orbit)
+        {
+            var parent = _parentIndex[index];
+            Fill(slot, parent);
+            position = slot.Position[parent] + orbit.OffsetAt(slot.TimeS);
+            velocity = slot.Velocity[parent] + orbit.VelocityAt(slot.TimeS);
+        }
+        slot.Position[index] = position;
+        slot.Velocity[index] = velocity;
+        slot.Done[index] = true;
+    }
+
+    /// <summary>Position of the body at <paramref name="index"/> in <see cref="Bodies"/> (fast path for per-body loops).</summary>
+    private Vector2D BodyPositionAt(int index, double timeS)
+    {
+        var slot = SlotAt(timeS);
+        Fill(slot, index);
+        return slot.Position[index];
+    }
+
+    private Vector2D BodyVelocityAt(int index, double timeS)
+    {
+        var slot = SlotAt(timeS);
+        Fill(slot, index);
+        return slot.Velocity[index];
+    }
+
+    private int IndexOf(BodyId id) => _bodyIndex.TryGetValue(id, out var i) ? i : throw new KeyNotFoundException($"No {id} in sector.");
 
     public CelestialBodyState GetBody(BodyId id) =>
         _byId.TryGetValue(id, out var body) ? body : throw new KeyNotFoundException($"No {id} in sector.");
@@ -96,6 +175,7 @@ public sealed partial class SectorState
         List<(CraftState, Vector2D)>? docked = null;
         foreach (var craft in _crafts)
         {
+            if (craft.Cruising) { StepCruise(craft, endS); continue; } // no thrust, no contact: it drops out first
             var reference = !craft.TargetCraftId.IsNone ? CraftVelocityAt(GetCraft(craft.TargetCraftId), midTickS)
                 : !craft.TargetBodyId.IsNone ? GetVelocityAt(craft.TargetBodyId, midTickS)
                 : Vector2D.Zero;
@@ -176,17 +256,7 @@ public sealed partial class SectorState
     }
 
     /// <summary>Body velocity in the sector frame (sum along its parent chain).</summary>
-    public Vector2D GetVelocityAt(BodyId id, double timeS)
-    {
-        var velocity = Vector2D.Zero;
-        var body = GetBody(id);
-        while (body.Orbit is { } orbit)
-        {
-            velocity += orbit.VelocityAt(timeS);
-            body = GetBody(orbit.Parent);
-        }
-        return velocity;
-    }
+    public Vector2D GetVelocityAt(BodyId id, double timeS) => BodyVelocityAt(IndexOf(id), timeS);
 
     /// <summary>Craft motion relative to a body, at the current tick. For HUDs now, and for autopilots and jobs later.</summary>
     public RelativeMotion GetRelativeMotion(CraftId craftId, BodyId bodyId)
@@ -205,9 +275,10 @@ public sealed partial class SectorState
     {
         CelestialBodyState? best = null;
         var bestDistance = double.PositiveInfinity;
-        foreach (var body in _bodies)
+        for (var i = 0; i < _bodies.Count; i++)
         {
-            var distance = GetPosition(body.Id).DistanceTo(point) - body.RadiusM;
+            var body = _bodies[i];
+            var distance = BodyPositionAt(i, TimeS).DistanceTo(point) - body.RadiusM;
             if (distance < bestDistance) { best = body; bestDistance = distance; }
         }
         return best is null ? throw new InvalidOperationException("Sector has no bodies.") : (best, bestDistance);
@@ -220,16 +291,5 @@ public sealed partial class SectorState
     /// Body centre at an arbitrary simulation time. The view passes a fractional time between
     /// ticks for smooth rendering; this never changes state.
     /// </summary>
-    public Vector2D GetPositionAt(BodyId id, double timeS)
-    {
-        var position = Vector2D.Zero;
-        var body = GetBody(id);
-        // Parents must already exist (enforced in AddBody), so this chain is finite.
-        while (body.Orbit is { } orbit)
-        {
-            position += orbit.OffsetAt(timeS);
-            body = GetBody(orbit.Parent);
-        }
-        return position;
-    }
+    public Vector2D GetPositionAt(BodyId id, double timeS) => BodyPositionAt(IndexOf(id), timeS); // parents exist (AddBody), so the chain ends
 }

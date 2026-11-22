@@ -24,7 +24,7 @@ public class AutopilotTests
         var game = TestData.NewGame(seed);
         var sector = game.Sector;
         var yard = sector.GetCraft(game.ShipyardId);
-        var rocks = sector.Bodies.Where(b => b.IsMineable).ToList();
+        var rocks = TestData.HomeRocks(sector); // the home neighbourhood, not the far planets
         var design = TestData.StarterShip();
         var stats = design.ComputeStats(Catalog);
         var miners = new List<CraftState>();

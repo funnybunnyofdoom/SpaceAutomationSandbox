@@ -250,7 +250,7 @@ public class ProductionNetworkTests
         var game = TestData.NewGame();
         var sector = game.Sector;
         var yard = sector.GetCraft(game.ShipyardId);
-        var rocks = sector.Bodies.Where(b => b.IsMineable).ToList();
+        var rocks = TestData.HomeRocks(sector); // the home neighbourhood, not the far planets
         var design = TestData.StarterShip();
         var stats = design.ComputeStats(Catalog);
         for (var i = 0; i < 30; i++)

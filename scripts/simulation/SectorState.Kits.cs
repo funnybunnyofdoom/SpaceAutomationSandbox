@@ -50,8 +50,8 @@ public sealed partial class SectorState
     {
         if (carrier.IsDocked) return "Undock first.";
         if (carrier.IsLanded)
-            return GetBody(carrier.LandedOnBodyId).Kind == BodyKind.GasGiant
-                ? $"{GetBody(carrier.LandedOnBodyId).Name} is a gas giant: nothing solid to build on."
+            return GetBody(carrier.LandedOnBodyId).Kind is BodyKind.GasGiant or BodyKind.Star
+                ? $"{GetBody(carrier.LandedOnBodyId).Name} has nothing solid to build on."
                 : null;
         if (kit.NeedsSurface) return $"'{kit.Name}' has foundations: land on a body to deploy it.";
         if (carrier.IsOnRails) return null;

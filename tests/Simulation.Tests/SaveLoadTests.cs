@@ -13,7 +13,7 @@ public class SaveLoadTests
         var sector = SectorGenerator.Generate(seed);
         var design = TestData.StarterShip();
         var craft = new CraftState(sector.AllocateCraftId(), "Player", design, design.ComputeStats(TestData.Catalog()),
-            SectorGenerator.PlayerSpawnPoint(sector), 0);
+            SectorGenerator.PlayerSpawnPoint(sector), 0) { Velocity = SectorGenerator.PlayerSpawnVelocity(sector) };
         sector.AddCraft(craft);
         sector.SetTarget(craft.Id, sector.Bodies.First(b => b.IsMineable).Id);
         return (sector, craft.Id);
@@ -136,7 +136,7 @@ public class SaveLoadTests
     [InlineData("{}")]
     [InlineData("""{ "schemaVersion": 1, "game": "SomethingElse", "sector": {} }""")]
     [InlineData("""{ "schemaVersion": 0, "game": "SpaceAutomationSandbox", "sector": {} }""")]
-    [InlineData("""{ "schemaVersion": 12, "game": "SpaceAutomationSandbox", "sector": {} }""")]
+    [InlineData("""{ "schemaVersion": 13, "game": "SpaceAutomationSandbox", "sector": {} }""")]
     public void Load_RejectsWrongOrForeignFiles(string json)
     {
         Assert.Throws<FormatException>(() => SaveGameSerializer.FromJson(json, TestData.Catalog()));
@@ -144,7 +144,7 @@ public class SaveLoadTests
 
     [Theory]
     [InlineData("\"part\": \"cockpit\"", "\"part\": \"warp_core\"")] // design no longer valid
-    [InlineData("\"targetBodyId\": 2", "\"targetBodyId\": 42")] // target missing
+    [InlineData("\"targetBodyId\": 3", "\"targetBodyId\": 42")] // target missing (Rock-1 is body 3)
     [InlineData("\"playerCraftId\": 1", "\"playerCraftId\": 7")] // player missing
     [InlineData("\"parentId\": 1", "\"parentId\": 2")] // asteroid orbits itself
     [InlineData("\"tick\": 0", "\"tick\": -5")]

@@ -15,8 +15,12 @@ public class PowerAndSlagTests
     private static CraftState AddCraft(SectorState sector, string name, params (int X, int Y, string Part)[] cells)
     {
         var design = new ShipDesign(name.ToLowerInvariant(), name, cells.Select(c => new DesignCell(new GridPos(c.X, c.Y), c.Part)).ToArray());
+        // Above the home planet (full sunlight), moving with it, clear of its surface and the Moon's orbit.
         var craft = new CraftState(sector.AllocateCraftId(), name, design, design.ComputeStats(Catalog),
-            new Vector2D(1e7 + 1000 * sector.Crafts.Count, 1e7), 0); // far from every body
+            SectorGenerator.PlayerSpawnPoint(sector) + new Vector2D(0, -3_000 - 400 * sector.Crafts.Count), 0)
+        {
+            Velocity = SectorGenerator.PlayerSpawnVelocity(sector),
+        };
         sector.AddCraft(craft);
         return craft;
     }

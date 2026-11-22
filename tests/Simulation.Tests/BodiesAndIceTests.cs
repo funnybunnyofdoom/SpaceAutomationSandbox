@@ -10,40 +10,57 @@ public class BodiesAndIceTests
     private static readonly PartCatalog Catalog = TestData.Catalog();
 
     [Fact]
-    public void Sector_HasAMoon_AnIceAsteroid_AndAGasGiant_AllOrbitingThePrimary()
+    public void System_HasAStarAtTheCentre_AndFourPlanets_ABelt_AndMoons()
     {
         var sector = SectorGenerator.Generate(NewGame.DefaultSeed);
-        var primary = sector.Bodies.Single(b => b.Kind == BodyKind.Planet);
+        var star = sector.Bodies[0];
+        Assert.Equal(BodyKind.Star, star.Kind);
+        Assert.Null(star.Orbit);
+        Assert.False(star.IsMineable);
 
-        var moon = sector.Bodies.Single(b => b.Kind == BodyKind.Moon);
-        Assert.True(moon.IsMineable);
-        Assert.True(moon.Deposit("iron_ore") > 0 && moon.Deposit("silicate") > 0);
-
-        var ice = sector.Bodies.Single(b => b.Name == "Ice-1");
-        Assert.Equal(SectorGenerator.IceIceKg, ice.Deposit("ice"));
+        var aroundStar = sector.Bodies.Where(b => b.Orbit?.Parent == star.Id).ToList();
+        Assert.Equal(new[] { "Home", "Cinder", "Giant", "Rime" }, aroundStar.Where(b => b.Kind != BodyKind.Asteroid).Select(b => b.Name));
+        Assert.Equal(SectorGenerator.BeltAsteroidCount, aroundStar.Count(b => b.Name.StartsWith("Belt-")));
+        Assert.Equal(SectorGenerator.HomeOrbitRadiusM, sector.Bodies.Single(b => b.Name == "Home").Orbit!.RadiusM);
 
         var giant = sector.Bodies.Single(b => b.Kind == BodyKind.GasGiant);
         Assert.False(giant.IsMineable);
-        Assert.True(giant.RadiusM > primary.RadiusM);
+        Assert.Equal(2, sector.Bodies.Count(b => b.Orbit?.Parent == giant.Id && b.Kind == BodyKind.Moon));
 
-        foreach (var body in new[] { moon, ice, giant })
+        var moon = sector.Bodies.Single(b => b.Name == "Moon");
+        Assert.True(moon.Deposit("iron_ore") > 0 && moon.Deposit("silicate") > 0);
+        Assert.Equal(SectorGenerator.IceIceKg, sector.Bodies.Single(b => b.Name == "Ice-1").Deposit("ice"));
+        Assert.True(sector.Bodies.Single(b => b.Name == "Rime").Deposit("ice") > 0);
+
+        // Orbits around the same parent never overlap, and every orbit clears its parent.
+        foreach (var group in sector.Bodies.Where(b => b.Orbit is not null).GroupBy(b => b.Orbit!.Parent))
         {
-            Assert.Equal(primary.Id, body.Orbit!.Parent);
-            Assert.True(body.Orbit.RadiusM > primary.RadiusM + body.RadiusM, $"{body.Name} must clear the primary");
+            var parent = sector.GetBody(group.Key);
+            var rings = group.Where(b => !b.Name.StartsWith("Belt-"))
+                .Select(b => (Low: b.Orbit!.RadiusM - b.RadiusM, High: b.Orbit.RadiusM + b.RadiusM)).OrderBy(r => r.Low).ToList();
+            Assert.All(rings, r => Assert.True(r.Low > parent.RadiusM, $"an orbit around {parent.Name} hits it"));
+            Assert.True(rings.Zip(rings.Skip(1)).All(pair => pair.First.High < pair.Second.Low), $"orbits around {parent.Name} overlap");
         }
-        // No two orbits overlap (bodies never pass through each other).
-        var ring = sector.Bodies.Where(b => b.Orbit is not null).Select(b => (Low: b.Orbit!.RadiusM - b.RadiusM, High: b.Orbit.RadiusM + b.RadiusM))
-            .OrderBy(r => r.Low).ToList();
-        Assert.True(ring.Zip(ring.Skip(1)).All(p => p.First.High < p.Second.Low));
     }
 
     [Fact]
-    public void OlderBodies_AreUnchanged_ByTheNewOnes()
+    public void Planets_MoveSlowly_SoTheHomeNeighbourhoodFeelsTheSame()
     {
         var sector = SectorGenerator.Generate(NewGame.DefaultSeed);
+        foreach (var planet in sector.Bodies.Where(b => b.Orbit?.Parent == sector.Bodies[0].Id))
+            Assert.InRange(sector.GetVelocityAt(planet.Id, 0).Length, 5, 15);
+    }
+
+    [Fact]
+    public void TheHomeNeighbourhood_IsUnchanged_ByTheStarSystem()
+    {
+        var sector = SectorGenerator.Generate(NewGame.DefaultSeed);
+        var home = SectorGenerator.HomePlanet(sector);
+        Assert.Equal(new BodyId(2), home.Id); // the star is body 1
+        // Same draws as before #53 (orbit radii relative to the home planet for this seed).
         var rock1 = sector.Bodies.Single(b => b.Name == "Rock-1");
-        Assert.Equal(new BodyId(2), rock1.Id);
-        Assert.Equal(new BodyId(4), sector.Bodies.Single(b => b.Name == "Rock-3").Id); // ids keep their order: new bodies come after
+        Assert.Equal(home.Id, rock1.Orbit!.Parent);
+        Assert.InRange(rock1.Orbit.RadiusM, 22_000, 30_000);
     }
 
     [Fact]
@@ -55,12 +72,13 @@ public class BodiesAndIceTests
         var game = TestData.NewGame();
         var yard = game.Sector.GetCraft(game.ShipyardId);
         var water = yard.Inventory["water"];
+        var fuel = yard.Inventory["fuel"];
         yard.Inventory.Add("ice", 2_000);
         for (var i = 0; i < 20 * FixedStepClock.TicksPerSecond; i++) game.Sector.Step();
 
         Assert.Equal(0, yard.Inventory["ice"]);
         Assert.Equal(water + 1_200, yard.Inventory["water"]);
-        Assert.Equal(600, yard.Inventory["fuel"]);
+        Assert.Equal(fuel + 600, yard.Inventory["fuel"]);
     }
 
     [Fact]

@@ -61,9 +61,10 @@ public sealed partial class SectorState
 
     private void ResolveContact(CraftState craft, double endS)
     {
-        foreach (var body in _bodies) // id order: deterministic if two bodies overlap
+        for (var i = 0; i < _bodies.Count; i++) // id order: deterministic if two bodies overlap
         {
-            var bodyPos = GetPositionAt(body.Id, endS);
+            var body = _bodies[i];
+            var bodyPos = BodyPositionAt(i, endS);
             if (craft.Position.DistanceTo(bodyPos) >= body.RadiusM + craft.CollisionRadiusM) continue; // can't touch
             if (SurfaceGap(craft, craft.Position, craft.HeadingRad, bodyPos, body.RadiusM) >= 0) continue;
 

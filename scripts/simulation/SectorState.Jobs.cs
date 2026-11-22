@@ -253,10 +253,13 @@ public sealed partial class SectorState
     /// </summary>
     private ShipControls NavigateTo(CraftState craft, Vector2D goal, Vector2D goalVelocity, BodyId ignore, double maxSpeed, double arrivalSpeed)
     {
-        foreach (var body in _bodies.Where(b => b.Id != ignore))
+        if (CruiseLeg(craft, goal, goalVelocity) is { } cruise) return cruise; // long legs between planets (#53)
+        for (var i = 0; i < _bodies.Count; i++)
         {
-            var centre = GetPosition(body.Id);
-            var relative = craft.Velocity - GetVelocityAt(body.Id, TimeS);
+            var body = _bodies[i];
+            if (body.Id == ignore) continue;
+            var centre = BodyPositionAt(i, TimeS);
+            var relative = craft.Velocity - BodyVelocityAt(i, TimeS);
             if (WillHit(craft.Position, relative, centre, body.RadiusM + craft.CollisionRadiusM + 20, JobImpactHorizonS))
             {
                 var away = craft.Position - centre;
@@ -264,9 +267,11 @@ public sealed partial class SectorState
             }
         }
 
-        foreach (var body in _bodies.Where(b => b.Id != ignore))
+        for (var i = 0; i < _bodies.Count; i++)
         {
-            var centre = GetPosition(body.Id);
+            var body = _bodies[i];
+            if (body.Id == ignore) continue;
+            var centre = BodyPositionAt(i, TimeS);
             var clearance = body.RadiusM + craft.CollisionRadiusM + JobAvoidClearanceM;
             if (SegmentClears(craft.Position, goal, centre, clearance)) continue;
 

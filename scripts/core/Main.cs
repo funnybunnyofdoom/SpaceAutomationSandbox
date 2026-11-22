@@ -27,7 +27,7 @@ public partial class Main : Node2D
     private const string StarterShipyardPath = "res://data/blueprints/starter_shipyard.json";
 
     // Zoom in screen pixels per sector metre. Mouse wheel changes it; this is view state only.
-    private const float MinPixelsPerMetre = 0.005f;
+    private const float MinPixelsPerMetre = 0.00005f; // the whole star system fits (#53)
     private const float MaxPixelsPerMetre = 8f;
     private const float ZoomStep = 1.15f;
     private float _pixelsPerMetre = 1f;
@@ -35,6 +35,13 @@ public partial class Main : Node2D
     private static readonly Color SpaceColor = new(0.02f, 0.02f, 0.06f);
     private static readonly Color PlanetColor = new(0.30f, 0.55f, 0.85f);
     private static readonly Color AsteroidColor = new(0.65f, 0.55f, 0.45f);
+    private static readonly Color StarColor = new(1f, 0.85f, 0.45f);
+
+    /// <summary>World point at the centre of the screen. Drawing is relative to it, so it stays sharp far from the star (#53).</summary>
+    private Vector2D _viewCentre;
+    private bool _mapMode;
+    private float _zoomBeforeMap = 1f;
+    private MapPanel? _mapPanel;
     private static readonly Color MoonColor = new(0.62f, 0.62f, 0.66f);
     private static readonly Color IceColor = new(0.75f, 0.88f, 0.95f);
     private static readonly Color GasGiantColor = new(0.85f, 0.66f, 0.42f);
@@ -119,6 +126,11 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_cargoPanel);
             _jobPanel = new JobPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
             _uiRoot.AddChild(_jobPanel);
+            _mapPanel = new MapPanel(() => _sector, () => _player,
+                body => { if (_player != null) { _sector.SetTarget(_player.Id, body); ShowStatus($"Target: {_sector.GetBody(body).Name}."); } },
+                craft => { if (_player != null && craft != _player.Id) { _sector.SetTargetCraft(_player.Id, craft); ShowStatus($"Target: {_sector.GetCraft(craft).Name}."); } })
+            { Visible = false };
+            _uiRoot.AddChild(_mapPanel);
             _diagnosticsPanel = new DiagnosticsPanel(() => _sector, _warp, _tickCost) { Visible = false };
             _uiRoot.AddChild(_diagnosticsPanel);
             _debugPanel = new DebugPanel(() => _sector, () => _warp.Speed, SetGameSpeed, _catalog.Materials) { Visible = false };
@@ -175,6 +187,7 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-fleet") >= 0) _fleetPanel?.Open();
         if (System.Array.IndexOf(args, "--open-diagnostics") >= 0) _diagnosticsPanel?.Open();
         if (System.Array.IndexOf(args, "--open-settings") >= 0) _settingsPanel?.Open();
+        if (System.Array.IndexOf(args, "--open-map") >= 0) ToggleMap();
         if (args.FirstOrDefault(a => a.StartsWith("--speed=")) is { } speedArg && int.TryParse(speedArg["--speed=".Length..], out var speed))
             _warp.Speed = speed;
         foreach (var arg in args) // --zoom=0.2
@@ -386,18 +399,22 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Cargo)) Toggle(_cargoPanel, () => _cargoPanel!.Open());
         else if (Pressed(InputActions.Diagnostics)) Toggle(_diagnosticsPanel, () => _diagnosticsPanel!.Open());
         else if (Pressed(InputActions.Settings)) Toggle(_settingsPanel, () => _settingsPanel!.Open());
+        else if (Pressed(InputActions.Map)) ToggleMap();
         else if (Pressed(InputActions.Fullscreen)) ToggleFullscreen();
         else if (Pressed(InputActions.TimeFaster)) { _warp.Paused = false; _warp.Faster(); ShowStatus($"Time {_warp}."); }
         else if (Pressed(InputActions.TimeSlower)) { _warp.Paused = false; _warp.Slower(); ShowStatus($"Time {_warp}."); }
         else if (Pressed(InputActions.TimePause)) { _warp.Paused = !_warp.Paused; ShowStatus(_warp.Paused ? "Paused (P to resume)." : $"Time {_warp}."); }
         else if (Pressed(InputActions.ClosePanels))
         {
+            if (_mapMode) ToggleMap();
             foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel })
                 if (panel != null) panel.Visible = false;
         }
         else if (_player == null) return;
         else if (Pressed(InputActions.Dock))
             ShowStatus((_player.IsDocked ? _sector.TryUndock(_player.Id) : _sector.TryDock(_player.Id)).Message);
+        else if (Pressed(InputActions.Cruise))
+            ShowStatus((_player.Cruising ? _sector.TryStopCruise(_player.Id) : _sector.TryStartCruise(_player.Id)).Message);
         else if (Pressed(InputActions.Deploy))
             ShowStatus(_player.Kits.FirstOrDefault() is { } kit ? _sector.TryDeployKit(_player.Id, kit.Id).Message : "No construction kit on board.");
         else if (Pressed(InputActions.Anchor))
@@ -459,7 +476,9 @@ public partial class Main : Node2D
         }
         _warp.RecordFrame(delta, ran, due);
 
-        if (_player != null) _camera.Position = ToPixels(InterpolatedPosition(_player));
+        _camera.Position = Vector2.Zero; // the world is drawn around _viewCentre instead (precision far from the star)
+        if (_mapMode && _sector.Bodies.FirstOrDefault(b => b.Orbit is null) is { } root) _viewCentre = _sector.GetPosition(root.Id);
+        else if (_player != null) _viewCentre = InterpolatedPosition(_player);
         _hud.Text = BuildHud();
         QueueRedraw();
         DevScreenshot();
@@ -491,7 +510,7 @@ public partial class Main : Node2D
         var text = "SpaceAutomationSandbox (working title) - Phase 4\n"
                    + $"seed {_sector.Seed}   tick {_sector.Tick} ({FixedStepClock.TicksPerSecond}/s)   t={_sector.TimeS:0.0}s"
 
-                   + $"   zoom {_pixelsPerMetre:0.###} px/m\n";
+                   + $"   zoom {_pixelsPerMetre:0.#####} px/m\n";
 
         if (Time.GetTicksMsec() < _statusUntilMs) text += $">> {_status}\n";
         if (_warp.Speed != 1 || _warp.Paused) text += $"TIME {_warp}   ([ slower, ] faster, P pause)\n";
@@ -510,6 +529,10 @@ public partial class Main : Node2D
                 + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
                 + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
                 + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
+                + (p.Cruising
+                    ? $"CRUISE {SectorState.CruiseSpeedMps:0} m/s - fuel {p.Inventory[SectorState.FuelMaterial] / 1000.0:0.00} t "
+                      + $"({p.Inventory[SectorState.FuelMaterial] / System.Math.Max(SectorState.CruiseFuelKgPerS(p), 1e-9) / 60:0} min left), V or brake to drop out\n"
+                    : p.CruiseStopReason is { } why && p.Stats.TotalThrustN > 0 ? $"cruise ended: {why} - V to cruise again\n" : "")
                 + (p.Job is { Active: true } job
                     ? $"AUTOPILOT ({job.Kind} job): {job.Status}   cycles {job.CompletedCycles}, delivered {job.DeliveredKg / 1000.0:0.0} t - J to view/stop\n"
                     : "")
@@ -554,7 +577,7 @@ public partial class Main : Node2D
 
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
-               + "W/Up thrust   X reverse   Q/E strafe   A/D turn   S/Space brake (matches target)   G anchor   K dock   U deploy kit   Tab cycle target   T target nearest   wheel zoom\n"
+               + "W/Up thrust   X reverse   Q/E strafe   V cruise   M map   A/D turn   S/Space brake (matches target)   G anchor   K dock   U deploy kit   Tab cycle target   T target nearest   wheel zoom\n"
                + "B blueprint editor   Y shipyard   F fleet   C cargo   J job   [ ] P time   F2 settings   F3 debug   F4 diagnostics   F6 save   F9 load   F7 new game   (closing the window autosaves)";
     }
 
@@ -609,7 +632,7 @@ public partial class Main : Node2D
                 0, Mathf.Tau, 512, RailColor);
         }
         foreach (var craft in _sector.Crafts) DrawCraft(craft);
-        foreach (var craft in _sector.Crafts.Where(c => c != _player)) // name tags for everything but your own ship
+        foreach (var craft in _sector.Crafts.Where(c => c != _player && _pixelsPerMetre > 0.02f)) // name tags (not when zoomed far out)
         {
             var radiusPx = Mathf.Max(8f, (float)craft.CollisionRadiusM * _pixelsPerMetre);
             DrawString(ThemeDB.FallbackFont, ToPixels(InterpolatedPosition(craft)) + new Vector2(radiusPx + 4, 4), craft.Name,
@@ -645,16 +668,20 @@ public partial class Main : Node2D
 
     private void DrawBody(CelestialBodyState body, double renderTimeS)
     {
-        if (body.Orbit is { } orbit)
+        // Orbits: skip ones too small to see, and huge ones (from close up they're a straight line off-screen).
+        var orbitPx = body.Orbit is { } o ? (float)o.RadiusM * _pixelsPerMetre : 0f;
+        if (body.Orbit is { } orbit && orbitPx is > 3f and < 200_000f)
         {
             var parentPx = ToPixels(_sector.GetPositionAt(orbit.Parent, renderTimeS));
-            DrawArc(parentPx, (float)orbit.RadiusM * _pixelsPerMetre, 0, Mathf.Tau, 512, OrbitColor);
+            DrawArc(parentPx, orbitPx, 0, Mathf.Tau, 512, OrbitColor);
         }
 
         var centre = ToPixels(_sector.GetPositionAt(body.Id, renderTimeS));
         var radiusPx = Mathf.Max(2f, (float)body.RadiusM * _pixelsPerMetre);
+        if (centre.Length() - radiusPx > 4 * GetViewportRect().Size.Length()) return; // far off-screen
         var color = body.Kind switch
         {
+            BodyKind.Star => StarColor,
             BodyKind.Planet => PlanetColor,
             BodyKind.Moon => MoonColor,
             BodyKind.GasGiant => GasGiantColor,
@@ -663,6 +690,10 @@ public partial class Main : Node2D
         if (radiusPx < 200f) DrawCircle(centre, radiusPx, color);
         else DrawColoredPolygon(CirclePoints(centre, radiusPx, 512), color); // smoother edge up close
 
+        // Zoomed out, a moon's or rock's name would sit on top of its planet's: only label bodies whose
+        // orbit is big enough on screen to tell apart (and always the target).
+        var isTarget = _player is { } p && p.TargetBodyId == body.Id;
+        if (body.Orbit is not null && orbitPx < 28f && !isTarget) return;
         DrawString(ThemeDB.FallbackFont, centre + new Vector2(radiusPx + 4, 4), body.Surveyed || !body.IsMineable ? body.Name : $"{body.Name} (unsurveyed)",
             HorizontalAlignment.Left, -1, 12, NameColor);
     }
@@ -710,7 +741,30 @@ public partial class Main : Node2D
         craft.PreviousPosition + (craft.Position - craft.PreviousPosition) * _warp.Alpha;
 
     private Vector2 ToPixels(Vector2D metres) =>
-        new((float)(metres.X * _pixelsPerMetre), (float)(metres.Y * _pixelsPerMetre));
+        new((float)((metres.X - _viewCentre.X) * _pixelsPerMetre), (float)((metres.Y - _viewCentre.Y) * _pixelsPerMetre));
+
+    /// <summary>
+    /// System map (M, #53): zooms out to show the whole system around its star, with the target list;
+    /// M again returns to the ship at the zoom it had. The wheel still zooms in between.
+    /// </summary>
+    private void ToggleMap()
+    {
+        _mapMode = !_mapMode;
+        if (_mapMode)
+        {
+            _zoomBeforeMap = _pixelsPerMetre;
+            var extent = _sector.Bodies.Where(b => b.Orbit is not null && _sector.GetBody(b.Orbit.Parent).Orbit is null)
+                .Select(b => b.Orbit!.RadiusM + b.RadiusM).DefaultIfEmpty(100_000).Max() * 1.1;
+            var screen = _uiRoot.GetViewportRect().Size;
+            _pixelsPerMetre = Mathf.Clamp((float)(Mathf.Min(screen.X - 420, screen.Y) / 2 / extent), MinPixelsPerMetre, MaxPixelsPerMetre);
+            _mapPanel?.Open();
+        }
+        else
+        {
+            _pixelsPerMetre = _zoomBeforeMap;
+            if (_mapPanel != null) _mapPanel.Visible = false;
+        }
+    }
 
     private static Vector2[] CirclePoints(Vector2 centre, float radius, int count)
     {

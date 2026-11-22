@@ -29,7 +29,9 @@ foreach (var count in counts)
     var sector = game.Sector;
     sector.DebugSurveyAll();
     var yard = sector.GetCraft(game.ShipyardId);
-    var rocks = sector.Bodies.Where(b => b.IsMineable).ToList();
+    // The home neighbourhood (same scenario as before the star system, #53): far planets would turn it into a travel benchmark.
+    var home = SectorGenerator.HomePlanet(sector).Id;
+    var rocks = sector.Bodies.Where(b => b.IsMineable && b.Orbit?.Parent == home).ToList();
     var stats = ship.ComputeStats(catalog);
     for (var i = 0; i < count; i++)
     {

@@ -13,6 +13,8 @@ public enum BodyKind
     Moon,
     /// <summary>Not mineable; you can't anchor or deploy on its cloud tops (#16). Skimming comes later.</summary>
     GasGiant,
+    /// <summary>The system's star at the centre (#53): not mineable, nothing anchors or deploys on it.</summary>
+    Star,
 }
 
 /// <summary>
@@ -36,8 +38,8 @@ public sealed class CelestialBodyState
         Id = id;
         Name = name;
         Kind = kind;
-        MassKg = massKg;
         DensityKgPerM3 = densityKgPerM3;
+        MassKg = massKg;
         IsMineable = isMineable;
         Orbit = orbit;
         Surveyed = !isMineable; // nothing to discover on the others yet
@@ -79,7 +81,17 @@ public sealed class CelestialBodyState
     public BodyKind Kind { get; }
 
     /// <summary>Gross natural-body mass. Mining is the only thing that changes it (see <see cref="Extract"/>).</summary>
-    public double MassKg { get; private set; }
+    public double MassKg
+    {
+        get => _massKg;
+        private set
+        {
+            _massKg = value;
+            RadiusM = RadiusFromMass(value, DensityKgPerM3); // kept with the mass: read very often (contact, autopilot)
+        }
+    }
+
+    private double _massKg;
 
     public double DensityKgPerM3 { get; }
     public bool IsMineable { get; }
@@ -87,7 +99,8 @@ public sealed class CelestialBodyState
     /// <summary>Null for a body fixed at the sector origin.</summary>
     public CircularOrbit? Orbit { get; }
 
-    public double RadiusM => RadiusFromMass(MassKg, DensityKgPerM3);
+    /// <summary>Follows the mass at fixed density (updated whenever the mass changes).</summary>
+    public double RadiusM { get; private set; }
 
     public static double RadiusFromMass(double massKg, double densityKgPerM3) =>
         Math.Cbrt(3.0 * massKg / (4.0 * Math.PI * densityKgPerM3));

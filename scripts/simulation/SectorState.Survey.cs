@@ -18,10 +18,11 @@ public sealed partial class SectorState
     private void StepSurvey()
     {
         if (PilotCraftId.IsNone || !_craftsById.TryGetValue(PilotCraftId, out var pilot)) return;
-        foreach (var body in _bodies)
+        for (var i = 0; i < _bodies.Count; i++)
         {
+            var body = _bodies[i];
             if (body.Surveyed) continue;
-            if (GetPosition(body.Id).DistanceTo(pilot.Position) - body.RadiusM <= SurveyRangeM) body.Surveyed = true;
+            if (BodyPositionAt(i, TimeS).DistanceTo(pilot.Position) - body.RadiusM <= SurveyRangeM) body.Surveyed = true;
         }
     }
 }
