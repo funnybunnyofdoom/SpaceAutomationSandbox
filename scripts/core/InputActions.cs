@@ -24,6 +24,8 @@ public static class InputActions
     public const string TimeSlower = "time_slower";
     public const string TimePause = "time_pause";
     public const string Diagnostics = "open_diagnostics";
+    public const string Settings = "open_settings";
+    public const string Fullscreen = "toggle_fullscreen";
     public const string TargetCycle = "target_cycle";
     public const string TargetNearest = "target_nearest";
     public const string ZoomIn = "view_zoom_in";
@@ -55,6 +57,8 @@ public static class InputActions
         Add(TimeSlower, 0.5f, Keys(Key.Bracketleft));
         Add(TimePause, 0.5f, Keys(Key.P));
         Add(Diagnostics, 0.5f, Keys(Key.F4));
+        Add(Settings, 0.5f, Keys(Key.F2));
+        Add(Fullscreen, 0.5f, Keys(Key.F11));
         Add(TargetCycle, 0.5f, Keys(Key.Tab), Pad(JoyButton.RightShoulder));
         Add(TargetNearest, 0.5f, Keys(Key.T), Pad(JoyButton.LeftShoulder));
         Add(ZoomIn, 0.5f, new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp }, Pad(JoyButton.DpadUp));

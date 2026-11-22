@@ -63,6 +63,11 @@ public partial class Main : Node2D
     private ulong _statusUntilMs;
     private Camera2D _camera = null!;
     private Label _hud = null!;
+    private readonly GameSettings _settings = GameSettings.Load();
+
+    /// <summary>Holds the HUD and every panel; scaled by the interface scale and sized to the window (#52).</summary>
+    private Control _uiRoot = null!;
+    private SettingsPanel? _settingsPanel;
     private BlueprintEditorView? _editor;
     private ShipyardPanel? _shipyardPanel;
     private FleetPanel? _fleetPanel;
@@ -80,21 +85,27 @@ public partial class Main : Node2D
         InputActions.EnsureDefaults(); // before any input is read
         RenderingServer.SetDefaultClearColor(SpaceColor);
         _camera = GetNode<Camera2D>("Camera2D");
+        _settings.ApplyWindow();
 
         var hudLayer = new CanvasLayer();
         AddChild(hudLayer);
+        _uiRoot = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
+        hudLayer.AddChild(_uiRoot);
+        GetViewport().SizeChanged += LayoutUi;
         _hud = new Label { Position = new Vector2(20, 16) };
-        hudLayer.AddChild(_hud);
+        _uiRoot.AddChild(_hud);
+        _settingsPanel = new SettingsPanel(_settings, () => { _settings.ApplyWindow(); _settings.Save(); LayoutUi(); }) { Visible = false };
+        _uiRoot.AddChild(_settingsPanel);
 
         LoadDefinitions();
         if (_catalog != null)
         {
             _editor = new BlueprintEditorView(_catalog, _partColors, () => _player?.Design) { Visible = false };
             _editor.CloseRequested += CloseEditor;
-            hudLayer.AddChild(_editor);
+            _uiRoot.AddChild(_editor);
 
             _shipyardPanel = new ShipyardPanel(() => _sector, _catalog, () => _player?.Design) { Visible = false };
-            hudLayer.AddChild(_shipyardPanel);
+            _uiRoot.AddChild(_shipyardPanel);
             _fleetPanel = new FleetPanel(() => _sector, () => _player?.Id) { Visible = false };
             _fleetPanel.CraftChosen += Pilot;
             _fleetPanel.CraftTargeted += target =>
@@ -103,16 +114,17 @@ public partial class Main : Node2D
                 _sector.SetTargetCraft(_player.Id, target);
                 ShowStatus($"Target: {_sector.GetCraft(target).Name}.");
             };
-            hudLayer.AddChild(_fleetPanel);
+            _uiRoot.AddChild(_fleetPanel);
             _cargoPanel = new CargoPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
-            hudLayer.AddChild(_cargoPanel);
+            _uiRoot.AddChild(_cargoPanel);
             _jobPanel = new JobPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
-            hudLayer.AddChild(_jobPanel);
+            _uiRoot.AddChild(_jobPanel);
             _diagnosticsPanel = new DiagnosticsPanel(() => _sector, _warp, _tickCost) { Visible = false };
-            hudLayer.AddChild(_diagnosticsPanel);
+            _uiRoot.AddChild(_diagnosticsPanel);
             _debugPanel = new DebugPanel(() => _sector, () => _warp.Speed, SetGameSpeed, _catalog.Materials) { Visible = false };
-            hudLayer.AddChild(_debugPanel);
+            _uiRoot.AddChild(_debugPanel);
         }
+        LayoutUi();
         // Continue where the player left off; a new game only if there's no usable save.
         if (_catalog != null && System.IO.File.Exists(SaveFilePath)) LoadGame(isStartup: true);
         else StartNewGame();
@@ -162,6 +174,7 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-shipyard") >= 0) _shipyardPanel?.Open();
         if (System.Array.IndexOf(args, "--open-fleet") >= 0) _fleetPanel?.Open();
         if (System.Array.IndexOf(args, "--open-diagnostics") >= 0) _diagnosticsPanel?.Open();
+        if (System.Array.IndexOf(args, "--open-settings") >= 0) _settingsPanel?.Open();
         if (args.FirstOrDefault(a => a.StartsWith("--speed=")) is { } speedArg && int.TryParse(speedArg["--speed=".Length..], out var speed))
             _warp.Speed = speed;
         foreach (var arg in args) // --zoom=0.2
@@ -307,7 +320,37 @@ public partial class Main : Node2D
     // process without this notification; use F6 first if you need that state.)
     public override void _Notification(int what)
     {
-        if (what == NotificationWMCloseRequest) SaveGame();
+        if (what != NotificationWMCloseRequest) return;
+        SaveGame();
+        _settings.CaptureWindow(); // reopen at the same size and place
+        _settings.Save();
+    }
+
+    /// <summary>
+    /// Sizes the UI root to the window in interface units and scales it (#52). Panels anchor to the
+    /// root, so they follow the window edges at any size; the world just shows more of space.
+    /// </summary>
+    private void LayoutUi()
+    {
+        var size = GetViewport().GetVisibleRect().Size;
+        var scale = _settings.EffectiveUiScale(size);
+        _uiRoot.Position = Vector2.Zero;
+        _uiRoot.Scale = new Vector2(scale, scale);
+        _uiRoot.Size = size / scale;
+        if (OS.GetCmdlineUserArgs().Contains("--print-layout")) GD.Print($"[Layout] window {DisplayServer.WindowGetSize()} viewport {size} ui scale {scale} ui size {_uiRoot.Size}");
+    }
+
+    private void ToggleFullscreen()
+    {
+        if (_settings.WindowMode == GameSettings.Mode.Windowed)
+        {
+            _settings.CaptureWindow();
+            _settings.WindowMode = GameSettings.Mode.Fullscreen;
+        }
+        else _settings.WindowMode = GameSettings.Mode.Windowed;
+        _settings.ApplyWindow();
+        _settings.Save();
+        LayoutUi();
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -342,12 +385,14 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Job)) Toggle(_jobPanel, () => _jobPanel!.Open());
         else if (Pressed(InputActions.Cargo)) Toggle(_cargoPanel, () => _cargoPanel!.Open());
         else if (Pressed(InputActions.Diagnostics)) Toggle(_diagnosticsPanel, () => _diagnosticsPanel!.Open());
+        else if (Pressed(InputActions.Settings)) Toggle(_settingsPanel, () => _settingsPanel!.Open());
+        else if (Pressed(InputActions.Fullscreen)) ToggleFullscreen();
         else if (Pressed(InputActions.TimeFaster)) { _warp.Paused = false; _warp.Faster(); ShowStatus($"Time {_warp}."); }
         else if (Pressed(InputActions.TimeSlower)) { _warp.Paused = false; _warp.Slower(); ShowStatus($"Time {_warp}."); }
         else if (Pressed(InputActions.TimePause)) { _warp.Paused = !_warp.Paused; ShowStatus(_warp.Paused ? "Paused (P to resume)." : $"Time {_warp}."); }
         else if (Pressed(InputActions.ClosePanels))
         {
-            foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel })
+            foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel })
                 if (panel != null) panel.Visible = false;
         }
         else if (_player == null) return;
@@ -417,6 +462,21 @@ public partial class Main : Node2D
         if (_player != null) _camera.Position = ToPixels(InterpolatedPosition(_player));
         _hud.Text = BuildHud();
         QueueRedraw();
+        DevScreenshot();
+    }
+
+    private int _framesShown;
+
+    /// <summary>
+    /// Dev/test hook: `-- --screenshot=path.png` saves the window at its real size after a few
+    /// frames and quits (movie maker always records 1280×720, so it can't check other resolutions).
+    /// </summary>
+    private void DevScreenshot()
+    {
+        if (++_framesShown != 20) return;
+        if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot=")) is not { } arg) return;
+        GetViewport().GetTexture().GetImage().SavePng(arg["--screenshot=".Length..]);
+        GetTree().Quit();
     }
 
     // Input actions (keyboard or gamepad; trigger and stick are analog).
@@ -495,7 +555,7 @@ public partial class Main : Node2D
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
                + "W/Up thrust   X reverse   Q/E strafe   A/D turn   S/Space brake (matches target)   G anchor   K dock   U deploy kit   Tab cycle target   T target nearest   wheel zoom\n"
-               + "B blueprint editor   Y shipyard   F fleet   C cargo   J job   [ ] P time   F3 debug   F4 diagnostics   F6 save   F9 load   F7 new game   (closing the window autosaves)";
+               + "B blueprint editor   Y shipyard   F fleet   C cargo   J job   [ ] P time   F2 settings   F3 debug   F4 diagnostics   F6 save   F9 load   F7 new game   (closing the window autosaves)";
     }
 
     private string LandedLine(CraftState p)
@@ -666,11 +726,14 @@ public partial class Main : Node2D
     // Screen-fixed backdrop: drawn around the camera so it never scrolls away. No parallax yet.
     private void DrawStarfield()
     {
+        // Fills the window at any size, at the same star density as the 1280×720 design.
         var origin = _camera.Position;
+        var half = GetViewportRect().Size / 2;
+        var count = (int)(StarCount * (half.X * half.Y) / (640f * 360f));
         var rng = new RandomNumberGenerator { Seed = StarfieldSeed };
-        for (var i = 0; i < StarCount; i++)
+        for (var i = 0; i < count; i++)
         {
-            var position = origin + new Vector2(rng.RandfRange(-640, 640), rng.RandfRange(-360, 360));
+            var position = origin + new Vector2(rng.RandfRange(-half.X, half.X), rng.RandfRange(-half.Y, half.Y));
             var brightness = rng.RandfRange(0.35f, 1.0f);
             var size = rng.Randf() < 0.1f ? 2f : 1f;
             DrawRect(new Rect2(position.Floor(), new Vector2(size, size)),
