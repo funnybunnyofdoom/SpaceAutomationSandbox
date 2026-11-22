@@ -86,8 +86,9 @@ public sealed partial class SectorState
     private void StepRepairs()
     {
         _repairingYards.Clear();
-        foreach (var craft in _crafts) craft.RepairStatus = null;
+        foreach (var craft in _crafts) { craft.RepairStatus = null; craft.YardStatus = null; }
         if (Parts is null) return;
+        List<CraftState>? removed = null;
         foreach (var yard in _crafts)
         {
             if (!yard.IsShipyard) continue;
@@ -95,7 +96,12 @@ public sealed partial class SectorState
             if (patient is null)
                 foreach (var c in _crafts)
                     if (c.DockedToCraftId == yard.Id && NeedsRepair(c)) { patient = c; break; }
-            if (patient is null || NextRepair(patient) is not { } next) continue;
+            if (patient is null || NextRepair(patient) is not { } next)
+            {
+                // No repairs: refits, dismantling and packing (#56, #57).
+                if (StepYardWork(yard, removed ??= new())) _repairingYards.Add(yard.Id);
+                continue;
+            }
             _repairingYards.Add(yard.Id); // the fabricator is busy: no building this tick
 
             var part = Parts.Get(next.Cell.PartId);
@@ -135,6 +141,8 @@ public sealed partial class SectorState
             }
             patient.RepairStatus = $"{verb} {part.Name} at {yard.Name}: done";
         }
+        // Craft dismantled or packed this tick leave after the loop (the list mustn't change while iterated).
+        if (removed is not null) foreach (var craft in removed) RemoveCraft(craft);
     }
 
     /// <summary>Puts a broken-off part back (its materials were just taken from the yard).</summary>
@@ -144,19 +152,8 @@ public sealed partial class SectorState
         var present = new HashSet<GridPos>(craft.Design.Cells.Select(c => c.Pos)) { cell.Pos };
         var complete = present.Count == intact.Cells.Count;
         var design = complete ? intact : new ShipDesign(intact.Id, intact.Name, intact.Cells.Where(c => present.Contains(c.Pos)));
-        var oldStats = craft.Stats;
-        craft.Design = design;
         if (complete) craft.IntactDesign = null;
-        craft.Stats = design.ComputeStats(Parts!, craft.HealthList);
-        // The centre of mass moved inside the craft: keep the other parts where they were in the world.
-        var shift = new Vector2D((craft.Stats.CenterOfMassX - oldStats.CenterOfMassX) * ShipDesign.CellSizeM,
-            (craft.Stats.CenterOfMassY - oldStats.CenterOfMassY) * ShipDesign.CellSizeM);
-        var (sin, cos) = Math.SinCos(craft.HeadingRad);
-        craft.Position += new Vector2D(shift.X * cos - shift.Y * sin, shift.X * sin + shift.Y * cos);
-        // Ports are numbered by position in the design: if the set changed, docked ships let go and dock again.
-        if (craft.Stats.DockingPorts.Count != oldStats.DockingPorts.Count)
-            foreach (var ship in _crafts.Where(s => s.DockedToCraftId == craft.Id).ToList())
-                ship.DockedToCraftId = CraftId.None;
+        ReplaceDesign(craft, design);
     }
 
     /// <summary>Restores saved repair state: the blueprint before parts broke off, and progress on the current repair.</summary>

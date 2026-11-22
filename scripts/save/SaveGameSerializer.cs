@@ -31,11 +31,12 @@ public static class SaveGameSerializer
     /// v12 added the star system (new games), the cruise drive and solar power by distance; v13 added
     /// part health (impact damage) and local gravity; v14 added crew and life support; v15 added abstract
     /// transit legs for craft far from the player; v16 added repairs (intact design, repair progress,
-    /// servicing) and survey jobs.
+    /// servicing) and survey jobs; v17 added refit/dismantle/pack orders and the craft id counter
+    /// (removed craft's ids are never reused, and jobs may still name them).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 16;
+    public const int SchemaVersion = 17;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -59,6 +60,7 @@ public static class SaveGameSerializer
                 Seed = sector.Seed,
                 Tick = sector.Tick,
                 NextOrderId = sector.NextOrderId,
+                NextCraftId = sector.NextCraftId,
                 EjectedKg = sector.EjectedKg.Count > 0
                     ? new SortedDictionary<string, long>(sector.EjectedKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal)
                     : null,
@@ -111,6 +113,10 @@ public static class SaveGameSerializer
                     IntactDesign = c.IntactDesign is { } intact ? DesignToDto(intact) : null,
                     RepairProgressKg = c.RepairProgressKg,
                     ServiceAtId = c.ServiceAt.Value,
+                    YardOrder = c.YardOrder is { } yo
+                        ? new YardOrderDto { Kind = yo.Kind, YardId = yo.YardId.Value, Target = yo.Target is { } t ? DesignToDto(t) : null }
+                        : null,
+                    YardProgressKg = c.YardProgressKg,
                     Crew = c.Crew,
                     DockClaimStationId = c.DockClaimStation.Value,
                     Transit = c.Transit is { } leg
@@ -296,6 +302,7 @@ public static class SaveGameSerializer
                 }
             }
             if (dto.NextOrderId > 0) sector.RestoreNextOrderId(dto.NextOrderId);
+            if (dto.NextCraftId > 0) sector.RestoreNextCraftId(dto.NextCraftId);
             foreach (var (material, kg) in dto.EjectedKg ?? new SortedDictionary<string, long>())
             {
                 if (!catalog.Materials.Contains(material)) throw new FormatException($"Unknown ejected material '{material}'.");
@@ -330,6 +337,18 @@ public static class SaveGameSerializer
                 }
                 if (c.RepairProgressKg < 0) throw new FormatException($"Craft {c.Id} has negative repair progress.");
                 sector.RestoreRepair(restored.Id, intactDesign, c.RepairProgressKg, new CraftId(c.ServiceAtId));
+                if (c.YardOrder is { } yod)
+                {
+                    ShipDesign? target = null;
+                    if (yod.Target is not null)
+                    {
+                        target = DesignFromDto(yod.Target, $"Craft {c.Id} refit target");
+                        var targetErrors = target.Validate(catalog, target.SuggestedRole(catalog), requireConnected: false);
+                        if (targetErrors.Count > 0) throw new FormatException($"Craft {c.Id} refit target is invalid: {string.Join("; ", targetErrors)}");
+                    }
+                    if (c.YardProgressKg < 0) throw new FormatException($"Craft {c.Id} has negative yard progress.");
+                    sector.RestoreYardOrder(restored.Id, new YardOrder(yod.Kind, new CraftId(yod.YardId), target), c.YardProgressKg);
+                }
                 if (c.Job is { Kind: "survey" } sj)
                 {
                     if (sj.SourceBodyId != 0) sector.GetBody(new BodyId(sj.SourceBodyId));
@@ -345,8 +364,7 @@ public static class SaveGameSerializer
                     if (r.ContractAmountKg > 0)
                     {
                         if (!catalog.Materials.Contains(r.MaterialId ?? "")) throw new FormatException($"Craft {c.Id} job uses unknown material '{r.MaterialId}'.");
-                        sector.GetCraft(new CraftId(r.PickupId));
-                        sector.GetCraft(new CraftId(r.DestinationId));
+                        // The stations may have been dismantled since (#57): the job drops the trip when it sees that.
                         contract = new HaulContract(new CraftId(r.PickupId), new CraftId(r.DestinationId), r.MaterialId!, r.ContractAmountKg).Validated();
                     }
                     sector.RestoreJob(restored.Id, new ServeRequestsJob(r.MinPickupKg)
@@ -358,10 +376,9 @@ public static class SaveGameSerializer
                 else if (c.Job is { } j)
                 {
                     if (!catalog.Materials.Contains(j.MaterialId ?? "")) throw new FormatException($"Craft {c.Id} job uses unknown material '{j.MaterialId}'.");
-                    sector.GetCraft(new CraftId(j.DestinationId));
+                    // Stations a job names may have been dismantled since (#57): the job waits with that reason.
                     if (j.Kind == "freight")
                     {
-                        sector.GetCraft(new CraftId(j.PickupId));
                         sector.RestoreJob(restored.Id, new HaulJob(new CraftId(j.PickupId), j.MaterialId!, new CraftId(j.DestinationId), j.MinPickupKg, j.KeepStockedKg)
                         {
                             Active = j.Active, State = j.HaulState, ResumeState = j.HaulResumeState, WaitReason = j.WaitReason,
@@ -454,6 +471,10 @@ public static class SaveGameSerializer
         public ulong Seed { get; set; }
         public long Tick { get; set; }
         public long NextOrderId { get; set; }
+
+        /// <summary>v17: next craft id (ids of dismantled craft are never reused). 0 in older files: derived from the craft.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint NextCraftId { get; set; }
         public SortedDictionary<string, long>? EjectedKg { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] // omitted while every multiplier is 1
         public TuningDto? Tuning { get; set; }
@@ -518,6 +539,13 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int PartsLost { get; set; }
 
+        /// <summary>v17: a refit, dismantle or pack order a shipyard is working on.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public YardOrderDto? YardOrder { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double YardProgressKg { get; set; }
+
         /// <summary>v16: the design before parts broke off (only while some are missing).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public DesignDto? IntactDesign { get; set; }
@@ -565,6 +593,13 @@ public static class SaveGameSerializer
         public List<OrderDto>? BuildQueue { get; set; }
         public List<KitDto>? Kits { get; set; }
         public SortedDictionary<string, long>? RequestsKg { get; set; }
+    }
+
+    private sealed class YardOrderDto
+    {
+        public YardWorkKind Kind { get; set; }
+        public uint YardId { get; set; }
+        public DesignDto? Target { get; set; }
     }
 
     private sealed class TransitDto

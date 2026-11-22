@@ -69,7 +69,7 @@ public partial class Main : Node2D
     private string _status = "";
     private ulong _statusUntilMs;
     private Camera2D _camera = null!;
-    private Label _hud = null!;
+    private Hud _hud = null!;
     private readonly GameSettings _settings = GameSettings.Load();
 
     /// <summary>Holds the HUD and every panel; scaled by the interface scale and sized to the window (#52).</summary>
@@ -99,7 +99,7 @@ public partial class Main : Node2D
         _uiRoot = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
         hudLayer.AddChild(_uiRoot);
         GetViewport().SizeChanged += LayoutUi;
-        _hud = new Label { Position = new Vector2(20, 16) };
+        _hud = new Hud(_settings, () => _settings.Save()); // areas on the left, key help on H (#51)
         _uiRoot.AddChild(_hud);
         _settingsPanel = new SettingsPanel(_settings, () => { _settings.ApplyWindow(); _settings.Save(); LayoutUi(); }) { Visible = false };
         _uiRoot.AddChild(_settingsPanel);
@@ -188,6 +188,7 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-diagnostics") >= 0) _diagnosticsPanel?.Open();
         if (System.Array.IndexOf(args, "--open-settings") >= 0) _settingsPanel?.Open();
         if (System.Array.IndexOf(args, "--open-map") >= 0) ToggleMap();
+        if (System.Array.IndexOf(args, "--open-help") >= 0) _hud.ToggleHelp();
         if (System.Array.IndexOf(args, "--demo-crash") >= 0 && _player != null)
         {
             // Dev/test hook: drop the player onto Home tail first at 30 m/s, to see damage (#34).
@@ -407,6 +408,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Diagnostics)) Toggle(_diagnosticsPanel, () => _diagnosticsPanel!.Open());
         else if (Pressed(InputActions.Settings)) Toggle(_settingsPanel, () => _settingsPanel!.Open());
         else if (Pressed(InputActions.Map)) ToggleMap();
+        else if (Pressed(InputActions.Help)) _hud.ToggleHelp();
         else if (Pressed(InputActions.Fullscreen)) ToggleFullscreen();
         else if (Pressed(InputActions.TimeFaster)) { _warp.Paused = false; _warp.Faster(); ShowStatus($"Time {_warp}."); }
         else if (Pressed(InputActions.TimeSlower)) { _warp.Paused = false; _warp.Slower(); ShowStatus($"Time {_warp}."); }
@@ -414,6 +416,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             if (_mapMode) ToggleMap();
+            _hud.CloseHelp();
             foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel })
                 if (panel != null) panel.Visible = false;
         }
@@ -486,7 +489,7 @@ public partial class Main : Node2D
         _camera.Position = Vector2.Zero; // the world is drawn around _viewCentre instead (precision far from the star)
         if (_mapMode && _sector.Bodies.FirstOrDefault(b => b.Orbit is null) is { } root) _viewCentre = _sector.GetPosition(root.Id);
         else if (_player != null) _viewCentre = InterpolatedPosition(_player);
-        _hud.Text = BuildHud();
+        _hud.Show(BuildHud());
         QueueRedraw();
         DevScreenshot();
     }
@@ -512,90 +515,87 @@ public partial class Main : Node2D
         return new ShipControls(throttle, turn, brake, strafe);
     }
 
-    private string BuildHud()
+    /// <summary>
+    /// This frame's HUD text, by area (#51). Seed, tick and zoom moved to the diagnostics panel (F4);
+    /// the key list to the help overlay (H).
+    /// </summary>
+    private HudSections BuildHud()
     {
-        var text = "SpaceAutomationSandbox (working title) - Phase 4\n"
-                   + $"seed {_sector.Seed}   tick {_sector.Tick} ({FixedStepClock.TicksPerSecond}/s)   t={_sector.TimeS:0.0}s"
+        var status = "";
+        if (Time.GetTicksMsec() < _statusUntilMs) status += $">> {_status}\n";
+        if (_warp.Speed != 1 || _warp.Paused) status += $"TIME {_warp}   ([ slower, ] faster, P pause)\n";
+        if (!_sector.Tuning.IsDefault) status += $"DEBUG: {_sector.Tuning}  (F3)\n";
+        if (_player is not { } p) return new HudSections(status + _setupError, "", ShipyardSummary(), "");
 
-                   + $"   zoom {_pixelsPerMetre:0.#####} px/m\n";
-
-        if (Time.GetTicksMsec() < _statusUntilMs) text += $">> {_status}\n";
-        if (_warp.Speed != 1 || _warp.Paused) text += $"TIME {_warp}   ([ slower, ] faster, P pause)\n";
-        if (!_sector.Tuning.IsDefault) text += $"DEBUG: {_sector.Tuning}  (F3)\n";
-        if (_player is not { } p) return text + _setupError;
-
-        var (nearest, nearestSurface) = _sector.NearestBody(p.Position);
         var headingDeg = Mathf.PosMod(Mathf.RadToDeg((float)p.HeadingRad), 360f);
-        text += $"Piloting {p.Name} ({p.Id}) - {p.Design.Name}: {p.Stats.TotalMassKg / 1000:0.0} t, {p.Stats.TotalThrustN / 1000:0} kN, "
-                + $"{p.Stats.TotalThrustN / p.MassKg:0.0} m/s²   "
-                + (p.HasCargoLimit ? $"cargo {p.CargoKg / 1000.0:0.0} / {p.CargoCapacityKg / 1000.0:0} t\n" : $"stores {p.CargoKg / 1000.0:0.0} t\n")
-                + (p.Kits.Count > 0
-                    ? $"KIT on board: {p.Kits[0].Name} ({p.Kits[0].MassKg / 1000.0:0.0} t){(p.Kits.Count > 1 ? $" +{p.Kits.Count - 1} more" : "")} - "
-                      + (_sector.DeployBlocker(p.Id) is { } blocked ? blocked : "U to deploy here") + "\n"
-                    : "")
-                + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
-                + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
-                + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
-                + (SectorState.CrewStatus(p) is { Length: > 0 } crew ? crew + "\n" : "")
-                + (SectorState.NeedsRepair(p)
-                    ? $"DAMAGE: {p.PartHealth.Count} part(s) damaged"
-                      + (p.PartHealth.Count > 0 ? $" (worst {p.PartHealth.Values.Min() * 100:0}%)" : "")
-                      + (SectorState.MissingParts(p) > 0 ? $", {SectorState.MissingParts(p)} broken off" : "")
-                      + " - " + (p.RepairStatus ?? "dock at a shipyard to repair") + "\n"
-                    : "")
-                + (!p.IsLanded && !p.IsDocked && !p.IsOnRails && !p.Cruising && _sector.GravitySource(p.Position) is { } pull
-                    ? $"gravity {_sector.GravityAt(p.Position, _sector.TimeS).Length:0.00} m/s² from {pull.Name} - land under {SectorState.SafeImpactSpeedMps:0} m/s\n"
-                    : "")
-                + (p.Cruising
-                    ? $"CRUISE {SectorState.CruiseSpeedMps:0} m/s - fuel {p.Inventory[SectorState.FuelMaterial] / 1000.0:0.00} t "
-                      + $"({p.Inventory[SectorState.FuelMaterial] / System.Math.Max(SectorState.CruiseFuelKgPerS(p), 1e-9) / 60:0} min left), V or brake to drop out\n"
-                    : p.CruiseStopReason is { } why && p.Stats.TotalThrustN > 0 ? $"cruise ended: {why} - V to cruise again\n" : "")
-                + (p.Job is { Active: true } job
-                    ? $"AUTOPILOT ({job.Kind} job): {job.Status}   cycles {job.CompletedCycles}, delivered {job.DeliveredKg / 1000.0:0.0} t - J to view/stop\n"
-                    : "")
-                + (_sector.MiningMaterial(p) is { } mining && p.FreeCargoKg > 0
-                    ? $"MINING {mining}: {p.Stats.MiningRateKgPerS:0} kg/s, {_sector.GetBody(p.LandedOnBodyId).Deposit(mining) / 1000.0:0.0} t left in {_sector.GetBody(p.LandedOnBodyId).Name}\n"
-                    : "")
-                + (p.IsLanded ? LandedLine(p) : "")
-                + (p.IsDocked
-                    ? $"DOCKED at {_sector.GetCraft(p.DockedToCraftId).Name}, port {p.DockPortIndex + 1} - C cargo, K or thrust to undock\n"
-                    : "")
-                + (p.RailOrbit is { } rail
-                    ? (p.Stats.TotalThrustN > 0
-                        ? $"PARKED in orbit around {_sector.GetBody(rail.Parent).Name} - thrust to leave the parking orbit\n"
-                        : $"On a fixed orbit around {_sector.GetBody(rail.Parent).Name} (no thrusters)\n")
-                    : "")
-                + ShipyardSummary();
+        var ship = $"{p.Name} - {p.Design.Name}: {p.SpeedMps:0.0} m/s, heading {headingDeg:000}°, "
+                   + (p.HasCargoLimit ? $"cargo {p.CargoKg / 1000.0:0.0} / {p.CargoCapacityKg / 1000.0:0} t\n" : $"stores {p.CargoKg / 1000.0:0.0} t\n")
+                   + $"{p.Stats.TotalMassKg / 1000:0.0} t, {p.Stats.TotalThrustN / 1000:0} kN, {p.Stats.TotalThrustN / p.MassKg:0.0} m/s²\n"
+                   + (p.Kits.Count > 0
+                       ? $"KIT on board: {p.Kits[0].Name} ({p.Kits[0].MassKg / 1000.0:0.0} t){(p.Kits.Count > 1 ? $" +{p.Kits.Count - 1} more" : "")} - "
+                         + (_sector.DeployBlocker(p.Id) is { } blocked ? blocked : "U to deploy here") + "\n"
+                       : "")
+                   + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
+                   + (SectorState.CrewStatus(p) is { Length: > 0 } crew ? crew + "\n" : "")
+                   + (SectorState.NeedsRepair(p)
+                       ? $"DAMAGE: {p.PartHealth.Count} part(s) damaged"
+                         + (p.PartHealth.Count > 0 ? $" (worst {p.PartHealth.Values.Min() * 100:0}%)" : "")
+                         + (SectorState.MissingParts(p) > 0 ? $", {SectorState.MissingParts(p)} broken off" : "")
+                         + " - " + (p.RepairStatus ?? "dock at a shipyard to repair") + "\n"
+                       : "")
+                   + (p.YardStatus is { } yardWork ? $"SHIPYARD WORK: {yardWork}\n" : "")
+                   + (!p.IsLanded && !p.IsDocked && !p.IsOnRails && !p.Cruising && _sector.GravitySource(p.Position) is { } pull
+                       ? $"gravity {_sector.GravityAt(p.Position, _sector.TimeS).Length:0.00} m/s² from {pull.Name} - land under {SectorState.SafeImpactSpeedMps:0} m/s\n"
+                       : "")
+                   + (p.Cruising
+                       ? $"CRUISE {SectorState.CruiseSpeedMps:0} m/s - fuel {p.Inventory[SectorState.FuelMaterial] / 1000.0:0.00} t "
+                         + $"({p.Inventory[SectorState.FuelMaterial] / System.Math.Max(SectorState.CruiseFuelKgPerS(p), 1e-9) / 60:0} min left), V or brake to drop out\n"
+                       : p.CruiseStopReason is { } why && p.Stats.TotalThrustN > 0 ? $"cruise ended: {why} - V to cruise again\n" : "")
+                   + (p.Job is { Active: true } job
+                       ? $"AUTOPILOT ({job.Kind} job): {job.Status}   cycles {job.CompletedCycles}, delivered {job.DeliveredKg / 1000.0:0.0} t - J to view/stop\n"
+                       : "")
+                   + (_sector.MiningMaterial(p) is { } mining && p.FreeCargoKg > 0
+                       ? $"MINING {mining}: {p.Stats.MiningRateKgPerS:0} kg/s, {_sector.GetBody(p.LandedOnBodyId).Deposit(mining) / 1000.0:0.0} t left in {_sector.GetBody(p.LandedOnBodyId).Name}\n"
+                       : "")
+                   + (p.IsLanded ? LandedLine(p) : "")
+                   + (p.IsDocked
+                       ? $"DOCKED at {_sector.GetCraft(p.DockedToCraftId).Name}, port {p.DockPortIndex + 1} - C cargo, K or thrust to undock\n"
+                       : "")
+                   + (p.RailOrbit is { } rail
+                       ? (p.Stats.TotalThrustN > 0
+                           ? $"PARKED in orbit around {_sector.GetBody(rail.Parent).Name} - thrust to leave the parking orbit\n"
+                           : $"On a fixed orbit around {_sector.GetBody(rail.Parent).Name} (no thrusters)\n")
+                       : "");
 
+        string target;
         if (!p.TargetCraftId.IsNone)
         {
-            var target = _sector.GetCraft(p.TargetCraftId);
-            var rel = _sector.GetRelativeMotionToCraft(p.Id, target.Id);
-            var ports = target.Stats.DockingPorts.Count;
-            text += $"target: {target.Name} ({target.Id}{(ports > 0 ? $", {_sector.FreePorts(target).Count}/{ports} ports free" : "")})   "
-                    + $"gap {FormatDistance(rel.SurfaceDistanceM)}   rel speed {rel.RelativeSpeedMps:0.0} m/s   "
-                    + $"{(rel.ClosingSpeedMps >= 0 ? "closing" : "opening")} {System.Math.Abs(rel.ClosingSpeedMps):0.0} m/s"
-                    + (rel.RelativeSpeedMps < SectorState.DockMaxRelativeSpeedMps && ports > 0 && !p.IsDocked ? "   [K to dock if within 100 m]" : "")
-                    + "\n";
+            var craft = _sector.GetCraft(p.TargetCraftId);
+            var rel = _sector.GetRelativeMotionToCraft(p.Id, craft.Id);
+            var ports = craft.Stats.DockingPorts.Count;
+            target = $"{craft.Name} ({craft.Id}{(ports > 0 ? $", {_sector.FreePorts(craft).Count}/{ports} ports free" : "")})\n"
+                     + $"gap {FormatDistance(rel.SurfaceDistanceM)}   rel speed {rel.RelativeSpeedMps:0.0} m/s   "
+                     + $"{(rel.ClosingSpeedMps >= 0 ? "closing" : "opening")} {System.Math.Abs(rel.ClosingSpeedMps):0.0} m/s"
+                     + (rel.RelativeSpeedMps < SectorState.DockMaxRelativeSpeedMps && ports > 0 && !p.IsDocked ? "   [K to dock if within 100 m]" : "")
+                     + "\n";
         }
         else if (p.TargetBodyId.IsNone)
         {
-            text += "target: none - brake stops relative to the sector\n";
+            target = "none - brake stops relative to the sector\n";
         }
         else
         {
-            var target = _sector.GetBody(p.TargetBodyId);
-            var rel = _sector.GetRelativeMotion(p.Id, target.Id);
-            text += $"target: {Describe(target)}   surface {FormatDistance(rel.SurfaceDistanceM)}   "
-                    + $"rel speed {rel.RelativeSpeedMps:0.0} m/s   "
-                    + $"{(rel.ClosingSpeedMps >= 0 ? "closing" : "opening")} {System.Math.Abs(rel.ClosingSpeedMps):0.0} m/s"
-                    + (rel.RelativeSpeedMps < 0.5 ? "   [MATCHED]" : "") + "\n";
+            var body = _sector.GetBody(p.TargetBodyId);
+            var rel = _sector.GetRelativeMotion(p.Id, body.Id);
+            target = $"{Describe(body)}\nsurface {FormatDistance(rel.SurfaceDistanceM)}   "
+                     + $"rel speed {rel.RelativeSpeedMps:0.0} m/s   "
+                     + $"{(rel.ClosingSpeedMps >= 0 ? "closing" : "opening")} {System.Math.Abs(rel.ClosingSpeedMps):0.0} m/s"
+                     + (rel.RelativeSpeedMps < 0.5 ? "   [MATCHED]" : "") + "\n";
         }
+        var (nearest, nearestSurface) = _sector.NearestBody(p.Position);
+        target += $"nearest: {Describe(nearest)}, surface {FormatDistance(nearestSurface)}";
 
-        return text
-               + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
-               + "W/Up thrust   X reverse   Q/E strafe   V cruise   M map   A/D turn   S/Space brake (matches target)   G anchor   K dock   U deploy kit   Tab cycle target   T target nearest   wheel zoom\n"
-               + "B blueprint editor   Y shipyard   F fleet   C cargo   J job   [ ] P time   F2 settings   F3 debug   F4 diagnostics   F6 save   F9 load   F7 new game   (closing the window autosaves)";
+        return new HudSections(status, ship, ShipyardSummary(), target);
     }
 
     private string LandedLine(CraftState p)

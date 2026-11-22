@@ -102,6 +102,7 @@ public partial class DiagnosticsPanel : PanelContainer
         var avg = _cost.AverageMs;
         var budget = avg * _warp.ActualSpeed * FixedStepClock.TicksPerSecond / 10; // % of each real second spent simulating
         text.AppendLine("TIME");
+        text.AppendLine($"  seed {_sector().Seed}, tick {_sector().Tick} ({FixedStepClock.TicksPerSecond}/s), game time {_sector().TimeS:0.0} s");
         text.AppendLine($"  speed {_warp}" + (_warp.SkippedTicks > 0 ? $", {_warp.SkippedTicks} ticks skipped so far" : ""));
         text.AppendLine($"  tick cost {avg:0.00} ms avg, {_cost.MaxMs:0.00} ms max (last {_cost.Count} ticks)");
         text.AppendLine($"  simulating uses {budget:0}% of real time");

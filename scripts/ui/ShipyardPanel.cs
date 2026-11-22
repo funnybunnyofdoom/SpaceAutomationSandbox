@@ -13,6 +13,9 @@ namespace SpaceAutomationSandbox.UI;
 /// (stations are built as kits, #8: load one onto a ship in the cargo panel, or deploy an orbital
 /// one beside the yard). Orders go through <see cref="SectorState.OrderBuild"/>, which takes the
 /// materials or refuses with the exact shortfall. Ordering works from anywhere (docs/06).
+/// "Work on craft" lists what the yard can reach (itself, docked ships, stations nearby) with Refit
+/// (to the selected design, #56), Dismantle (with a preview and a confirming second click) and Pack
+/// as kit (#57).
 /// </summary>
 public partial class ShipyardPanel : PanelContainer
 {
@@ -36,6 +39,9 @@ public partial class ShipyardPanel : PanelContainer
     private List<(string Label, Func<ShipDesign> Load)> _designs = new();
     private double _sinceRefresh;
     private string _queueSignature = "";
+    private VBoxContainer _work = null!;
+    private string _workSignature = "";
+    private CraftId _confirmDismantle = CraftId.None;
 
     public ShipyardPanel(Func<SectorState> sector, PartCatalog catalog, Func<ShipDesign?> currentShipDesign)
     {
@@ -56,9 +62,12 @@ public partial class ShipyardPanel : PanelContainer
         OffsetTop = 12;
         OffsetBottom = -12;
 
-        var box = new VBoxContainer();
+        // Everything scrolls: the panel holds more than fits at 720p.
+        var outer = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        AddChild(outer);
+        var box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         box.AddThemeConstantOverride("separation", 8);
-        AddChild(box);
+        outer.AddChild(box);
 
         var title = new Label { Text = "SHIPYARD  (Y to close)" };
         title.AddThemeFontSizeOverride("font_size", 18);
@@ -71,7 +80,7 @@ public partial class ShipyardPanel : PanelContainer
         _stock = new Label();
         box.AddChild(_stock);
 
-        box.AddChild(new Label { Text = "Build:" });
+        box.AddChild(new Label { Text = "Design (to build, or to refit a craft to):" });
         _designPicker = new OptionButton { FocusMode = FocusModeEnum.None };
         _designPicker.ItemSelected += _ => Refresh(force: true);
         box.AddChild(_designPicker);
@@ -86,14 +95,20 @@ public partial class ShipyardPanel : PanelContainer
         box.AddChild(_status);
 
         box.AddChild(new Label { Text = "Queue (first builds first):" });
-        var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
-        box.AddChild(scroll);
         _queue = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        scroll.AddChild(_queue);
+        box.AddChild(_queue);
 
         box.AddChild(new Label { Text = "Construction kits in storage:" });
         _kits = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         box.AddChild(_kits);
+
+        box.AddChild(new Label
+        {
+            Text = $"Work on craft (docked ships, stations within {SectorState.YardReachM:0} m, the yard itself). Removed parts return {SectorState.RecoveryFraction * 100:0}% of their materials (less if damaged); the rest is slag.",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0),
+        });
+        _work = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        box.AddChild(_work);
     }
 
     /// <summary>Shows the panel, refreshing the yard and design lists (designs may have been saved in the editor).</summary>
@@ -202,6 +217,95 @@ public partial class ShipyardPanel : PanelContainer
 
         RefreshQueue(yard, force);
         RefreshKits(yard, force);
+        RefreshWork(yard, force);
+    }
+
+    private void RefreshWork(CraftState yard, bool force)
+    {
+        var sector = _sector();
+        var craft = sector.CraftInYardReach(yard.Id);
+        var signature = yard.Id + ":" + string.Join(",", craft.Select(c => $"{c.Id.Value}/{c.YardOrder?.Kind}"));
+        if (force || signature != _workSignature)
+        {
+            _workSignature = signature;
+            foreach (var child in _work.GetChildren()) { _work.RemoveChild(child); child.QueueFree(); }
+            foreach (var c in craft)
+            {
+                var row = new VBoxContainer();
+                row.AddChild(new Label { Name = "Text", AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0) });
+                var buttons = new HBoxContainer();
+                var (yardId, craftId) = (yard.Id, c.Id);
+                if (c.YardOrder is not null)
+                {
+                    AddButton(buttons, "Cancel", () => sector.CancelYardWork(craftId));
+                }
+                else
+                {
+                    AddButton(buttons, "Refit to design", () =>
+                    {
+                        if (SelectedDesign() is not { } design) return new ActionResult(false, "No design selected.");
+                        return sector.OrderRefit(yardId, craftId, design);
+                    });
+                    if (c.Id != yard.Id)
+                    {
+                        AddButton(buttons, "Dismantle", () =>
+                        {
+                            if (_confirmDismantle != craftId)
+                            {
+                                _confirmDismantle = craftId;
+                                var preview = sector.PreviewDismantle(craftId);
+                                return new ActionResult(false, $"Dismantle {sector.GetCraft(craftId).Name}? Returns "
+                                    + string.Join(", ", preview.ReturnedKg.Select(kv => $"{kv.Value / 1000.0:0.0##} t {kv.Key}"))
+                                    + $"; {preview.ScrapKg / 1000.0:0.0##} t becomes slag. Press Dismantle again to confirm.");
+                            }
+                            _confirmDismantle = CraftId.None;
+                            return sector.OrderDismantle(yardId, craftId);
+                        });
+                        if (!c.IsShipyard && c.Design.SuggestedRole(_catalog) == DesignRole.Station)
+                            AddButton(buttons, "Pack as kit", () => sector.OrderPackKit(yardId, craftId));
+                    }
+                }
+                row.AddChild(buttons);
+                _work.AddChild(row);
+            }
+            if (craft.Count == 0) _work.AddChild(new Label { Text = "  (nothing in reach)", Modulate = new Color(1, 1, 1, 0.6f) });
+        }
+
+        // Status text every refresh.
+        for (var i = 0; i < craft.Count && i < _work.GetChildCount(); i++)
+        {
+            var c = craft[i];
+            if (_work.GetChild(i).GetNodeOrNull<Label>("Text") is not { } label) continue;
+            var doing = c.YardStatus ?? c.RepairStatus ?? (c.YardOrder is { } o ? $"{o.Kind.ToString().ToLowerInvariant()} queued" : "");
+            var preview = c.YardOrder is null && SelectedDesign() is { } design && design.SuggestedRole(_catalog) == (c.IntactDesign ?? c.Design).SuggestedRole(_catalog)
+                ? RefitSummary(sector, c, design) : "";
+            label.Text = $"{c.Name} ({c.Id}) - {c.Design.Name}, {c.Design.Cells.Count} parts"
+                         + (c.Id == yard.Id ? " (this yard)" : c.IsDocked ? " (docked)" : " (nearby)")
+                         + (doing.Length > 0 ? "\n  " + doing : "")
+                         + (preview.Length > 0 ? "\n  " + preview : "");
+        }
+    }
+
+    private static string RefitSummary(SectorState sector, CraftState craft, ShipDesign design)
+    {
+        var p = sector.PreviewRefit(craft.Id, design);
+        if (p.PartsAdded == 0 && p.PartsRemoved == 0) return $"matches {design.Name}";
+        return $"refit to {design.Name}: {p.PartsRemoved} off, {p.PartsAdded} on; needs "
+               + (p.CostKg.Count == 0 ? "nothing" : string.Join(", ", p.CostKg.Select(kv => $"{kv.Value / 1000.0:0.0##} t {kv.Key}")))
+               + $", returns {p.ReturnedKg.Values.Sum() / 1000.0:0.0##} t (+{p.ScrapKg / 1000.0:0.0##} t slag)";
+    }
+
+    private void AddButton(HBoxContainer row, string text, Func<ActionResult> action)
+    {
+        var button = new Button { Text = text, FocusMode = FocusModeEnum.None };
+        button.Pressed += () =>
+        {
+            var result = action();
+            _status.Text = result.Message;
+            _status.AddThemeColorOverride("font_color", result.Done ? OkColor : ShortColor);
+            Refresh(force: true);
+        };
+        row.AddChild(button);
     }
 
     private void RefreshKits(CraftState yard, bool force)

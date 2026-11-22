@@ -135,6 +135,15 @@ public sealed class CraftState
     /// <summary>What repairs on this craft are doing this tick, for display. Not saved.</summary>
     public string? RepairStatus { get; internal set; }
 
+    /// <summary>A refit, dismantle or pack-as-kit order a shipyard is working on (#56, #57); null when none. Saved.</summary>
+    public YardOrder? YardOrder { get; internal set; }
+
+    /// <summary>Work done on the current step of <see cref="YardOrder"/>, in kg. Saved.</summary>
+    public double YardProgressKg { get; internal set; }
+
+    /// <summary>What the yard order is doing this tick, for display. Not saved.</summary>
+    public string? YardStatus { get; internal set; }
+
     /// <summary>Damaged parts (#34): health 0..1 by cell. Missing = undamaged. Parts at 0 have broken off.</summary>
     public IReadOnlyDictionary<GridPos, double> PartHealth => HealthList;
 

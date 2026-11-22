@@ -86,6 +86,7 @@ public sealed partial class SectorState
         foreach (var craft in _crafts)
         {
             if (craft.Transit is not null || TryStartTransit(craft)) { craft.Job?.NoteTick(Tick); continue; }
+            if (craft.Job is { Active: true } held && StepYardOrder(craft, held)) { held.NoteTick(Tick); continue; } // refits pause the job (#56)
             if (craft.Job is { Active: true } active && StepService(craft, active)) { active.NoteTick(Tick); continue; } // repairs first (#3)
             switch (craft.Job)
             {

@@ -42,6 +42,7 @@ public static class InputActions
     public const string QuickSave = "game_quicksave";
     public const string QuickLoad = "game_quickload";
     public const string NewGame = "game_new";
+    public const string Help = "open_help";
 
     public static void EnsureDefaults()
     {
@@ -77,6 +78,7 @@ public static class InputActions
         Add(QuickSave, 0.5f, Keys(Key.F6));
         Add(QuickLoad, 0.5f, Keys(Key.F9));
         Add(NewGame, 0.5f, Keys(Key.F7));
+        Add(Help, 0.5f, Keys(Key.H, Key.F1));
     }
 
     /// <summary>Throttle 0..1 (analog on a trigger), turn −1..1 (analog on the stick), brake on/off.</summary>

@@ -35,6 +35,9 @@ public sealed class GameSettings
     public Vector2I? WindowSize { get; set; }
     public Vector2I? WindowPosition { get; set; }
 
+    /// <summary>HUD areas folded away (#51), by title.</summary>
+    public System.Collections.Generic.HashSet<string> HudCollapsed { get; } = new(StringComparer.Ordinal);
+
     public static GameSettings Load()
     {
         var settings = new GameSettings();
@@ -45,6 +48,8 @@ public sealed class GameSettings
         settings.UiScale = Array.IndexOf(UiScales, scale) >= 0 ? scale : 0;
         if (file.HasSectionKey("display", "window_size")) settings.WindowSize = file.GetValue("display", "window_size").AsVector2I();
         if (file.HasSectionKey("display", "window_position")) settings.WindowPosition = file.GetValue("display", "window_position").AsVector2I();
+        foreach (var title in file.GetValue("hud", "collapsed", "").AsString().Split(',', StringSplitOptions.RemoveEmptyEntries))
+            settings.HudCollapsed.Add(title);
         return settings;
     }
 
@@ -55,6 +60,7 @@ public sealed class GameSettings
         file.SetValue("display", "ui_scale", UiScale);
         if (WindowSize is { } size) file.SetValue("display", "window_size", size);
         if (WindowPosition is { } position) file.SetValue("display", "window_position", position);
+        file.SetValue("hud", "collapsed", string.Join(",", HudCollapsed));
         file.Save(FilePath);
     }
 
