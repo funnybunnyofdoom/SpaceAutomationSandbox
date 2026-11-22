@@ -33,6 +33,7 @@ public static class SaveMigrations
         [12] = ("v13 added part health and local gravity: older craft are undamaged; gravity simply applies from now on", (_, _) => { }),
         [13] = ("v14 added crew and life support: craft from older games need no crew, so they keep working", ExemptLegacyCraftFromCrew),
         [14] = ("v15 added abstract transit for craft far from the player: nothing is in transit in an older save", (_, _) => { }),
+        [15] = ("v16 added repairs and survey jobs: parts that broke off in an older save can't be rebuilt (their blueprint wasn't kept); damage can be repaired", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

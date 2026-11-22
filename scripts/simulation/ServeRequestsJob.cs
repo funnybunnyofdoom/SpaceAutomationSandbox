@@ -55,7 +55,7 @@ public sealed class ServeRequestsJob : ShipJob
 
     protected override int StateKey => (int)State * 2 + (Contract is null ? 0 : 1);
 
-    public override string Status => !Active ? "stopped"
+    protected override string JobStatus => !Active ? "stopped"
         : State == HaulJobState.Waiting ? $"waiting: {WaitReason}"
         : Contract is not { } c ? "looking for a request to serve"
         : State switch

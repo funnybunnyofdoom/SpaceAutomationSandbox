@@ -31,6 +31,7 @@ public partial class JobPanel : PanelContainer
     private GridContainer _miningRows = null!;
     private GridContainer _freightRows = null!;
     private GridContainer _serveRows = null!;
+    private Label _surveyNote = null!;
     private OptionButton _serveMinLoad = null!;
     private OptionButton _source = null!, _mineMaterial = null!, _mineDestination = null!, _returnAt = null!;
     private OptionButton _pickup = null!, _haulMaterial = null!, _haulDestination = null!, _minPickup = null!, _keepStocked = null!;
@@ -75,6 +76,7 @@ public partial class JobPanel : PanelContainer
         _kind.AddItem("Mining");
         _kind.AddItem("Freight: fixed route");
         _kind.AddItem("Freight: serve requests");
+        _kind.AddItem("Survey: scout unsurveyed bodies");
         _kind.ItemSelected += _ => ShowKind();
         kindRow.AddChild(_kind);
         box.AddChild(kindRow);
@@ -108,6 +110,13 @@ public partial class JobPanel : PanelContainer
             Text = "Serves stations' requests (set them in the cargo panel, C, while docked).",
             AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(250, 0), Modulate = new Color(1, 1, 1, 0.6f),
         });
+
+        _surveyNote = new Label
+        {
+            Text = "Flies to the nearest unsurveyed body, surveys it (within 2 km, as when you fly there), then the next. Lets jobs and depots use bodies you haven't visited.",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(410, 0), Modulate = new Color(1, 1, 1, 0.6f),
+        };
+        box.AddChild(_surveyNote);
 
         var buttons = new HBoxContainer();
         var start = new Button { Text = "Start job", FocusMode = FocusModeEnum.None };
@@ -159,6 +168,7 @@ public partial class JobPanel : PanelContainer
         _miningRows.Visible = _kind.Selected == 0;
         _freightRows.Visible = _kind.Selected == 1;
         _serveRows.Visible = _kind.Selected == 2;
+        _surveyNote.Visible = _kind.Selected == 3;
     }
 
     private void RefreshChoices()
@@ -214,6 +224,10 @@ public partial class JobPanel : PanelContainer
                 Select(_keepStocked, Array.IndexOf(KeepStocked, haul.KeepStockedKg));
                 RefreshDeposits();
                 break;
+            case SurveyJob:
+                _kind.Select(3);
+                RefreshDeposits();
+                break;
             case ServeRequestsJob serve:
                 _kind.Select(2);
                 Select(_serveMinLoad, Array.IndexOf(MinPickups, serve.MinLoadKg));
@@ -259,6 +273,7 @@ public partial class JobPanel : PanelContainer
                            + $"{Station(m.DestinationId)}, return at {m.ReturnFraction * 100:0}%",
             HaulJob h => $"Freight: {job.MaterialId} from {Station(h.PickupId)} to {Station(h.DestinationId)}"
                          + (h.KeepStockedKg > 0 ? $", keep {h.KeepStockedKg / 1000} t there" : ""),
+            SurveyJob => $"Surveying: {job.CompletedCycles} bodies surveyed, {sector.Bodies.Count(b => !b.Surveyed && b.Kind != BodyKind.Star)} left",
             ServeRequestsJob s => "Freight: serving station requests"
                                   + (s.Contract is { } c ? $" (now {c.AmountKg / 1000.0:0.0} t {c.MaterialId}, {Station(c.PickupId)} → {Station(c.DestinationId)})" : ""),
             _ => job.Kind,
@@ -281,6 +296,7 @@ public partial class JobPanel : PanelContainer
     {
         var craft = _craft();
         if (craft is null) return;
+        if (_kind.Selected == 3) { Show(_sector().StartJob(craft.Id, new SurveyJob())); return; }
         if (_stations.Count == 0 && _kind.Selected != 2) { Show(new ActionResult(false, "No station with a docking port.")); return; }
 
         if (_kind.Selected == 0)

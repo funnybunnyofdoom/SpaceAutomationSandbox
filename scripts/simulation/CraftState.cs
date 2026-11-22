@@ -123,6 +123,18 @@ public sealed class CraftState
 
     internal Dictionary<GridPos, double> HealthList { get; } = new();
 
+    /// <summary>The design before parts broke off (#3), so a shipyard can rebuild them; null when nothing is missing.</summary>
+    public ShipDesign? IntactDesign { get; internal set; }
+
+    /// <summary>Work done on the current repair, in kg (#3). Saved.</summary>
+    public double RepairProgressKg { get; internal set; }
+
+    /// <summary>The shipyard an automated job is taking this craft to for repairs (#3); None otherwise. Saved.</summary>
+    public CraftId ServiceAt { get; internal set; }
+
+    /// <summary>What repairs on this craft are doing this tick, for display. Not saved.</summary>
+    public string? RepairStatus { get; internal set; }
+
     /// <summary>Damaged parts (#34): health 0..1 by cell. Missing = undamaged. Parts at 0 have broken off.</summary>
     public IReadOnlyDictionary<GridPos, double> PartHealth => HealthList;
 

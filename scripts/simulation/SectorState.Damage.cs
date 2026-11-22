@@ -20,7 +20,7 @@ namespace SpaceAutomationSandbox.Simulation;
 /// parked craft (stations) don't move; docked and cruising craft don't collide.</item>
 /// <item>Automated craft follow traffic rules to avoid each other (#55, SectorState.Traffic).</item>
 /// </list>
-/// No repairs yet (maintenance, #3). Sectors without a part catalog (bare test sectors) take no damage.
+/// Shipyards repair damage (#3, SectorState.Service). Sectors without a part catalog (bare test sectors) take no damage.
 /// </summary>
 public sealed partial class SectorState
 {
@@ -94,6 +94,7 @@ public sealed partial class SectorState
                 _ejectedKg[material] = (_ejectedKg.TryGetValue(material, out var had) ? had : 0) + kg;
         }
         craft.PartsLost += broken.Count;
+        craft.IntactDesign ??= craft.Design; // remembered so a shipyard can rebuild what broke off (#3)
 
         // The design keeps its id and name; the craft is now a damaged copy of it.
         var brokenSet = broken.Select(c => c.Pos).ToHashSet();

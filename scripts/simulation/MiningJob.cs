@@ -46,8 +46,14 @@ public abstract class ShipJob
     /// <summary>While waiting: don't retry before this tick (0 = retry every tick).</summary>
     public long RetryAtTick { get; internal set; }
 
-    /// <summary>What it is doing now, in plain words (with the wait reason when blocked).</summary>
-    public abstract string Status { get; }
+    /// <summary>What it is doing now, in plain words (with the wait reason when blocked); servicing (#3) shows instead while it happens.</summary>
+    public string Status => ServiceStatus ?? JobStatus;
+
+    /// <summary>The job's own status.</summary>
+    protected abstract string JobStatus { get; }
+
+    /// <summary>While the craft is away for repairs (#3): what it's doing. Set each tick by the simulation; not saved.</summary>
+    public string? ServiceStatus { get; internal set; }
 
     /// <summary>Short kind name for UI and saves.</summary>
     public abstract string Kind { get; }
@@ -70,10 +76,11 @@ public abstract class ShipJob
     /// <summary>Called once per tick after the job ran: logs the new status when the state or wait reason changed. Cheap otherwise.</summary>
     internal void NoteTick(long tick)
     {
-        var key = Active ? StateKey : -1;
-        if (key == _lastKey && string.Equals(WaitReason, _lastWait, StringComparison.Ordinal)) return;
+        var key = !Active ? -1 : ServiceStatus is not null ? -2 : StateKey;
+        var wait = ServiceStatus is { } service && service.StartsWith("waiting", StringComparison.Ordinal) ? service : WaitReason;
+        if (key == _lastKey && string.Equals(wait, _lastWait, StringComparison.Ordinal)) return;
         _lastKey = key;
-        _lastWait = WaitReason;
+        _lastWait = wait;
         if (_history.Count == HistoryLength) _history.Dequeue();
         _history.Enqueue(new JobEvent(tick, Status));
     }
@@ -130,7 +137,7 @@ public sealed class MiningJob : ShipJob
 
     protected override int StateKey => (int)State;
 
-    public override string Status => !Active ? "stopped"
+    protected override string JobStatus => !Active ? "stopped"
         : State == MiningJobState.Waiting ? $"waiting: {WaitReason}"
         : State switch
         {
@@ -188,7 +195,7 @@ public sealed class HaulJob : ShipJob
 
     protected override int StateKey => (int)State;
 
-    public override string Status => !Active ? "stopped"
+    protected override string JobStatus => !Active ? "stopped"
         : State == HaulJobState.Waiting ? $"waiting: {WaitReason}"
         : State switch
         {

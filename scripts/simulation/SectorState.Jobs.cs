@@ -86,8 +86,10 @@ public sealed partial class SectorState
         foreach (var craft in _crafts)
         {
             if (craft.Transit is not null || TryStartTransit(craft)) { craft.Job?.NoteTick(Tick); continue; }
+            if (craft.Job is { Active: true } active && StepService(craft, active)) { active.NoteTick(Tick); continue; } // repairs first (#3)
             switch (craft.Job)
             {
+                case SurveyJob { Active: true } survey: StepSurveyJob(craft, survey); break;
                 case MiningJob { Active: true } mining: StepJob(craft, mining, allowResume: true); break;
                 case HaulJob { Active: true } haul: StepHaul(craft, haul, allowResume: true); break;
                 case ServeRequestsJob { Active: true } serve: StepServe(craft, serve, allowResume: true); break;

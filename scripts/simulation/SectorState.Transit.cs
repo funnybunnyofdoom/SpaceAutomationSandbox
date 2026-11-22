@@ -69,8 +69,13 @@ public sealed partial class SectorState
     private (BodyId Body, CraftId Craft, double Angle, double Radius)? TravelTarget(CraftState craft)
     {
         CraftState? station = null;
-        switch (craft.Job)
+        if (!craft.ServiceAt.IsNone && _craftsById.TryGetValue(craft.ServiceAt, out var yard)) station = yard; // going for repairs (#3)
+        else switch (craft.Job)
         {
+            case SurveyJob { Active: true, State: SurveyJobState.Flying } scout when _byId.TryGetValue(scout.TargetBodyId, out var unsurveyed):
+                // A scout surveys on the way in, so the leg ends where it's in range.
+                var from = craft.Position - GetPosition(unsurveyed.Id);
+                return (unsurveyed.Id, CraftId.None, Math.Atan2(from.Y, from.X), SurveyRadius(unsurveyed, craft));
             case MiningJob { Active: true, State: MiningJobState.ToSource } mining when _byId.TryGetValue(mining.SourceBodyId, out var source):
                 if (source.Deposit(mining.MaterialId) == 0) return null;
                 SurfacePoint(source, craft, JobHoverAltitudeM, mining); // picks this trip's spot if not yet

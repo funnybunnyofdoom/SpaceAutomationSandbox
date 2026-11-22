@@ -30,11 +30,12 @@ public static class SaveGameSerializer
     /// landing sites with construction kits and added station requests and serve-requests freight.
     /// v12 added the star system (new games), the cruise drive and solar power by distance; v13 added
     /// part health (impact damage) and local gravity; v14 added crew and life support; v15 added abstract
-    /// transit legs for craft far from the player.
+    /// transit legs for craft far from the player; v16 added repairs (intact design, repair progress,
+    /// servicing) and survey jobs.
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 15;
+    public const int SchemaVersion = 16;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -107,6 +108,9 @@ public static class SaveGameSerializer
                             .Select(kv => new HealthDto { X = kv.Key.X, Y = kv.Key.Y, Health = kv.Value }).ToList()
                         : null,
                     PartsLost = c.PartsLost,
+                    IntactDesign = c.IntactDesign is { } intact ? DesignToDto(intact) : null,
+                    RepairProgressKg = c.RepairProgressKg,
+                    ServiceAtId = c.ServiceAt.Value,
                     Crew = c.Crew,
                     DockClaimStationId = c.DockClaimStation.Value,
                     Transit = c.Transit is { } leg
@@ -133,6 +137,11 @@ public static class SaveGameSerializer
                         : null,
                     Job = c.Job switch
                     {
+                        SurveyJob sv => new JobDto
+                        {
+                            Kind = sv.Kind, SourceBodyId = sv.TargetBodyId.Value, SurveyState = sv.State, Active = sv.Active,
+                            WaitReason = sv.WaitReason, CompletedCycles = sv.CompletedCycles, RetryAtTick = sv.RetryAtTick,
+                        },
                         MiningJob j => new JobDto
                         {
                             Kind = j.Kind, SourceBodyId = j.SourceBodyId.Value, MaterialId = j.MaterialId, DestinationId = j.DestinationId.Value,
@@ -312,7 +321,25 @@ public static class SaveGameSerializer
                         throw new FormatException($"Craft {c.Id} has an invalid refining batch.");
                     restored.RefiningBatch = new RefiningBatch(batch.RecipeId ?? "", inputs, batch.ProgressKg);
                 }
-                if (c.Job is { Kind: "requests" } r)
+                ShipDesign? intactDesign = null;
+                if (c.IntactDesign is not null)
+                {
+                    intactDesign = DesignFromDto(c.IntactDesign, $"Craft {c.Id} intact design");
+                    var intactErrors = intactDesign.Validate(catalog, intactDesign.SuggestedRole(catalog), requireConnected: false);
+                    if (intactErrors.Count > 0) throw new FormatException($"Craft {c.Id} intact design is invalid: {string.Join("; ", intactErrors)}");
+                }
+                if (c.RepairProgressKg < 0) throw new FormatException($"Craft {c.Id} has negative repair progress.");
+                sector.RestoreRepair(restored.Id, intactDesign, c.RepairProgressKg, new CraftId(c.ServiceAtId));
+                if (c.Job is { Kind: "survey" } sj)
+                {
+                    if (sj.SourceBodyId != 0) sector.GetBody(new BodyId(sj.SourceBodyId));
+                    sector.RestoreJob(restored.Id, new SurveyJob
+                    {
+                        Active = sj.Active, State = sj.SurveyState, TargetBodyId = new BodyId(sj.SourceBodyId), WaitReason = sj.WaitReason,
+                        CompletedCycles = sj.CompletedCycles, RetryAtTick = sj.RetryAtTick,
+                    });
+                }
+                else if (c.Job is { Kind: "requests" } r)
                 {
                     HaulContract? contract = null;
                     if (r.ContractAmountKg > 0)
@@ -491,6 +518,16 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int PartsLost { get; set; }
 
+        /// <summary>v16: the design before parts broke off (only while some are missing).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public DesignDto? IntactDesign { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double RepairProgressKg { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint ServiceAtId { get; set; }
+
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int Crew { get; set; }
 
@@ -572,7 +609,7 @@ public static class SaveGameSerializer
 
     private sealed class JobDto
     {
-        /// <summary>"mining" (v6 default), "freight" (v7) or "requests" (v11, contract in pickup/destination/material/contractAmountKg).</summary>
+        /// <summary>"mining" (v6 default), "freight" (v7), "requests" (v11, contract in pickup/destination/material/contractAmountKg) or "survey" (v16, target in sourceBodyId).</summary>
         public string? Kind { get; set; }
         public uint SourceBodyId { get; set; }
         public uint PickupId { get; set; }
@@ -593,6 +630,9 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public long ContractAmountKg { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public SurveyJobState SurveyState { get; set; }
 
         /// <summary>Mining: this trip's landing spot bearing (v14+, #55); null when not picked yet.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

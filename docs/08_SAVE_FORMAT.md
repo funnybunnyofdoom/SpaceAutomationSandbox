@@ -22,7 +22,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
 
 ```jsonc
 {
-  "schemaVersion": 15,
+  "schemaVersion": 16,
   "game": "SpaceAutomationSandbox",
   "playerCraftId": 1,                 // 0 = no player craft
   "sector": {
@@ -58,6 +58,8 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
         "ejectionRemainderKg": 0.5,                  // v10: ejected fraction of a kg (0..1); omitted when 0
         "cruising": true, "cruiseFuelRemainderKg": 0.4,  // v12: cruise drive on, and burned fuel not yet whole kg; both omitted when off/0
         "partHealth": [ { "x": 0, "y": 2, "health": 0.6 } ], "partsLost": 1,  // v13: damaged parts (omitted when none) and parts broken off
+        "intactDesign": { /* design */ }, "repairProgressKg": 12.5, "serviceAtId": 2, // v16, optional (#3): blueprint before parts broke off
+                                                     // (only while some are missing), work on the current repair, the yard a job is going to for repairs
         "crew": 4, "foodRemainderKg": 0.3, "waterRemainderKg": 0.6, "farmRemainderKg": 0.1, "crewGrowthS": 120.5,  // v14; each omitted when 0
         "legacyNoCrew": false,                       // v14: only written (true) for craft from older saves: no crew rules
         "dockClaimStationId": 2, "dockClaimPort": 0, // #55 (still v14, optional): the berth this craft has claimed; omitted when none
@@ -79,7 +81,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
 }
 ```
 
-The load checks for: the right `game`, a `schemaVersion` from 1 to 15, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs (as a ship or as a station; queued designs as ships), known materials in inventories and orders, target, landed-on, rail-orbit parent and player IDs that exist, dock links to real free ports (one ship per port, not also landed or on rails), and anchor states the rules allow (anchored only while landed with a clamp or foundation; a landed foundation always anchored). Any failure raises `FormatException` with a reason.
+The load checks for: the right `game`, a `schemaVersion` from 1 to 16, valid JSON, a non-negative tick, unique IDs, orbit parents that exist and aren't circular (bodies may appear in any order), valid designs (as a ship or as a station; queued designs as ships), known materials in inventories and orders, target, landed-on, rail-orbit parent and player IDs that exist, dock links to real free ports (one ship per port, not also landed or on rails), and anchor states the rules allow (anchored only while landed with a clamp or foundation; a landed foundation always anchored). Any failure raises `FormatException` with a reason.
 
 ## Changing the format
 
@@ -93,6 +95,7 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 2 | Added `landedOnBodyId` and `landedOffset` per craft (solid bodies) | A v1 file loads with every craft flying. The next save writes v2. |
 | 3 | Added `railOrbit`, `inventoryKg` and `buildQueue` per craft, and `nextOrderId` (shipyards) | v1/v2 files load with empty inventories and no queues. They contain no shipyard; F7 starts a new game that has one. |
 | 4 | Added `anchored` per craft (anchor clamps and foundations) | Older files load with nothing anchored, except a landed foundation, which is always anchored. |
+| 16 | Repairs and survey jobs: optional `intactDesign`, `repairProgressKg`, `serviceAtId` per craft; `job.kind` "survey" (target in `sourceBodyId`, `surveyState`) | Nothing changes. Parts that broke off in an older save can't be rebuilt (the blueprint wasn't kept); damage can be repaired. |
 | 15 | Abstract transit for craft far from the player: optional `transit` per craft (start and arrival tick, start point, target body or craft, arrival angle and radius) | Nothing is in transit in an older file; the migration changes nothing. |
 | 14 | Crew and life support: `crew`, supply and farm remainders, `crewGrowthS` and `legacyNoCrew` per craft. Eaten and drunk supplies go into `sector.ejectedKg` | The migration marks every older craft `legacyNoCrew`, so designs over 15 parts keep working without crew. |
 | 13 | Part health (`partHealth`, `partsLost` per craft; the saved design already lacks broken-off parts, and craft designs no longer need to be valid ships or stations, only made of known parts) and local gravity. Debris goes into `sector.ejectedKg` | Older craft are undamaged; gravity applies from the first tick after loading. |

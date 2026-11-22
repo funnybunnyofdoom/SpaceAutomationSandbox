@@ -537,10 +537,11 @@ public partial class Main : Node2D
                 + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
                 + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
                 + (SectorState.CrewStatus(p) is { Length: > 0 } crew ? crew + "\n" : "")
-                + (p.PartHealth.Count > 0 || p.PartsLost > 0
+                + (SectorState.NeedsRepair(p)
                     ? $"DAMAGE: {p.PartHealth.Count} part(s) damaged"
                       + (p.PartHealth.Count > 0 ? $" (worst {p.PartHealth.Values.Min() * 100:0}%)" : "")
-                      + (p.PartsLost > 0 ? $", {p.PartsLost} broken off" : "") + " - no repairs yet\n"
+                      + (SectorState.MissingParts(p) > 0 ? $", {SectorState.MissingParts(p)} broken off" : "")
+                      + " - " + (p.RepairStatus ?? "dock at a shipyard to repair") + "\n"
                     : "")
                 + (!p.IsLanded && !p.IsDocked && !p.IsOnRails && !p.Cruising && _sector.GravitySource(p.Position) is { } pull
                     ? $"gravity {_sector.GravityAt(p.Position, _sector.TimeS).Length:0.00} m/s² from {pull.Name} - land under {SectorState.SafeImpactSpeedMps:0} m/s\n"

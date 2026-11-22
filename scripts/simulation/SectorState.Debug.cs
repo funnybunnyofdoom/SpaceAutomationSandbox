@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace SpaceAutomationSandbox.Simulation;
 
@@ -50,5 +52,20 @@ public sealed partial class SectorState
     public void DebugSurveyAll()
     {
         foreach (var body in _bodies) body.Surveyed = true;
+    }
+
+    /// <summary>
+    /// DEBUG: damages one part as an impact would: sets its health, or breaks it off at 0 (its
+    /// materials become debris). For tests and trying out repairs.
+    /// </summary>
+    public void DebugDamagePart(CraftId craftId, Construction.GridPos pos, double health)
+    {
+        var craft = GetCraft(craftId);
+        if (Parts is null) throw new InvalidOperationException("No part catalog: this sector takes no damage.");
+        var cell = craft.Design.Cells.First(c => c.Pos == pos);
+        if (health <= 0) { BreakOff(craft, new List<Construction.DesignCell> { cell }); return; }
+        if (health > 1) throw new ArgumentOutOfRangeException(nameof(health));
+        if (health < 1) craft.HealthList[pos] = health; else craft.HealthList.Remove(pos);
+        craft.Stats = craft.Design.ComputeStats(Parts, craft.HealthList);
     }
 }

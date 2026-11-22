@@ -231,6 +231,7 @@ public sealed partial class SectorState
         StepSurvey();
 
         // Shipyards advance after movement, so a finished craft is placed against the yard's new position.
+        StepRepairs(); // the fabricator repairs before it builds (#3)
         StepFabrication(endS);
         StepEjection();
         EndPowerTick();

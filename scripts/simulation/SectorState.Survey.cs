@@ -2,8 +2,8 @@ namespace SpaceAutomationSandbox.Simulation;
 
 /// <summary>
 /// First visits: the craft the player is piloting surveys any body whose surface it comes within
-/// <see cref="SurveyRangeM"/> of. Only surveyed bodies can be mined by jobs or built on, so new
-/// sites are founded by the player going there (NPC expansion comes later).
+/// <see cref="SurveyRangeM"/> of; so does a craft running a survey job (an automated scout, #4), by
+/// the same rule. Only surveyed bodies can be mined by jobs or built on.
 /// </summary>
 public sealed partial class SectorState
 {
@@ -17,12 +17,23 @@ public sealed partial class SectorState
 
     private void StepSurvey()
     {
-        if (PilotCraftId.IsNone || !_craftsById.TryGetValue(PilotCraftId, out var pilot)) return;
+        if (!PilotCraftId.IsNone && _craftsById.TryGetValue(PilotCraftId, out var pilot)) SurveyAround(pilot);
+        foreach (var craft in _crafts)
+            if (craft.Job is SurveyJob { Active: true } scout && craft.Transit is null) scout.CompletedCycles += SurveyAround(craft);
+    }
+
+    /// <summary>Surveys every body within range of the craft; returns how many were new.</summary>
+    private int SurveyAround(CraftState craft)
+    {
+        var count = 0;
         for (var i = 0; i < _bodies.Count; i++)
         {
             var body = _bodies[i];
-            if (body.Surveyed) continue;
-            if (BodyPositionAt(i, TimeS).DistanceTo(pilot.Position) - body.RadiusM <= SurveyRangeM) body.Surveyed = true;
+            if (body.Surveyed || body.Kind == BodyKind.Star) continue;
+            if (BodyPositionAt(i, TimeS).DistanceTo(craft.Position) - body.RadiusM > SurveyRangeM) continue;
+            body.Surveyed = true;
+            count++;
         }
+        return count;
     }
 }
