@@ -92,6 +92,7 @@ public partial class DiagnosticsPanel : PanelContainer
         AppendTime(text);
         AppendJobs(text, sector);
         AppendRequests(text, sector);
+        AppendImpacts(text, sector);
         AppendLedger(text, sector, ledger);
         _text.Text = text.ToString().Replace("\r\n", "\n"); // AppendLine writes CRLF on Windows; a Label shows \r as an extra line
     }
@@ -144,13 +145,25 @@ public partial class DiagnosticsPanel : PanelContainer
         text.AppendLine();
     }
 
+    private static void AppendImpacts(StringBuilder text, SectorState sector)
+    {
+        if (sector.RecentImpacts.Count == 0) return;
+        text.AppendLine("RECENT DAMAGING IMPACTS");
+        foreach (var e in sector.RecentImpacts.Reverse().Take(8))
+        {
+            var name = sector.Crafts.FirstOrDefault(c => c.Id == e.Craft)?.Name ?? e.Craft.ToString();
+            text.AppendLine($"  {e.Tick * FixedStepClock.TickSeconds / 60:0.0} min: {name} hit {e.With} at {e.SpeedMps:0} m/s");
+        }
+        text.AppendLine();
+    }
+
     private void AppendLedger(StringBuilder text, SectorState sector, MassLedger ledger)
     {
         static string T(long kg) => $"{kg / 1000.0:#,0.0} t";
         text.AppendLine("MASS LEDGER");
         text.AppendLine($"  deposits {T(ledger.DepositsKg)}   stock {T(ledger.StockKg)}");
         text.AppendLine($"  kits {T(ledger.KitsKg)}   build orders {T(ledger.OrdersKg)}   refining {T(ledger.RefiningKg)}");
-        text.AppendLine($"  craft (their parts) {T(ledger.CraftKg)}   ejected {T(ledger.EjectedKg)}");
+        text.AppendLine($"  craft (their parts) {T(ledger.CraftKg)}   ejected, burned or debris {T(ledger.EjectedKg)}");
         text.AppendLine($"  total {ledger.TotalKg:#,0} kg");
         var cheats = sector.DebugAddedKg - _baselineCheatKg;
         var drift = ledger.TotalKg - _baselineKg - cheats;

@@ -70,9 +70,14 @@ public class CargoTests
 
         sector.TryUndock(ship.Id);
         var before = ship.Velocity;
+        var gravity = Vector2D.Zero;
         ship.Controls = new ShipControls(1, 0, false);
-        for (var i = 0; i < FixedStepClock.TicksPerSecond; i++) sector.Step();
-        Assert.Equal(ship.Stats.TotalThrustN / ship.MassKg, (ship.Velocity - before).Length, 1);
+        for (var i = 0; i < FixedStepClock.TicksPerSecond; i++)
+        {
+            gravity += sector.GravityAt(ship.Position, sector.TimeS) * FixedStepClock.TickSeconds; // Home pulls too (#32)
+            sector.Step();
+        }
+        Assert.Equal(ship.Stats.TotalThrustN / ship.MassKg, (ship.Velocity - before - gravity).Length, 1);
     }
 
     [Fact]

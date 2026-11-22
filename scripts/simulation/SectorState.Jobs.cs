@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace SpaceAutomationSandbox.Simulation;
@@ -66,8 +67,13 @@ public sealed partial class SectorState
     /// <summary>Restores a saved job exactly (no validation of the current situation; the job re-checks every tick).</summary>
     public void RestoreJob(CraftId craftId, ShipJob job) => GetCraft(craftId).Job = job;
 
+    /// <summary>Craft that can't move (parked or landed), gathered once per tick for the autopilot's station avoidance.</summary>
+    private readonly List<CraftState> _stationsThisTick = new();
+
     private void StepJobs()
     {
+        _stationsThisTick.Clear();
+        foreach (var craft in _crafts) if (!Movable(craft)) _stationsThisTick.Add(craft);
         foreach (var craft in _crafts)
         {
             switch (craft.Job)
@@ -251,16 +257,26 @@ public sealed partial class SectorState
     ///    (down to straight up, which always is), re-checked every tick.
     /// 3. Otherwise fly straight at the goal.
     /// </summary>
-    private ShipControls NavigateTo(CraftState craft, Vector2D goal, Vector2D goalVelocity, BodyId ignore, double maxSpeed, double arrivalSpeed)
+    private ShipControls NavigateTo(CraftState craft, Vector2D goal, Vector2D goalVelocity, BodyId ignore, double maxSpeed, double arrivalSpeed,
+        CraftId ignoreCraft = default)
     {
         if (CruiseLeg(craft, goal, goalVelocity) is { } cruise) return cruise; // long legs between planets (#53)
+        if (AvoidStations(craft, goal, ignoreCraft, maxSpeed) is { } avoid) return avoid; // stations are solid now (#34)
+        // Gravity curves the path towards the body pulling it (#32): predict with it for that body.
+        var pullingIndex = GravitySourceIndex(craft.Position, TimeS);
+        var pull = GravityAt(craft.Position, TimeS, pullingIndex);
+        var positions = AllBodyPositions(TimeS, out var velocities);
         for (var i = 0; i < _bodies.Count; i++)
         {
             var body = _bodies[i];
             if (body.Id == ignore) continue;
-            var centre = BodyPositionAt(i, TimeS);
-            var relative = craft.Velocity - BodyVelocityAt(i, TimeS);
-            if (WillHit(craft.Position, relative, centre, body.RadiusM + craft.CollisionRadiusM + 20, JobImpactHorizonS))
+            var centre = positions[i];
+            var relative = craft.Velocity - velocities[i];
+            // Look further ahead the faster we close: time to turn round (π at the turn rate) plus time to stop.
+            var accel = craft.Stats.TotalThrustN / craft.MassKg;
+            var horizon = JobImpactHorizonS + (accel > 0 ? relative.Length / accel : 0) + Math.PI / FlightModel.TurnRateRadPerS;
+            if (WillHit(craft.Position, relative, centre, body.RadiusM + craft.CollisionRadiusM + 20, horizon,
+                    i == pullingIndex ? pull : Vector2D.Zero))
             {
                 var away = craft.Position - centre;
                 return Autopilot.ThrustAlong(craft, away * (1 / Math.Max(away.Length, 1e-9)));
@@ -271,7 +287,7 @@ public sealed partial class SectorState
         {
             var body = _bodies[i];
             if (body.Id == ignore) continue;
-            var centre = BodyPositionAt(i, TimeS);
+            var centre = positions[i];
             var clearance = body.RadiusM + craft.CollisionRadiusM + JobAvoidClearanceM;
             if (SegmentClears(craft.Position, goal, centre, clearance)) continue;
 
@@ -307,8 +323,49 @@ public sealed partial class SectorState
     }
 
     /// <summary>Moving at <paramref name="relativeVelocity"/>, does the ship come within <paramref name="radius"/> of the centre in the next <paramref name="horizonS"/>?</summary>
-    private static bool WillHit(Vector2D position, Vector2D relativeVelocity, Vector2D centre, double radius, double horizonS)
+    /// <summary>
+    /// Stations (craft that can't move: parked or landed) are obstacles since #34. Steer round any
+    /// whose disc the straight way to the goal crosses, and turn away from one about to be hit.
+    /// <paramref name="ignoreCraft"/> is the station being docked at (its own approach handles it).
+    /// </summary>
+    private ShipControls? AvoidStations(CraftState craft, Vector2D goal, CraftId ignoreCraft, double maxSpeed)
     {
+        foreach (var station in _stationsThisTick)
+        {
+            if (station.Id == ignoreCraft || ReferenceEquals(station, craft) || craft.DockedToCraftId == station.Id) continue;
+            var clearance = station.CollisionRadiusM + craft.CollisionRadiusM + 25;
+            var offset = craft.Position - station.Position;
+            if (offset.Length > 3_000 + clearance) continue; // far away: nothing to do yet
+            var relative = craft.Velocity - station.Velocity;
+            var accel = craft.Stats.TotalThrustN / craft.MassKg;
+            var horizon = 3 + (accel > 0 ? relative.Length / accel : 0);
+            if (WillHit(craft.Position, relative, station.Position, clearance - 10, horizon))
+                return Autopilot.ThrustAlong(craft, offset * (1 / Math.Max(offset.Length, 1e-9)));
+            if (SegmentClears(craft.Position, goal, station.Position, clearance)) continue;
+            if (goal.DistanceTo(station.Position) < clearance) continue; // the goal itself is beside it: the docking approach handles that
+            // Pass on the side we're already on, a little wider than the station.
+            var toGoal = goal - craft.Position;
+            var side = new Vector2D(-toGoal.Y, toGoal.X) * (1 / Math.Max(toGoal.Length, 1e-9));
+            if (offset.X * side.X + offset.Y * side.Y < 0) side = side * -1;
+            var waypoint = station.Position + side * (clearance + 15);
+            return Autopilot.Approach(craft, waypoint, station.Velocity, Math.Min(maxSpeed, JobCruiseSpeedMps), arrivalSpeed: 20);
+        }
+        return null;
+    }
+
+    private static bool WillHit(Vector2D position, Vector2D relativeVelocity, Vector2D centre, double radius, double horizonS,
+        Vector2D acceleration = default)
+    {
+        if (acceleration.X != 0 || acceleration.Y != 0)
+        {
+            // Curved path under constant gravity: sample it (cheap: only for the one body pulling).
+            for (var step = 1; step <= 12; step++)
+            {
+                var ts = horizonS * step / 12;
+                if ((position + relativeVelocity * ts + acceleration * (0.5 * ts * ts)).DistanceTo(centre) < radius) return true;
+            }
+            return false;
+        }
         var toCentre = centre - position;
         var speedSq = relativeVelocity.X * relativeVelocity.X + relativeVelocity.Y * relativeVelocity.Y;
         if (speedSq < 1e-9) return false;

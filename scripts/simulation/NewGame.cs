@@ -20,8 +20,10 @@ public static class NewGame
     /// <summary>Fuel in the player's hold at the start: about 10 minutes of cruise for the starter ship.</summary>
     public const long PlayerStartingFuelKg = 150;
 
-    /// <summary>Shipyard orbit height above the primary's surface, and its period.</summary>
+    /// <summary>Shipyard orbit height above the home planet's surface. Its period is a real circular orbit there (#32).</summary>
     public const double ShipyardAltitudeM = 600; // 300 m above the player's spawn, so it's in view at the start
+
+    /// <summary>Period used for rails where there is no gravity to set one.</summary>
     public const double ShipyardOrbitPeriodS = 1_800;
 
     /// <summary>Phase lead over the player's spawn point, so the yard starts in view nearby.</summary>
@@ -48,7 +50,12 @@ public static class NewGame
         var primary = SectorGenerator.HomePlanet(sector);
 
         var player = new CraftState(sector.AllocateCraftId(), "Player", starterShip, starterShip.ComputeStats(catalog),
-            SectorGenerator.PlayerSpawnPoint(sector), headingRad: 0) { Velocity = SectorGenerator.PlayerSpawnVelocity(sector) };
+            SectorGenerator.PlayerSpawnPoint(sector), headingRad: 0)
+        {
+            // In a circular orbit around Home (#32): it doesn't fall, and it keeps pace with the yard.
+            Velocity = SectorGenerator.PlayerSpawnVelocity(sector)
+                       + new Vector2D(SectorState.CircularOrbitSpeedMps(primary, primary.RadiusM + SectorGenerator.PlayerSpawnAltitudeM), 0),
+        };
         sector.AddCraft(player);
         sector.SetTarget(player.Id, primary.Id);
         player.Inventory.Add(SectorState.FuelMaterial, PlayerStartingFuelKg);
@@ -58,8 +65,9 @@ public static class NewGame
             Vector2D.Zero, headingRad: 0);
         sector.AddCraft(yard);
         // Spawn point is straight "up" (−Y) from the primary, i.e. angle −π/2 on its orbit circle.
-        sector.PutOnRails(yard.Id, new CircularOrbit(primary.Id, primary.RadiusM + ShipyardAltitudeM, ShipyardOrbitPeriodS,
-            -Math.PI / 2 + ShipyardPhaseLeadRad));
+        var yardRadius = primary.RadiusM + ShipyardAltitudeM;
+        sector.PutOnRails(yard.Id, new CircularOrbit(primary.Id, yardRadius,
+            SectorState.CircularOrbitPeriodS(primary, yardRadius, ShipyardOrbitPeriodS), -Math.PI / 2 + ShipyardPhaseLeadRad));
         foreach (var (material, kg) in StartingStockKg)
         {
             if (!catalog.Materials.Contains(material)) throw new InvalidOperationException($"Starting stock uses unknown material '{material}'.");

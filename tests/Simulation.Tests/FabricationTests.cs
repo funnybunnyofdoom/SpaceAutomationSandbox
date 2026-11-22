@@ -98,6 +98,8 @@ public class FabricationTests
         var yard = sector.GetCraft(game.ShipyardId);
         yard.Inventory.Add(NewGame.StartingStockKg); // enough for three or more
         var design = TestData.StarterShip();
+        // The player orbits just below the yard and would sometimes take the parking slot: move it away.
+        TestData.LandAt(sector, sector.GetCraft(game.PlayerCraftId), sector.Bodies.First(b => b.IsMineable));
         for (var i = 0; i < 3; i++) Assert.True(sector.OrderBuild(yard.Id, design, Catalog).Accepted);
         RunSeconds(sector, 3 * design.ComputeStats(Catalog).TotalMassKg / yard.Stats.FabricationRateKgPerS + 2);
 
@@ -118,9 +120,10 @@ public class FabricationTests
         Assert.True(ship.IsOnRails);
         Assert.Equal(yard.RailOrbit!.RadiusM, ship.RailOrbit!.RadiusM);
         var gap = ship.Position.DistanceTo(yard.Position) - ship.CollisionRadiusM - yard.CollisionRadiusM;
-        // Parked a short arc behind on the same orbit: the straight-line gap is close to the target gap.
-        Assert.InRange(gap, SectorState.ParkingGapM * 0.5, SectorState.ParkingGapM * 1.5);
-        Assert.True((ship.Velocity - yard.Velocity).Length < 0.5, "Parked ships move with the yard.");
+        // Parked a short arc behind on the same orbit, in the first free slot (the yard's fixed berths can
+        // swing into the first one as it orbits, #32), so within a few slots of the yard.
+        Assert.InRange(gap, SectorState.ParkingGapM * 0.5, SectorState.ParkingGapM * 1.5 + 2 * (2 * ship.CollisionRadiusM + SectorState.ParkingGapM));
+        Assert.True((ship.Velocity - yard.Velocity).Length < 1.5, "Parked ships move with the yard."); // a little apart on a faster orbit (#32)
 
         RunSeconds(sector, 600); // ten minutes later still alongside
         Assert.Equal(gap, ship.Position.DistanceTo(yard.Position) - ship.CollisionRadiusM - yard.CollisionRadiusM, 6);

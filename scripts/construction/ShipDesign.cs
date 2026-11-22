@@ -205,7 +205,11 @@ public sealed class ShipDesign
     }
 
     /// <summary>Totals and centre of mass (in cell units). Call only on a design whose parts are all known.</summary>
-    public ShipStats ComputeStats(PartCatalog catalog)
+    /// <param name="health">
+    /// Damaged parts (#34), 0..1 by cell; missing = undamaged. A damaged part's output (thrust, drill,
+    /// refinery, fabricator, solar, ejector) scales with its health; mass, storage and power use don't.
+    /// </param>
+    public ShipStats ComputeStats(PartCatalog catalog, IReadOnlyDictionary<GridPos, double>? health = null)
     {
         double mass = 0, thrust = 0, otherThrust = 0, cargo = 0, energy = 0, fabrication = 0, mining = 0, refining = 0, momentX = 0, momentY = 0;
         double generation = 0, thrustPower = 0, drillPower = 0, refineryPower = 0, fabricatorPower = 0, ejectorPower = 0, ejection = 0;
@@ -215,23 +219,24 @@ public sealed class ShipDesign
         foreach (var cell in Cells)
         {
             var part = catalog.Get(cell.PartId);
+            var h = health is not null && health.TryGetValue(cell.Pos, out var cellHealth) ? Math.Clamp(cellHealth, 0, 1) : 1;
             mass += part.MassKg;
             // A thruster pushes the way it faces: 0 forward, 1 right, 2 backward, 3 left.
             switch (cell.Rotation)
             {
-                case 0: thrust += part.ThrustN; break;
-                case 1: right += part.ThrustN; break;
-                case 2: reverse += part.ThrustN; break;
-                default: left += part.ThrustN; break;
+                case 0: thrust += part.ThrustN * h; break;
+                case 1: right += part.ThrustN * h; break;
+                case 2: reverse += part.ThrustN * h; break;
+                default: left += part.ThrustN * h; break;
             }
-            if (cell.Rotation != 0) otherThrust += part.ThrustN;
+            if (cell.Rotation != 0) otherThrust += part.ThrustN * h;
             cargo += part.CargoCapacityKg;
             energy += part.EnergyCapacityKJ;
-            fabrication += part.FabricationRateKgPerS;
-            mining += part.MiningRateKgPerS;
-            refining += part.RefiningRateKgPerS;
-            generation += part.PowerGenerationKW;
-            ejection += part.EjectionRateKgPerS;
+            fabrication += part.FabricationRateKgPerS * h;
+            mining += part.MiningRateKgPerS * h;
+            refining += part.RefiningRateKgPerS * h;
+            generation += part.PowerGenerationKW * h;
+            ejection += part.EjectionRateKgPerS * h;
             // Each part's power use goes to the activity it powers; thrusters by the direction they push.
             if (part.ThrustN > 0)
             {

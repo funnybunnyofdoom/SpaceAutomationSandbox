@@ -155,7 +155,7 @@ public partial class Main : Node2D
         {
             // Dev/test hook: drop onto the primary clamp-first (nose up), then anchor.
             _player.HeadingRad = 0;
-            _player.Velocity = new Vector2D(0, 20); // falling towards the primary below
+            _player.Velocity = _sector.GetVelocityAt(SectorGenerator.HomePlanet(_sector).Id, _sector.TimeS) + new Vector2D(0, 4); // gently down: harmless (#34)
             for (var i = 0; i < 600 && !_player.IsLanded; i++) _sector.Step();
             _player.Controls = ShipControls.Idle;
             ShowStatus(_sector.TryAnchor(_player.Id).Message);
@@ -188,6 +188,13 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-diagnostics") >= 0) _diagnosticsPanel?.Open();
         if (System.Array.IndexOf(args, "--open-settings") >= 0) _settingsPanel?.Open();
         if (System.Array.IndexOf(args, "--open-map") >= 0) ToggleMap();
+        if (System.Array.IndexOf(args, "--demo-crash") >= 0 && _player != null)
+        {
+            // Dev/test hook: drop the player onto Home tail first at 30 m/s, to see damage (#34).
+            _player.Velocity = _sector.GetVelocityAt(SectorGenerator.HomePlanet(_sector).Id, _sector.TimeS) + new Vector2D(0, 30);
+            for (var i = 0; i < 600 && !_player.IsLanded; i++) _sector.Step();
+            _player.Controls = ShipControls.Idle;
+        }
         if (args.FirstOrDefault(a => a.StartsWith("--speed=")) is { } speedArg && int.TryParse(speedArg["--speed=".Length..], out var speed))
             _warp.Speed = speed;
         foreach (var arg in args) // --zoom=0.2
@@ -529,6 +536,14 @@ public partial class Main : Node2D
                 + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
                 + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
                 + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
+                + (p.PartHealth.Count > 0 || p.PartsLost > 0
+                    ? $"DAMAGE: {p.PartHealth.Count} part(s) damaged"
+                      + (p.PartHealth.Count > 0 ? $" (worst {p.PartHealth.Values.Min() * 100:0}%)" : "")
+                      + (p.PartsLost > 0 ? $", {p.PartsLost} broken off" : "") + " - no repairs yet\n"
+                    : "")
+                + (!p.IsLanded && !p.IsDocked && !p.IsOnRails && !p.Cruising && _sector.GravitySource(p.Position) is { } pull
+                    ? $"gravity {_sector.GravityAt(p.Position, _sector.TimeS).Length:0.00} m/s² from {pull.Name} - land under {SectorState.SafeImpactSpeedMps:0} m/s\n"
+                    : "")
                 + (p.Cruising
                     ? $"CRUISE {SectorState.CruiseSpeedMps:0} m/s - fuel {p.Inventory[SectorState.FuelMaterial] / 1000.0:0.00} t "
                       + $"({p.Inventory[SectorState.FuelMaterial] / System.Math.Max(SectorState.CruiseFuelKgPerS(p), 1e-9) / 60:0} min left), V or brake to drop out\n"
@@ -721,7 +736,10 @@ public partial class Main : Node2D
             var local = new Vector2((float)(cell.Pos.X - stats.CenterOfMassX), (float)(cell.Pos.Y - stats.CenterOfMassY)) * cellPx;
             var rect = new Rect2(local - new Vector2(cellPx, cellPx) / 2 + new Vector2(gap, gap) / 2,
                 new Vector2(cellPx - gap, cellPx - gap));
-            DrawRect(rect, _partColors.GetValueOrDefault(cell.PartId, Colors.Magenta));
+            var colour = _partColors.GetValueOrDefault(cell.PartId, Colors.Magenta);
+            // Damaged parts (#34) darken towards black-red as they lose health.
+            if (craft.PartHealth.TryGetValue(cell.Pos, out var health)) colour = colour.Lerp(new Color(0.25f, 0.05f, 0.05f), (float)(1 - health) * 0.8f);
+            DrawRect(rect, colour);
 
             // Only rear-facing thrusters fire on throttle (docs/06); others stay dark for now.
             if (cell.PartId == "thruster" && cell.Rotation == 0 && craft.Controls.Throttle > 0 && !craft.Controls.Brake)

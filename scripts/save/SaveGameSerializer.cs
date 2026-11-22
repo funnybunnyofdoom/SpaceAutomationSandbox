@@ -28,11 +28,12 @@ public static class SaveGameSerializer
     /// v7 added survey flags, refinery batches and freight jobs; v8 added debug tuning and job retry
     /// times; v9 limited storage to storage parts; v10 added power and slag ejection; v11 replaced order
     /// landing sites with construction kits and added station requests and serve-requests freight.
-    /// v12 added the star system (new games), the cruise drive and solar power by distance.
+    /// v12 added the star system (new games), the cruise drive and solar power by distance; v13 added
+    /// part health (impact damage) and local gravity.
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 12;
+    public const int SchemaVersion = 13;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -100,6 +101,11 @@ public static class SaveGameSerializer
                     LegacyFreePower = c.LegacyFreePower,
                     EjectionRemainderKg = c.EjectionRemainderKg,
                     Cruising = c.Cruising,
+                    PartHealth = c.PartHealth.Count > 0
+                        ? c.PartHealth.OrderBy(kv => kv.Key.Y).ThenBy(kv => kv.Key.X)
+                            .Select(kv => new HealthDto { X = kv.Key.X, Y = kv.Key.Y, Health = kv.Value }).ToList()
+                        : null,
+                    PartsLost = c.PartsLost,
                     CruiseFuelRemainderKg = c.CruiseFuelRemainderKg,
                     MiningRemainderKg = c.MiningRemainderKg,
                     RefiningBatch = c.RefiningBatch is { } rb
@@ -198,10 +204,12 @@ public static class SaveGameSerializer
             foreach (var c in dto.Crafts ?? new List<CraftDto>())
             {
                 var design = DesignFromDto(c.Design, $"Craft {c.Id}");
-                // A craft must be usable as a ship or as a station.
-                var shipErrors = design.Validate(catalog, DesignRole.Ship, requireConnected: false);
-                if (shipErrors.Count > 0 && design.Validate(catalog, DesignRole.Station, requireConnected: false).Count > 0)
-                    throw new FormatException($"Craft {c.Id} design '{design.Id}' is invalid: {string.Join("; ", shipErrors)}");
+                // Every part must exist. Roles aren't checked: damage can break off a cockpit or the
+                // last thruster (#34), and such a wreck is still a valid craft in a save.
+                if (design.Cells.Count == 0) throw new FormatException($"Craft {c.Id} has no parts.");
+                foreach (var cell in design.Cells)
+                    if (!catalog.TryGet(cell.PartId, out _))
+                        throw new FormatException($"Craft {c.Id} design '{design.Id}' is invalid: unknown part '{cell.PartId}' at ({cell.Pos.X},{cell.Pos.Y}).");
 
                 var craft = new CraftState(new CraftId(c.Id), c.Name ?? "", design, design.ComputeStats(catalog),
                     ToVec(c.Position, "position"), c.HeadingRad)
@@ -223,6 +231,8 @@ public static class SaveGameSerializer
                 craft.EjectionRemainderKg = c.EjectionRemainderKg;
                 if (c.CruiseFuelRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has a cruise fuel remainder of {c.CruiseFuelRemainderKg} kg.");
                 craft.Cruising = c.Cruising;
+                sector.RestoreHealth(craft.Id,
+                    (c.PartHealth ?? new List<HealthDto>()).ToDictionary(h => new GridPos(h.X, h.Y), h => h.Health), c.PartsLost);
                 craft.CruiseFuelRemainderKg = c.CruiseFuelRemainderKg;
                 if (c.RailOrbit is { } rail) sector.RestoreRails(craft.Id, OrbitFromDto(rail));
                 foreach (var (material, kg) in c.InventoryKg ?? new SortedDictionary<string, long>())
@@ -454,6 +464,11 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool Cruising { get; set; }
 
+        public List<HealthDto>? PartHealth { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int PartsLost { get; set; }
+
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double CruiseFuelRemainderKg { get; set; }
         public double MiningRemainderKg { get; set; }
@@ -464,6 +479,13 @@ public static class SaveGameSerializer
         public List<OrderDto>? BuildQueue { get; set; }
         public List<KitDto>? Kits { get; set; }
         public SortedDictionary<string, long>? RequestsKg { get; set; }
+    }
+
+    private sealed class HealthDto
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public double Health { get; set; }
     }
 
     private sealed class KitDto

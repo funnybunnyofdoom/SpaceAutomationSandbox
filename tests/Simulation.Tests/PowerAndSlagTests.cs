@@ -54,6 +54,9 @@ public class PowerAndSlagTests
     {
         var sector = TestData.NewGame().Sector;
         var station = AddCraft(sector, "Panel", (0, 0, "battery"), (1, 0, "solar_panel"));
+        var home = SectorGenerator.HomePlanet(sector);
+        var radius = home.RadiusM + 2_000; // a parked orbit: without thrusters it would fall under gravity (#32)
+        sector.PutOnRails(station.Id, new CircularOrbit(home.Id, radius, SectorState.CircularOrbitPeriodS(home, radius, 1_800), 0));
         station.StoredEnergyKJ = 0;
 
         for (var i = 0; i < 10 * TicksPerSecond; i++) sector.Step();

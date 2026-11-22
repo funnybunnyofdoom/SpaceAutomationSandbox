@@ -23,7 +23,7 @@ public sealed partial class SectorState
     /// <summary>…and the carrier nearly matched to that body.</summary>
     public const double DeployMaxRelativeSpeedMps = 20;
 
-    /// <summary>Orbit period given to stations deployed in flight (same as the starter yard's).</summary>
+    /// <summary>Orbit period for stations deployed in flight outside any body's gravity (inside it, a real circular orbit, #32).</summary>
     public const double DeployOrbitPeriodS = NewGame.ShipyardOrbitPeriodS;
 
     /// <summary>Moves a kit between two craft docked together, if the receiver has room for it.</summary>
@@ -91,12 +91,13 @@ public sealed partial class SectorState
         var offset = carrier.Position - GetPosition(body.Id);
         var radius = Math.Max(offset.Length, body.RadiusM + station.CollisionRadiusM + ParkingGapM);
         var phaseNow = Math.Atan2(offset.Y, offset.X);
+        var period = CircularOrbitPeriodS(body, radius, DeployOrbitPeriodS);
         for (var slot = 1; slot <= 1000; slot++)
         {
             var distance = carrier.CollisionRadiusM + station.CollisionRadiusM + ParkingGapM
                            + (slot - 1) * (2 * station.CollisionRadiusM + ParkingGapM);
-            var orbit = new CircularOrbit(body.Id, radius, DeployOrbitPeriodS,
-                phaseNow - distance / radius - 2.0 * Math.PI * (TimeS / DeployOrbitPeriodS));
+            var orbit = new CircularOrbit(body.Id, radius, period,
+                phaseNow - distance / radius - 2.0 * Math.PI * (TimeS / period));
             if (!IsFree(RailPositionAt(orbit, TimeS), station)) continue;
             PutOnRails(station.Id, orbit);
             return;

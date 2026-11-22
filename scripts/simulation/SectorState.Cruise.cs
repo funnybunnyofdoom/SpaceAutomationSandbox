@@ -82,9 +82,10 @@ public sealed partial class SectorState
     {
         CelestialBodyState? best = null;
         var bestGap = double.PositiveInfinity;
+        var positions = AllBodyPositions(timeS);
         for (var i = 0; i < _bodies.Count; i++)
         {
-            var gap = BodyPositionAt(i, timeS).DistanceTo(point) - _bodies[i].RadiusM;
+            var gap = positions[i].DistanceTo(point) - _bodies[i].RadiusM;
             if (gap < bestGap) { best = _bodies[i]; bestGap = gap; }
         }
         return best is null ? throw new InvalidOperationException("Sector has no bodies.") : (best, bestGap);

@@ -65,6 +65,7 @@ public sealed partial class SectorState
         public Vector2D[] Position = Array.Empty<Vector2D>();
         public Vector2D[] Velocity = Array.Empty<Vector2D>();
         public bool[] Done = Array.Empty<bool>();
+        public bool All;
     }
 
     private readonly MotionSlot[] _motionSlots = { new(), new(), new(), new() };
@@ -82,6 +83,7 @@ public sealed partial class SectorState
         foreach (var slot in _motionSlots)
         {
             slot.TimeS = double.NaN;
+            slot.All = false;
             slot.Position = new Vector2D[_bodies.Count];
             slot.Velocity = new Vector2D[_bodies.Count];
             slot.Done = new bool[_bodies.Count];
@@ -95,6 +97,7 @@ public sealed partial class SectorState
         var fresh = _motionSlots[_nextMotionSlot];
         _nextMotionSlot = (_nextMotionSlot + 1) % _motionSlots.Length;
         fresh.TimeS = timeS;
+        fresh.All = false;
         Array.Clear(fresh.Done);
         return fresh;
     }
@@ -115,6 +118,21 @@ public sealed partial class SectorState
         slot.Velocity[index] = velocity;
         slot.Done[index] = true;
     }
+
+    /// <summary>Every body's position (and velocity) at a time, filled once: for loops over all bodies (hot paths).</summary>
+    private Vector2D[] AllBodyPositions(double timeS, out Vector2D[] velocities)
+    {
+        var slot = SlotAt(timeS);
+        if (!slot.All)
+        {
+            for (var i = 0; i < _bodies.Count; i++) Fill(slot, i);
+            slot.All = true;
+        }
+        velocities = slot.Velocity;
+        return slot.Position;
+    }
+
+    private Vector2D[] AllBodyPositions(double timeS) => AllBodyPositions(timeS, out _);
 
     /// <summary>Position of the body at <paramref name="index"/> in <see cref="Bodies"/> (fast path for per-body loops).</summary>
     private Vector2D BodyPositionAt(int index, double timeS)
@@ -181,7 +199,9 @@ public sealed partial class SectorState
                 : Vector2D.Zero;
             var velocityBefore = craft.Velocity;
             var thrustPowered = TryUsePower(craft, ThrustEnergyKJ(craft, reference));
-            FlightModel.Step(craft, FixedStepClock.TickSeconds, reference, thrustPowered);
+            // Gravity pulls free-flying craft only; landed, docked and parked ones are held in place.
+            var gravity = craft.IsDocked || craft.IsLanded || craft.IsOnRails ? Vector2D.Zero : GravityAt(craft.Position, TimeS);
+            FlightModel.Step(craft, FixedStepClock.TickSeconds, reference, thrustPowered, gravity);
 
             // Docked ships follow their station, which may move later in this loop: settled below.
             if (craft.IsDocked) (docked ??= new()).Add((craft, craft.Velocity - velocityBefore));
@@ -191,6 +211,7 @@ public sealed partial class SectorState
         }
 
         if (docked != null) UpdateDocked(docked);
+        ResolveCraftCollisions(); // after everything moved (#34)
         StepMining();
         StepRefining();
         StepSurvey();

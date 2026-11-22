@@ -186,6 +186,7 @@ public partial class FleetPanel : PanelContainer
         var second = Where(sector, craft);
         if (craft.BuildQueue.Count > 0) second += $"   building {craft.BuildQueue[0].Fraction * 100:0}%";
         if (craft.PowerShort && !craft.LegacyFreePower) second += "   NO POWER";
+        if (craft.PartHealth.Count > 0 || craft.PartsLost > 0) second += $"   DAMAGED ({craft.PartHealth.Count + craft.PartsLost} parts)";
         if (craft.Job is { Active: true } job) second += $"\n   {job.Kind}: {job.Status} ({job.CompletedCycles} cycles)";
         else if (IsShip(craft) && pilot != craft) second += "   (idle)";
         return $"{craft.Name}  ({craft.Id}, {role}{distance})\n   {second}";

@@ -80,8 +80,19 @@ public sealed class CraftState
 
     public CraftId Id { get; }
     public string Name { get; }
-    public ShipDesign Design { get; }
-    public ShipStats Stats { get; }
+    /// <summary>Current design: parts that broke off (#34) are gone from it.</summary>
+    public ShipDesign Design { get; internal set; }
+
+    /// <summary>Stats of the current design and its part health.</summary>
+    public ShipStats Stats { get; internal set; }
+
+    internal Dictionary<GridPos, double> HealthList { get; } = new();
+
+    /// <summary>Damaged parts (#34): health 0..1 by cell. Missing = undamaged. Parts at 0 have broken off.</summary>
+    public IReadOnlyDictionary<GridPos, double> PartHealth => HealthList;
+
+    /// <summary>How many parts broke off this craft (#34), for the HUD.</summary>
+    public int PartsLost { get; internal set; }
 
     public Vector2D Position { get; internal set; }
     public Vector2D Velocity { get; internal set; }

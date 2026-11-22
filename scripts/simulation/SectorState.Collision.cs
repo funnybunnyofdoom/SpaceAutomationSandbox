@@ -61,18 +61,25 @@ public sealed partial class SectorState
 
     private void ResolveContact(CraftState craft, double endS)
     {
+        var positions = AllBodyPositions(endS);
         for (var i = 0; i < _bodies.Count; i++) // id order: deterministic if two bodies overlap
         {
             var body = _bodies[i];
-            var bodyPos = BodyPositionAt(i, endS);
+            var bodyPos = positions[i];
             if (craft.Position.DistanceTo(bodyPos) >= body.RadiusM + craft.CollisionRadiusM) continue; // can't touch
             if (SurfaceGap(craft, craft.Position, craft.HeadingRad, bodyPos, body.RadiusM) >= 0) continue;
 
             var settled = SettleOnSurface(craft, craft.Position, bodyPos, body.RadiusM);
+            var bodyVelocity = GetVelocityAt(body.Id, endS);
+            var normal = (settled - bodyPos) * (1 / Math.Max((settled - bodyPos).Length, 1e-9));
+            var relative = craft.Velocity - bodyVelocity;
+            var impact = -(relative.X * normal.X + relative.Y * normal.Y); // speed into the surface
             craft.LandedOnBodyId = body.Id;
             craft.LandedOffset = settled - bodyPos;
             craft.Position = settled;
-            craft.Velocity = GetVelocityAt(body.Id, endS);
+            craft.Velocity = bodyVelocity;
+            ApplyImpact(craft, bodyPos + normal * body.RadiusM, impact, body.Name); // hard landings break parts (#34)
+            if (craft.IsLanded) craft.LandedOffset = craft.Position - bodyPos; // a part may have broken off
             OnLanded(craft);
             return;
         }
