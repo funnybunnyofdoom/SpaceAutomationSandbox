@@ -7,7 +7,8 @@ namespace SpaceAutomationSandbox.Simulation;
 /// collisions. Acceleration = total thrust / total mass along the nose. "Brake" is a flight assist
 /// that spends the same thrust directly against velocity, so the ship can stop without turning
 /// around. With a target body set, braking matches the target's velocity instead (rendezvous assist).
-/// Turning is a fixed rate. No fuel or power is used yet. Stepped only by whole fixed ticks.
+/// Thrusters push the way they face (#40): throttle &gt; 0 fires forward thrust, &lt; 0 reverse
+/// thrust, and strafe fires the side thrusters. Turning is a fixed rate. Stepped only by whole fixed ticks.
 /// </summary>
 public static class FlightModel
 {
@@ -16,6 +17,10 @@ public static class FlightModel
 
     public static Vector2D ForwardFromHeading(double headingRad) =>
         new(Math.Sin(headingRad), -Math.Cos(headingRad));
+
+    /// <summary>The craft's right side (90° clockwise from forward on screen).</summary>
+    public static Vector2D RightFromHeading(double headingRad) =>
+        new(Math.Cos(headingRad), Math.Sin(headingRad));
 
     /// <param name="brakeReferenceVelocity">
     /// Velocity the brake matches: the target body's velocity, or zero to stop relative to the sector.
@@ -27,7 +32,7 @@ public static class FlightModel
         craft.PreviousHeadingRad = craft.HeadingRad;
 
         var controls = craft.Controls.Clamped();
-        if (!thrustAvailable) controls = controls with { Throttle = 0, Brake = false };
+        if (!thrustAvailable) controls = controls with { Throttle = 0, Strafe = 0, Brake = false };
         craft.HeadingRad = WrapAngle(craft.HeadingRad + controls.Turn * TurnRateRadPerS * dt);
 
         // Cargo counts: a loaded ship accelerates and brakes more slowly.
@@ -42,9 +47,16 @@ public static class FlightModel
                 ? brakeReferenceVelocity
                 : brakeReferenceVelocity + relative * ((speed - maxDeltaV) / speed);
         }
-        else if (controls.Throttle > 0)
+        else
         {
-            velocity += ForwardFromHeading(craft.HeadingRad) * (maxDeltaV * controls.Throttle);
+            var stats = craft.Stats;
+            var forward = ForwardFromHeading(craft.HeadingRad);
+            var right = RightFromHeading(craft.HeadingRad);
+            var perKg = dt / craft.MassKg;
+            if (controls.Throttle > 0) velocity += forward * (stats.TotalThrustN * perKg * controls.Throttle);
+            else if (controls.Throttle < 0) velocity += forward * (stats.ReverseThrustN * perKg * controls.Throttle);
+            if (controls.Strafe > 0) velocity += right * (stats.RightThrustN * perKg * controls.Strafe);
+            else if (controls.Strafe < 0) velocity += right * (stats.LeftThrustN * perKg * controls.Strafe);
         }
 
         // Semi-implicit Euler: the new velocity moves the ship this tick.

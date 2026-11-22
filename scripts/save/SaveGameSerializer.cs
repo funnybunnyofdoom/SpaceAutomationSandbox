@@ -86,7 +86,7 @@ public static class SaveGameSerializer
                     Position = Vec(c.Position),
                     Velocity = Vec(c.Velocity),
                     HeadingRad = c.HeadingRad,
-                    Controls = new ControlsDto { Throttle = c.Controls.Throttle, Turn = c.Controls.Turn, Brake = c.Controls.Brake },
+                    Controls = new ControlsDto { Throttle = c.Controls.Throttle, Turn = c.Controls.Turn, Brake = c.Controls.Brake, Strafe = c.Controls.Strafe },
                     TargetBodyId = c.TargetBodyId.Value,
                     TargetCraftId = c.TargetCraftId.Value,
                     DockedToCraftId = c.DockedToCraftId.Value,
@@ -196,15 +196,15 @@ public static class SaveGameSerializer
             {
                 var design = DesignFromDto(c.Design, $"Craft {c.Id}");
                 // A craft must be usable as a ship or as a station.
-                var shipErrors = design.Validate(catalog, DesignRole.Ship);
-                if (shipErrors.Count > 0 && design.Validate(catalog, DesignRole.Station).Count > 0)
+                var shipErrors = design.Validate(catalog, DesignRole.Ship, requireConnected: false);
+                if (shipErrors.Count > 0 && design.Validate(catalog, DesignRole.Station, requireConnected: false).Count > 0)
                     throw new FormatException($"Craft {c.Id} design '{design.Id}' is invalid: {string.Join("; ", shipErrors)}");
 
                 var craft = new CraftState(new CraftId(c.Id), c.Name ?? "", design, design.ComputeStats(catalog),
                     ToVec(c.Position, "position"), c.HeadingRad)
                 {
                     Velocity = ToVec(c.Velocity, "velocity"),
-                    Controls = c.Controls is { } k ? new ShipControls(k.Throttle, k.Turn, k.Brake) : ShipControls.Idle,
+                    Controls = c.Controls is { } k ? new ShipControls(k.Throttle, k.Turn, k.Brake, k.Strafe) : ShipControls.Idle,
                 };
                 sector.AddCraft(craft);
                 sector.SetTarget(craft.Id, new BodyId(c.TargetBodyId));
@@ -228,7 +228,7 @@ public static class SaveGameSerializer
                 foreach (var o in c.BuildQueue ?? new List<OrderDto>())
                 {
                     var orderDesign = DesignFromDto(o.Design, $"Order {o.OrderId}");
-                    var orderErrors = orderDesign.Validate(catalog, orderDesign.SuggestedRole(catalog));
+                    var orderErrors = orderDesign.Validate(catalog, orderDesign.SuggestedRole(catalog), requireConnected: false);
                     if (orderErrors.Count > 0)
                         throw new FormatException($"Order {o.OrderId} design '{orderDesign.Id}' is invalid: {string.Join("; ", orderErrors)}");
                     var materials = o.MaterialsKg ?? new SortedDictionary<string, long>();
@@ -240,7 +240,7 @@ public static class SaveGameSerializer
                 foreach (var kitDto in c.Kits ?? new List<KitDto>())
                 {
                     var kitDesign = DesignFromDto(kitDto.Design, $"Kit {kitDto.Id}");
-                    var kitErrors = kitDesign.Validate(catalog, DesignRole.Station);
+                    var kitErrors = kitDesign.Validate(catalog, DesignRole.Station, requireConnected: false);
                     if (kitErrors.Count > 0) throw new FormatException($"Kit {kitDto.Id} design '{kitDesign.Id}' is invalid: {string.Join("; ", kitErrors)}");
                     var materials = kitDto.MaterialsKg ?? new SortedDictionary<string, long>();
                     if (materials.Any(kv => !catalog.Materials.Contains(kv.Key)))
@@ -538,5 +538,8 @@ public static class SaveGameSerializer
         public double Throttle { get; set; }
         public double Turn { get; set; }
         public bool Brake { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double Strafe { get; set; }
     }
 }

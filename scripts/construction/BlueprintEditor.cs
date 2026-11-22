@@ -147,20 +147,8 @@ public sealed class BlueprintEditor
         }
     }
 
-    /// <summary>
-    /// Advice that doesn't block saving. Connectivity is a warning only, because whether parts must
-    /// connect is still open (docs/06, question 4).
-    /// </summary>
-    public IReadOnlyList<string> Warnings
-    {
-        get
-        {
-            var warnings = ToDesign().Warnings(_catalog).ToList();
-            var groups = CountConnectedGroups();
-            if (groups > 1) warnings.Add($"Parts form {groups} separate groups (not edge-connected).");
-            return warnings;
-        }
-    }
+    /// <summary>Advice that doesn't block saving. Loose parts are an error since #35 (see <see cref="Errors"/>).</summary>
+    public IReadOnlyList<string> Warnings => ToDesign().Warnings(_catalog);
 
     public int CountConnectedGroups()
     {

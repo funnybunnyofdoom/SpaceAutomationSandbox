@@ -4,14 +4,19 @@ using System.Collections.Generic;
 namespace SpaceAutomationSandbox.Simulation;
 
 /// <summary>
-/// Builds the Phase 1 starter sector from a seed: one central planet fixed at the origin and
-/// one small mineable asteroid on a circular orbit. All numbers are placeholders at game
-/// scale (far smaller than real bodies) and are expected to be tuned.
+/// Builds the starter sector from a seed: one central planet fixed at the origin, three mineable
+/// asteroids, and (#16) a moon, an ice asteroid and a distant gas giant, all on circular orbits.
+/// All numbers are placeholders at game scale (far smaller than real bodies) and are expected to
+/// be tuned. Bodies are drawn in a fixed order, so adding new ones at the end keeps earlier ones
+/// unchanged for a given seed.
 /// </summary>
 public static class SectorGenerator
 {
     public const double PlanetDensityKgPerM3 = 5500;
     public const double AsteroidDensityKgPerM3 = 2500;
+    public const double MoonDensityKgPerM3 = 3300;
+    public const double IceDensityKgPerM3 = 1000;
+    public const double GasGiantDensityKgPerM3 = 1300;
 
     /// <summary>Placeholder deposits (docs/06, Phase 4). Finite, so they can run out.</summary>
     public const long Rock1IronOreKg = 500_000;
@@ -20,6 +25,10 @@ public static class SectorGenerator
     public const long Rock3IronOreKg = 300_000;
     public const long Rock1CopperOreKg = 50_000;
     public const long Rock3CopperOreKg = 200_000;
+    public const long MoonIronOreKg = 800_000;
+    public const long MoonSilicateKg = 600_000;
+    public const long IceIceKg = 400_000;
+    public const long IceSilicateKg = 50_000;
 
     public static SectorState Generate(ulong seed)
     {
@@ -53,7 +62,25 @@ public static class SectorGenerator
         AddAsteroid(sector, rng, planet.Id, "Rock-3", 44_000, 50_000, 3_000, 4_200,
             new Dictionary<string, long> { ["iron_ore"] = Rock3IronOreKg, ["copper_ore"] = Rock3CopperOreKg });
 
+        // #16: drawn after the asteroids, so the bodies above are unchanged for a given seed.
+        AddBody(sector, rng, planet.Id, "Moon", BodyKind.Moon, MoonDensityKgPerM3, 1_200, 1_600, 14_000, 18_000, 900, 1_500, true,
+            new Dictionary<string, long> { ["iron_ore"] = MoonIronOreKg, ["silicate"] = MoonSilicateKg });
+        AddBody(sector, rng, planet.Id, "Ice-1", BodyKind.Asteroid, IceDensityKgPerM3, 500, 800, 56_000, 64_000, 3_600, 4_800, true,
+            new Dictionary<string, long> { ["ice"] = IceIceKg, ["silicate"] = IceSilicateKg });
+        AddBody(sector, rng, planet.Id, "Giant", BodyKind.GasGiant, GasGiantDensityKgPerM3, 9_000, 11_000, 120_000, 140_000, 9_000, 12_000, false,
+            new Dictionary<string, long>());
+
         return sector;
+    }
+
+    private static void AddBody(SectorState sector, DeterministicRandom rng, BodyId parent, string name, BodyKind kind, double density,
+        double minRadiusM, double maxRadiusM, double minOrbitM, double maxOrbitM, double minPeriodS, double maxPeriodS,
+        bool mineable, Dictionary<string, long> deposits)
+    {
+        var radiusM = rng.Range(minRadiusM, maxRadiusM);
+        var orbit = new CircularOrbit(parent, rng.Range(minOrbitM, maxOrbitM), rng.Range(minPeriodS, maxPeriodS), rng.Range(0, 2 * Math.PI));
+        sector.AddBody(new CelestialBodyState(sector.AllocateBodyId(), name, kind,
+            Math.Round(CelestialBodyState.MassFromRadius(radiusM, density)), density, mineable, orbit, deposits));
     }
 
     private static void AddAsteroid(SectorState sector, DeterministicRandom rng, BodyId parent, string name,

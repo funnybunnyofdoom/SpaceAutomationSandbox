@@ -16,12 +16,18 @@ public readonly record struct CraftId(uint Value)
 /// Pilot commands held as state, so a player, and later an autonomous job, steers the same way
 /// and a recorded per-tick input sequence replays exactly.
 /// </summary>
-public readonly record struct ShipControls(double Throttle, double Turn, bool Brake)
+public readonly record struct ShipControls(double Throttle, double Turn, bool Brake, double Strafe = 0)
 {
     public static readonly ShipControls Idle = new(0, 0, false);
 
-    /// <summary>Throttle clamped to [0,1], turn to [−1,1] (positive = clockwise on screen); NaN becomes 0.</summary>
-    public ShipControls Clamped() => new(Clamp(Throttle, 0, 1), Clamp(Turn, -1, 1), Brake);
+    /// <summary>
+    /// Throttle clamped to [−1,1] (negative = reverse thrusters), turn and strafe to [−1,1]
+    /// (positive = clockwise / to the right on screen); NaN becomes 0.
+    /// </summary>
+    public ShipControls Clamped() => new(Clamp(Throttle, -1, 1), Clamp(Turn, -1, 1), Brake, Clamp(Strafe, -1, 1));
+
+    /// <summary>True if any thruster is asked to fire (brake aside).</summary>
+    public bool Thrusting => Throttle != 0 || Strafe != 0;
 
     private static double Clamp(double v, double min, double max) => double.IsNaN(v) ? 0 : Math.Clamp(v, min, max);
 }

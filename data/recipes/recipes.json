@@ -3,6 +3,7 @@
   "recipes": [
     { "id": "make_electronics", "name": "Make electronics", "inputsKg": { "copper_ore": 600, "silicate": 400 }, "outputsKg": { "electronics": 500, "slag": 500 } },
     { "id": "smelt_iron",  "name": "Smelt iron ore",    "inputsKg": { "iron_ore": 1000 }, "outputsKg": { "metal": 700, "slag": 300 } },
-    { "id": "cast_silicate", "name": "Process silicate", "inputsKg": { "silicate": 1000 }, "outputsKg": { "composites": 500, "slag": 500 } }
+    { "id": "cast_silicate", "name": "Process silicate", "inputsKg": { "silicate": 1000 }, "outputsKg": { "composites": 500, "slag": 500 } },
+    { "id": "process_ice", "name": "Process ice", "inputsKg": { "ice": 1000 }, "outputsKg": { "water": 600, "fuel": 300, "slag": 100 } }
   ]
 }

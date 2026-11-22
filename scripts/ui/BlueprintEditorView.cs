@@ -243,7 +243,10 @@ public partial class BlueprintEditorView : Control
             ? "Empty design."
             : $"Id: {_model.Id}{(_model.IsDirty ? "   (unsaved)" : "")}\n"
               + $"Cells {s.CellCount}    Mass {s.TotalMassKg / 1000:0.0} t\n"
-              + $"Thrust {s.TotalThrustN / 1000:0} kN forward{(s.NonForwardThrustN > 0 ? $" (+{s.NonForwardThrustN / 1000:0} kN other)" : "")}    Accel {s.MaxAccelerationMps2:0.0} m/s²\n"
+              + $"Thrust {s.TotalThrustN / 1000:0} kN forward    Accel {s.MaxAccelerationMps2:0.0} m/s²\n"
+              + (s.NonForwardThrustN > 0
+                  ? $"Reverse {s.ReverseThrustN / 1000:0} kN    Strafe left {s.LeftThrustN / 1000:0} / right {s.RightThrustN / 1000:0} kN\n"
+                  : "")
               + (s.DockingPorts.Count > 0 || s.FabricationRateKgPerS > 0 ? $"Docking ports {s.DockingPorts.Count}    Fabrication {s.FabricationRateKgPerS:0} kg/s\n" : "")
               + $"Cargo {s.CargoCapacityKg / 1000:0} t    Battery {s.EnergyCapacityKJ / 1000:0} MJ\n"
               + $"Power: solar {s.PowerGenerationKW:0} kW, use up to {s.TotalPowerUseKW:0} kW\n(thrust {s.ThrustPowerKW:0} kW)"
@@ -306,6 +309,11 @@ public partial class BlueprintEditorView : Control
         if (BlueprintLibrary.IsBuiltInId(id))
         {
             SetStatus($"'{id}' is a built-in design. Pick another name to save your own copy.", ErrorColor);
+            return;
+        }
+        if (_model.ToDesign().LooseCells() is { Count: > 0 } loose)
+        {
+            SetStatus($"{loose.Count} part(s) (outlined red) don't touch the rest. Connect every part edge to edge before saving.", ErrorColor);
             return;
         }
         if (BlueprintLibrary.UserDesignExists(id) && id != _loadedFromId

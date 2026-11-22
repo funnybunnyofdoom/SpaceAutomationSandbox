@@ -187,7 +187,7 @@ public class MiningJobTests
         var game = TestData.NewGame();
         var sector = game.Sector;
         var rock = sector.Bodies.First(b => b.IsMineable);
-        var primary = sector.Bodies.Single(b => !b.IsMineable);
+        var primary = sector.Bodies.Single(b => b.Kind == BodyKind.Planet);
 
         var noClamp = new ShipDesign("nc", "No clamp", TestData.StarterShip().Cells.Where(c => c.PartId != "anchor_clamp"));
         var plain = new CraftState(sector.AllocateCraftId(), "Plain", noClamp, noClamp.ComputeStats(Catalog), Vector2D.Zero, 0);

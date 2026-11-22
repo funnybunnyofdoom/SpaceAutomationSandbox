@@ -127,17 +127,29 @@ public class BlueprintEditorTests
     }
 
     [Fact]
-    public void Warnings_ReportDisconnectedGroups_WithoutBlocking()
+    public void DisconnectedParts_AreAnError_NamingTheLooseCells()
     {
         var editor = NewEditor();
+        editor.Name = "Test";
         editor.Place(new GridPos(0, 0), "cockpit");
         editor.Place(new GridPos(0, 1), "thruster");
-        Assert.Empty(editor.Warnings);
+        Assert.Empty(editor.Errors);
 
         editor.Place(new GridPos(4, 4), "cargo"); // floating
         Assert.Equal(2, editor.CountConnectedGroups());
-        Assert.Contains(editor.Warnings, w => w.Contains("2 separate groups"));
-        Assert.Empty(editor.Errors);
+        Assert.Contains(editor.Errors, e => e.Contains("1 part(s) aren't connected") && e.Contains("(4,4)"));
+        Assert.Equal(new[] { new GridPos(4, 4) }, editor.ToDesign().LooseCells());
+
+        editor.Place(new GridPos(1, 1), "cargo"); // touches the thruster: still loose at (4,4) only
+        Assert.Single(editor.ToDesign().LooseCells());
+        Assert.Empty(editor.ToDesign().Validate(TestData.Catalog(), DesignRole.Ship, requireConnected: false));
+    }
+
+    [Fact]
+    public void BuiltInDesigns_AreAllConnected()
+    {
+        foreach (var file in new[] { "starter_ship", "starter_shipyard", "surface_depot" })
+            Assert.Empty(ShipDesign.FromJson(TestData.Read($"data/blueprints/{file}.json")).LooseCells());
     }
 
     [Fact]

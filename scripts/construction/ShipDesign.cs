@@ -63,7 +63,13 @@ public sealed record ShipStats(
     double RefineryPowerKW = 0,
     double FabricatorPowerKW = 0,
     double EjectorPowerKW = 0,
-    double EjectionRateKgPerS = 0)
+    double EjectionRateKgPerS = 0,
+    double ReverseThrustN = 0,
+    double LeftThrustN = 0,
+    double RightThrustN = 0,
+    double ReversePowerKW = 0,
+    double LeftPowerKW = 0,
+    double RightPowerKW = 0)
 {
     /// <summary>Everything running at once (full throttle, drilling, refining, building, ejecting), kW.</summary>
     public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW;
@@ -75,8 +81,9 @@ public sealed record ShipStats(
     public bool IsFixedStructure => FoundationCount > 0;
 
     /// <summary>
-    /// Full-thrust acceleration of the empty craft in m/s². <see cref="TotalThrustN"/> counts only
-    /// rear-facing thrusters (rotation 0); others are in <see cref="NonForwardThrustN"/> and unused for now.
+    /// Full-thrust forward acceleration of the empty craft in m/s². A thruster pushes the way it faces
+    /// (#40): rotation 0 forward (<see cref="TotalThrustN"/>), 2 backward (<see cref="ReverseThrustN"/>),
+    /// 1 right and 3 left (strafe). <see cref="NonForwardThrustN"/> is the sum of the last three.
     /// </summary>
     public double MaxAccelerationMps2 => TotalMassKg > 0 ? TotalThrustN / TotalMassKg : 0;
 }
@@ -128,10 +135,17 @@ public sealed class ShipDesign
         p.FabricationRateKgPerS > 0 || p.IsDockingPort || p.CargoCapacityKg > 0 || p.RefiningRateKgPerS > 0;
 
     /// <summary>Human-readable problems for the given role; empty means the design is usable in that role.</summary>
-    public IReadOnlyList<string> Validate(PartCatalog catalog, DesignRole role = DesignRole.Ship)
+    /// <param name="requireConnected">
+    /// New designs must be one piece (#35). Craft already built before that rule (in saves) are
+    /// loaded with false, so old games keep working.
+    /// </param>
+    public IReadOnlyList<string> Validate(PartCatalog catalog, DesignRole role = DesignRole.Ship, bool requireConnected = true)
     {
         var errors = new List<string>();
         if (Cells.Count == 0) { errors.Add("Design has no parts."); return errors; }
+        if (requireConnected && LooseCells() is { Count: > 0 } loose)
+            errors.Add($"{loose.Count} part(s) aren't connected to the rest (cells must touch edge to edge): "
+                       + string.Join(", ", loose.Take(5).Select(p => $"({p.X},{p.Y})")) + (loose.Count > 5 ? ", …" : "") + ".");
 
         int controlSources = 0, foundations = 0, facilities = 0;
         double forwardThrust = 0;
@@ -163,13 +177,31 @@ public sealed class ShipDesign
         return errors;
     }
 
-    /// <summary>Advice that doesn't block use, e.g. thrusters that give no forward thrust yet.</summary>
-    public IReadOnlyList<string> Warnings(PartCatalog catalog)
+    /// <summary>Advice that doesn't block use. None at the moment (every thruster direction is used since #40).</summary>
+    public IReadOnlyList<string> Warnings(PartCatalog catalog) => Array.Empty<string>();
+
+    /// <summary>
+    /// Cells not edge-connected to the main piece (#35): the largest group of edge-touching cells
+    /// (ties: the one holding the first cell in row order) counts as the craft, everything else is loose.
+    /// </summary>
+    public IReadOnlyList<GridPos> LooseCells()
     {
-        var sideways = Cells.Count(c => c.Rotation != 0 && catalog.TryGet(c.PartId, out var p) && p.ThrustN > 0);
-        return sideways > 0
-            ? new[] { $"{sideways} thruster(s) don't face backward; they give no forward thrust (only rear-facing thrusters fly the ship for now)." }
-            : Array.Empty<string>();
+        var remaining = new HashSet<GridPos>(Cells.Select(c => c.Pos));
+        List<GridPos>? main = null;
+        foreach (var start in Cells.Select(c => c.Pos))
+        {
+            if (!remaining.Remove(start)) continue;
+            var group = new List<GridPos> { start };
+            for (var i = 0; i < group.Count; i++)
+            {
+                var p = group[i];
+                foreach (var n in new[] { new GridPos(p.X + 1, p.Y), new GridPos(p.X - 1, p.Y), new GridPos(p.X, p.Y + 1), new GridPos(p.X, p.Y - 1) })
+                    if (remaining.Remove(n)) group.Add(n);
+            }
+            if (main is null || group.Count > main.Count) main = group;
+        }
+        var inMain = new HashSet<GridPos>(main ?? new List<GridPos>());
+        return Cells.Select(c => c.Pos).Where(p => !inMain.Contains(p)).ToList();
     }
 
     /// <summary>Totals and centre of mass (in cell units). Call only on a design whose parts are all known.</summary>
@@ -177,14 +209,22 @@ public sealed class ShipDesign
     {
         double mass = 0, thrust = 0, otherThrust = 0, cargo = 0, energy = 0, fabrication = 0, mining = 0, refining = 0, momentX = 0, momentY = 0;
         double generation = 0, thrustPower = 0, drillPower = 0, refineryPower = 0, fabricatorPower = 0, ejectorPower = 0, ejection = 0;
+        double reverse = 0, left = 0, right = 0, reversePower = 0, leftPower = 0, rightPower = 0;
         int clamps = 0, foundations = 0;
         var ports = new List<DockingPortInfo>();
         foreach (var cell in Cells)
         {
             var part = catalog.Get(cell.PartId);
             mass += part.MassKg;
-            if (cell.Rotation == 0) thrust += part.ThrustN;
-            else otherThrust += part.ThrustN;
+            // A thruster pushes the way it faces: 0 forward, 1 right, 2 backward, 3 left.
+            switch (cell.Rotation)
+            {
+                case 0: thrust += part.ThrustN; break;
+                case 1: right += part.ThrustN; break;
+                case 2: reverse += part.ThrustN; break;
+                default: left += part.ThrustN; break;
+            }
+            if (cell.Rotation != 0) otherThrust += part.ThrustN;
             cargo += part.CargoCapacityKg;
             energy += part.EnergyCapacityKJ;
             fabrication += part.FabricationRateKgPerS;
@@ -192,8 +232,17 @@ public sealed class ShipDesign
             refining += part.RefiningRateKgPerS;
             generation += part.PowerGenerationKW;
             ejection += part.EjectionRateKgPerS;
-            // Each part's power use goes to the activity it powers (only rear-facing thrusters fire).
-            if (part.ThrustN > 0) { if (cell.Rotation == 0) thrustPower += part.PowerUseKW; }
+            // Each part's power use goes to the activity it powers; thrusters by the direction they push.
+            if (part.ThrustN > 0)
+            {
+                switch (cell.Rotation)
+                {
+                    case 0: thrustPower += part.PowerUseKW; break;
+                    case 1: rightPower += part.PowerUseKW; break;
+                    case 2: reversePower += part.PowerUseKW; break;
+                    default: leftPower += part.PowerUseKW; break;
+                }
+            }
             else if (part.MiningRateKgPerS > 0) drillPower += part.PowerUseKW;
             else if (part.RefiningRateKgPerS > 0) refineryPower += part.PowerUseKW;
             else if (part.FabricationRateKgPerS > 0) fabricatorPower += part.PowerUseKW;
@@ -219,7 +268,8 @@ public sealed class ShipDesign
 
         return new ShipStats(Cells.Count, mass, thrust, cargo, energy, comX, comY,
             Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations, otherThrust, ports, mining, refining,
-            generation, thrustPower, drillPower, refineryPower, fabricatorPower, ejectorPower, ejection);
+            generation, thrustPower, drillPower, refineryPower, fabricatorPower, ejectorPower, ejection,
+            reverse, left, right, reversePower, leftPower, rightPower);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

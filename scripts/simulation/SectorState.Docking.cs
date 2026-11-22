@@ -162,7 +162,7 @@ public sealed partial class SectorState
             var station = GetCraft(ship.DockedToCraftId);
             var berth = BerthPosition(station, ship.DockPortIndex, ship.CollisionRadiusM, station.Position);
             var controls = ship.Controls.Clamped();
-            if (!controls.Brake && controls.Throttle > 0 && ownDeltaV.Length > 0)
+            if (!controls.Brake && controls.Thrusting && ownDeltaV.Length > 0)
             {
                 ship.DockedToCraftId = CraftId.None;
                 ship.Velocity = station.Velocity + ownDeltaV;

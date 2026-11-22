@@ -45,7 +45,7 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
         "position": { "x": 2381.0, "y": -6188.0 },   // centre of mass, sector metres
         "velocity": { "x": 60.1, "y": 46.3 },        // m/s
         "headingRad": 2.63,
-        "controls": { "throttle": 0, "turn": 0, "brake": false },
+        "controls": { "throttle": 0, "turn": 0, "brake": false },   // throttle −1..1 (negative = reverse); optional "strafe" −1..1, omitted when 0
         "targetBodyId": 2,                           // 0 = no target
         "targetCraftId": 0,                          // v5: target craft (exclusive with targetBodyId)
         "dockedToCraftId": 0, "dockPort": 0,         // v5: station and port index while docked

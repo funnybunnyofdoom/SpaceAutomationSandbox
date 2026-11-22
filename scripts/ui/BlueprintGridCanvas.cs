@@ -23,6 +23,7 @@ public partial class BlueprintGridCanvas : Control
     private static readonly Color HoverErase = new(1f, 0.35f, 0.3f, 0.9f);
     private static readonly Color ComColor = new(1f, 1f, 1f, 0.9f);
     private static readonly Color UnknownPart = new(1f, 0f, 1f);
+    private static readonly Color LooseCell = new(1f, 0.25f, 0.2f, 0.95f);
 
     private readonly BlueprintEditor _model;
     private readonly IReadOnlyDictionary<string, Color> _colors;
@@ -102,6 +103,7 @@ public partial class BlueprintGridCanvas : Control
         }
 
         var font = ThemeDB.FallbackFont;
+        var loose = _model.Cells.Count > 0 ? new HashSet<GridPos>(_model.ToDesign().LooseCells()) : new HashSet<GridPos>();
         foreach (var (pos, cell) in _model.Cells)
         {
             var origin = CellOrigin(pos);
@@ -112,6 +114,7 @@ public partial class BlueprintGridCanvas : Control
             var tag = id.Length >= 2 ? id[..2].ToUpperInvariant() : id.ToUpperInvariant();
             DrawString(font, origin + new Vector2(5, CellPx - 9), tag, HorizontalAlignment.Left, -1, 11, new Color(0, 0, 0, 0.75f));
             DrawFacing(origin, cell.Rotation, new Color(0, 0, 0, 0.6f));
+            if (loose.Contains(pos)) DrawRect(new Rect2(origin, new Vector2(CellPx, CellPx)), LooseCell, false, 3); // not connected (#35)
         }
 
         if (_model.Stats is { } stats) // centre of mass (cell centres are at integer coordinates)

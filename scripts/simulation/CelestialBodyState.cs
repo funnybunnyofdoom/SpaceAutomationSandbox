@@ -9,6 +9,10 @@ public enum BodyKind
 {
     Planet,
     Asteroid,
+    /// <summary>A large rocky body orbiting a planet: mineable and landable (#16).</summary>
+    Moon,
+    /// <summary>Not mineable; you can't anchor or deploy on its cloud tops (#16). Skimming comes later.</summary>
+    GasGiant,
 }
 
 /// <summary>

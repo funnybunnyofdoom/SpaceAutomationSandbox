@@ -35,6 +35,9 @@ public partial class Main : Node2D
     private static readonly Color SpaceColor = new(0.02f, 0.02f, 0.06f);
     private static readonly Color PlanetColor = new(0.30f, 0.55f, 0.85f);
     private static readonly Color AsteroidColor = new(0.65f, 0.55f, 0.45f);
+    private static readonly Color MoonColor = new(0.62f, 0.62f, 0.66f);
+    private static readonly Color IceColor = new(0.75f, 0.88f, 0.95f);
+    private static readonly Color GasGiantColor = new(0.85f, 0.66f, 0.42f);
     private static readonly Color OrbitColor = new(1f, 1f, 1f, 0.12f);
     private static readonly Color NameColor = new(0.8f, 0.8f, 0.85f);
     private static readonly Color FlameColor = new(1f, 0.75f, 0.3f, 0.9f);
@@ -419,8 +422,8 @@ public partial class Main : Node2D
     // Input actions (keyboard or gamepad; trigger and stick are analog).
     private static ShipControls ReadControls()
     {
-        var (throttle, turn, brake) = InputActions.ReadFlight();
-        return new ShipControls(throttle, turn, brake);
+        var (throttle, turn, brake, strafe) = InputActions.ReadFlight();
+        return new ShipControls(throttle, turn, brake, strafe);
     }
 
     private string BuildHud()
@@ -491,7 +494,7 @@ public partial class Main : Node2D
 
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
-               + "W/Up thrust   A/D turn   S/Space brake (matches target)   G anchor   K dock   U deploy kit   Tab cycle target   T target nearest   wheel zoom\n"
+               + "W/Up thrust   X reverse   Q/E strafe   A/D turn   S/Space brake (matches target)   G anchor   K dock   U deploy kit   Tab cycle target   T target nearest   wheel zoom\n"
                + "B blueprint editor   Y shipyard   F fleet   C cargo   J job   [ ] P time   F3 debug   F4 diagnostics   F6 save   F9 load   F7 new game   (closing the window autosaves)";
     }
 
@@ -590,7 +593,13 @@ public partial class Main : Node2D
 
         var centre = ToPixels(_sector.GetPositionAt(body.Id, renderTimeS));
         var radiusPx = Mathf.Max(2f, (float)body.RadiusM * _pixelsPerMetre);
-        var color = body.Kind == BodyKind.Planet ? PlanetColor : AsteroidColor;
+        var color = body.Kind switch
+        {
+            BodyKind.Planet => PlanetColor,
+            BodyKind.Moon => MoonColor,
+            BodyKind.GasGiant => GasGiantColor,
+            _ => body.DepositsKg.ContainsKey("ice") ? IceColor : AsteroidColor,
+        };
         if (radiusPx < 200f) DrawCircle(centre, radiusPx, color);
         else DrawColoredPolygon(CirclePoints(centre, radiusPx, 512), color); // smoother edge up close
 

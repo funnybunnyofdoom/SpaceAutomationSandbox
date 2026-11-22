@@ -20,6 +20,8 @@ public sealed partial class SectorState
         if (craft.IsAnchored) return new(false, $"{craft.Name} is already anchored.");
         if (!craft.IsLanded) return new(false, $"{craft.Name} must be landed on a body to anchor.");
         if (!craft.Stats.CanAnchor) return new(false, $"{craft.Name} has no anchor clamp.");
+        if (GetBody(craft.LandedOnBodyId).Kind == BodyKind.GasGiant)
+            return new(false, $"{GetBody(craft.LandedOnBodyId).Name} is a gas giant: there's nothing solid to anchor to.");
         if (!AnchorTouchesGround(craft))
             return new(false, $"{craft.Name}'s anchor clamp isn't touching {GetBody(craft.LandedOnBodyId).Name}: land on the clamp side.");
         craft.IsAnchored = true;

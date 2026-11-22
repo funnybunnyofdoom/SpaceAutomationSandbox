@@ -55,8 +55,11 @@ public sealed partial class SectorState
     private double ThrustEnergyKJ(CraftState craft, Vector2D brakeReference)
     {
         var controls = craft.Controls.Clamped();
-        var level = controls.Brake ? ((craft.Velocity - brakeReference).Length > 1e-6 ? 1 : 0) : controls.Throttle;
-        return craft.Stats.ThrustPowerKW * level * FixedStepClock.TickSeconds;
+        var stats = craft.Stats;
+        if (controls.Brake) return (craft.Velocity - brakeReference).Length > 1e-6 ? stats.ThrustPowerKW * FixedStepClock.TickSeconds : 0;
+        var kw = controls.Throttle >= 0 ? stats.ThrustPowerKW * controls.Throttle : stats.ReversePowerKW * -controls.Throttle;
+        kw += controls.Strafe >= 0 ? stats.RightPowerKW * controls.Strafe : stats.LeftPowerKW * -controls.Strafe;
+        return kw * FixedStepClock.TickSeconds;
     }
 
     private void StepEjection()

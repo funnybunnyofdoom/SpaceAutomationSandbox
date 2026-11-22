@@ -23,22 +23,70 @@ public class RotationTests
     }
 
     [Fact]
-    public void OnlyRearFacingThrusters_CountAsForwardThrust()
+    public void Thrusters_PushTheWayTheyFace()
     {
         var thrust = Catalog.Get("thruster").ThrustN;
+        var power = Catalog.Get("thruster").PowerUseKW;
 
         var oneTurned = WithThrusterRotations(0, 1).ComputeStats(Catalog);
         Assert.Equal(thrust, oneTurned.TotalThrustN);
+        Assert.Equal(thrust, oneTurned.RightThrustN);
         Assert.Equal(thrust, oneTurned.NonForwardThrustN);
-        Assert.Contains(WithThrusterRotations(0, 1).Warnings(Catalog), w => w.Contains("1 thruster"));
+        Assert.Equal(power, oneTurned.RightPowerKW);
+        Assert.Empty(WithThrusterRotations(0, 1).Warnings(Catalog));
 
         var bothTurned = WithThrusterRotations(2, 3);
-        Assert.Equal(0, bothTurned.ComputeStats(Catalog).TotalThrustN);
-        Assert.Contains(bothTurned.Validate(Catalog, DesignRole.Ship), e => e.Contains("rear-facing thruster"));
+        var stats = bothTurned.ComputeStats(Catalog);
+        Assert.Equal(0, stats.TotalThrustN);
+        Assert.Equal(thrust, stats.ReverseThrustN);
+        Assert.Equal(thrust, stats.LeftThrustN);
+        Assert.Contains(bothTurned.Validate(Catalog, DesignRole.Ship), e => e.Contains("rear-facing thruster")); // still needs forward thrust
     }
 
     [Fact]
-    public void RotatedThrusterShip_AcceleratesWithItsForwardThrustOnly()
+    public void ReverseAndStrafe_PushBackwardAndSideways()
+    {
+        var design = WithThrusterRotations(2, 1); // left thruster reversed, right one pushing right
+        var stats = design.ComputeStats(Catalog);
+        var thrust = Catalog.Get("thruster").ThrustN;
+
+        var craft = new CraftState(new CraftId(1), "t", design, stats, Vector2D.Zero, 0) { Controls = new ShipControls(-1, 0, false) };
+        for (var i = 0; i < FixedStepClock.TicksPerSecond; i++) FlightModel.Step(craft, FixedStepClock.TickSeconds);
+        Assert.Equal(thrust / stats.TotalMassKg, craft.Velocity.Y, 9); // heading 0: backward is +Y on screen
+        Assert.Equal(0, craft.Velocity.X, 9);
+
+        craft = new CraftState(new CraftId(1), "t", design, stats, Vector2D.Zero, 0) { Controls = new ShipControls(0, 0, false, Strafe: 1) };
+        for (var i = 0; i < FixedStepClock.TicksPerSecond; i++) FlightModel.Step(craft, FixedStepClock.TickSeconds);
+        Assert.Equal(thrust / stats.TotalMassKg, craft.Velocity.X, 9); // right is +X
+        Assert.Equal(0, craft.Velocity.Y, 9);
+
+        craft = new CraftState(new CraftId(1), "t", design, stats, Vector2D.Zero, 0) { Controls = new ShipControls(0, 0, false, Strafe: -1) };
+        FlightModel.Step(craft, FixedStepClock.TickSeconds);
+        Assert.Equal(0, craft.SpeedMps); // no left-facing thruster: strafing left does nothing
+    }
+
+    [Fact]
+    public void Reverse_DrawsTheReverseThrustersPower_AndUndocks()
+    {
+        var game = TestData.NewGame();
+        var sector = game.Sector;
+        var yard = sector.GetCraft(game.ShipyardId);
+        var design = WithThrusterRotations(2, 0);
+        var ship = new CraftState(sector.AllocateCraftId(), "R", design, design.ComputeStats(Catalog), yard.Position, 0);
+        sector.AddCraft(ship);
+        sector.RestoreDock(ship.Id, yard.Id, sector.FreePorts(yard)[0]);
+        ship.StoredEnergyKJ = 1_000; // part charged, so the battery cap doesn't hide what was used
+        var energy = ship.StoredEnergyKJ;
+
+        ship.Controls = new ShipControls(-1, 0, false);
+        sector.Step();
+        Assert.False(ship.IsDocked);
+        var used = energy + ship.Stats.PowerGenerationKW * FixedStepClock.TickSeconds - ship.StoredEnergyKJ;
+        Assert.Equal(ship.Stats.ReversePowerKW * FixedStepClock.TickSeconds, used, 6);
+    }
+
+    [Fact]
+    public void ForwardThrottle_UsesOnlyForwardThrusters()
     {
         var design = WithThrusterRotations(0, 1);
         var stats = design.ComputeStats(Catalog);
@@ -49,7 +97,7 @@ public class RotationTests
         for (var i = 0; i < FixedStepClock.TicksPerSecond; i++) FlightModel.Step(craft, FixedStepClock.TickSeconds);
 
         Assert.Equal(stats.TotalThrustN / stats.TotalMassKg, craft.SpeedMps, 9);
-        Assert.Equal(0, craft.Velocity.X, 9); // the sideways thruster doesn't push yet
+        Assert.Equal(0, craft.Velocity.X, 9); // the sideways thruster only fires when strafing
     }
 
     [Fact]

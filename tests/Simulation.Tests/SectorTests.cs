@@ -24,13 +24,13 @@ public class SectorTests
     }
 
     [Fact]
-    public void StarterSector_HasOneFixedPlanetAndThreeMineableOrbitingAsteroids()
+    public void StarterSector_HasOneFixedPlanet_AndMineableBodiesOrbitingIt()
     {
         var sector = SectorGenerator.Generate(Seed);
 
-        Assert.Equal(4, sector.Bodies.Count);
+        Assert.Equal(7, sector.Bodies.Count);
         var planet = Assert.Single(sector.Bodies, b => b.Kind == BodyKind.Planet);
-        Assert.Equal(new[] { "Rock-1", "Rock-2", "Rock-3" }, sector.Bodies.Where(b => b.IsMineable).Select(b => b.Name));
+        Assert.Equal(new[] { "Rock-1", "Rock-2", "Rock-3", "Moon", "Ice-1" }, sector.Bodies.Where(b => b.IsMineable).Select(b => b.Name));
         Assert.All(sector.Bodies.Where(b => b.IsMineable), b => Assert.Equal(planet.Id, b.Orbit!.Parent));
         Assert.True(sector.Bodies.First(b => b.Name == "Rock-2").Deposit("silicate") > 0);
         var rock = sector.Bodies.First(b => b.IsMineable);

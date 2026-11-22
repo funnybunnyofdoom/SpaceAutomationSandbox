@@ -14,6 +14,9 @@ public static class InputActions
     public const string TurnLeft = "ship_turn_left";
     public const string TurnRight = "ship_turn_right";
     public const string Brake = "ship_brake";
+    public const string Reverse = "ship_reverse";
+    public const string StrafeLeft = "ship_strafe_left";
+    public const string StrafeRight = "ship_strafe_right";
     public const string Anchor = "ship_anchor";
     public const string Dock = "ship_dock";
     public const string Deploy = "ship_deploy_kit";
@@ -42,6 +45,9 @@ public static class InputActions
         Add(TurnLeft, 0.2f, Keys(Key.A, Key.Left), Stick(JoyAxis.LeftX, -1));
         Add(TurnRight, 0.2f, Keys(Key.D, Key.Right), Stick(JoyAxis.LeftX, 1));
         Add(Brake, 0.5f, Keys(Key.S, Key.Down, Key.Space), Stick(JoyAxis.TriggerLeft, 1), Pad(JoyButton.B));
+        Add(Reverse, 0.2f, Keys(Key.X), Stick(JoyAxis.LeftY, 1));
+        Add(StrafeLeft, 0.2f, Keys(Key.Q), Stick(JoyAxis.RightX, -1));
+        Add(StrafeRight, 0.2f, Keys(Key.E), Stick(JoyAxis.RightX, 1));
         Add(Anchor, 0.5f, Keys(Key.G), Pad(JoyButton.X));
         Add(Dock, 0.5f, Keys(Key.K), Pad(JoyButton.Y));
         Add(Deploy, 0.5f, Keys(Key.U));
@@ -66,8 +72,10 @@ public static class InputActions
     }
 
     /// <summary>Throttle 0..1 (analog on a trigger), turn −1..1 (analog on the stick), brake on/off.</summary>
-    public static (double Throttle, double Turn, bool Brake) ReadFlight() =>
-        (Input.GetActionStrength(Thrust), Input.GetAxis(TurnLeft, TurnRight), Input.IsActionPressed(Brake));
+    /// <summary>Throttle is forward minus reverse (−1..1); strafe is left −1 .. right +1.</summary>
+    public static (double Throttle, double Turn, bool Brake, double Strafe) ReadFlight() =>
+        (Input.GetActionStrength(Thrust) - Input.GetActionStrength(Reverse), Input.GetAxis(TurnLeft, TurnRight),
+         Input.IsActionPressed(Brake), Input.GetAxis(StrafeLeft, StrafeRight));
 
     private static void Add(string action, float deadzone, params object[] events)
     {
