@@ -73,7 +73,13 @@ public sealed partial class SectorState
     private void StepJobs()
     {
         _stationsThisTick.Clear();
-        foreach (var craft in _crafts) if (!Movable(craft)) _stationsThisTick.Add(craft);
+        foreach (var craft in _crafts)
+        {
+            if (!Movable(craft)) _stationsThisTick.Add(craft);
+            if (!craft.IsAutomated && !craft.DockClaimStation.IsNone) { craft.DockClaimStation = CraftId.None; craft.DockClaimPort = 0; }
+            craft.GivingWayTo = CraftId.None;
+        }
+        BuildTrafficGrid(); // traffic rules (#55)
         foreach (var craft in _crafts)
         {
             switch (craft.Job)
@@ -119,7 +125,7 @@ public sealed partial class SectorState
                     return;
                 }
                 SetTarget(craft.Id, source.Id);
-                var hover = SurfacePoint(source, craft, JobHoverAltitudeM);
+                var hover = SurfacePoint(source, craft, JobHoverAltitudeM, job);
                 craft.Controls = NavigateTo(craft, hover, GetVelocityAt(source.Id, TimeS), source.Id, JobCruiseSpeedMps, 0);
                 if (hover.DistanceTo(craft.Position) < 40 && (craft.Velocity - GetVelocityAt(source.Id, TimeS)).Length < 2)
                     job.State = MiningJobState.Landing;
@@ -137,7 +143,7 @@ public sealed partial class SectorState
                     return;
                 }
                 SetTarget(craft.Id, source.Id);
-                craft.Controls = LandOnAnchor(craft, source);
+                craft.Controls = GiveWay(craft, CraftId.None, source.Id) ?? LandOnAnchor(craft, source); // let lifting ships out first (#55)
                 return;
 
             case MiningJobState.Mining:
@@ -162,7 +168,7 @@ public sealed partial class SectorState
                 switch (FlyToDock(craft, destination))
                 {
                     case DockApproach.Docked: job.State = MiningJobState.Unloading; break;
-                    case DockApproach.NoFreePort: Wait(craft, job, MiningJobState.ToDestination, $"no free docking port at {destination.Name}"); break;
+                    case DockApproach.NoFreePort: Wait(craft, job, MiningJobState.ToDestination, $"queued for a berth at {destination.Name}"); break;
                 }
                 return;
 
@@ -174,6 +180,7 @@ public sealed partial class SectorState
                 if (craft.Inventory[material] == 0)
                 {
                     job.CompletedCycles++;
+                    job.SpotBearingRad = null; // a new spot next trip
                     job.State = MiningJobState.ToSource;
                 }
                 else if (amount == 0)
@@ -237,12 +244,26 @@ public sealed partial class SectorState
     }
 
     /// <summary>Point above (or, with negative altitude, just inside) the body's surface on the craft's side.</summary>
-    private Vector2D SurfacePoint(CelestialBodyState body, CraftState craft, double altitudeM)
+    /// <summary>Spacing between miners' spots on the same rock, along its surface (#55).</summary>
+    public const double MiningSpotSpacingM = 40;
+
+    /// <summary>
+    /// The point above this trip's landing spot. The spot is picked once per trip (saved with the job):
+    /// on the side the craft is coming from, then nudged by up to three spacings either way by craft
+    /// id, so miners working the same rock land apart instead of on top of each other (#55).
+    /// </summary>
+    private Vector2D SurfacePoint(CelestialBodyState body, CraftState craft, double altitudeM, MiningJob job)
     {
         var centre = GetPosition(body.Id);
-        var outward = craft.Position - centre;
-        var unit = outward.Length > 1e-9 ? outward * (1 / outward.Length) : new Vector2D(0, -1);
-        return centre + unit * (body.RadiusM + craft.CollisionRadiusM + altitudeM);
+        if (job.SpotBearingRad is null)
+        {
+            var outward = craft.Position - centre;
+            var bearing = Math.Atan2(outward.Y, outward.X);
+            var nudge = (int)(craft.Id.Value % 7) - 3;
+            job.SpotBearingRad = FlightModel.WrapAngle(bearing + nudge * MiningSpotSpacingM / Math.Max(body.RadiusM, 1));
+        }
+        var angle = job.SpotBearingRad.Value;
+        return centre + new Vector2D(Math.Cos(angle), Math.Sin(angle)) * (body.RadiusM + craft.CollisionRadiusM + altitudeM);
     }
 
     /// <summary>Seconds ahead the autopilot looks for an impact along its current velocity.</summary>
@@ -261,7 +282,9 @@ public sealed partial class SectorState
         CraftId ignoreCraft = default)
     {
         if (CruiseLeg(craft, goal, goalVelocity) is { } cruise) return cruise; // long legs between planets (#53)
-        if (AvoidStations(craft, goal, ignoreCraft, maxSpeed) is { } avoid) return avoid; // stations are solid now (#34)
+        // Keep right on long legs (#55), except on the way down to a body: there the shifted goal could
+        // sit low over a surface the autopilot deliberately doesn't treat as an obstacle.
+        if (ignore.IsNone) goal = LaneGoal(craft, goal);
         // Gravity curves the path towards the body pulling it (#32): predict with it for that body.
         var pullingIndex = GravitySourceIndex(craft.Position, TimeS);
         var pull = GravityAt(craft.Position, TimeS, pullingIndex);
@@ -282,6 +305,9 @@ public sealed partial class SectorState
                 return Autopilot.ThrustAlong(craft, away * (1 / Math.Max(away.Length, 1e-9)));
             }
         }
+        // Then other craft, then routing round stations: never let a detour override a ship about to be hit (#55).
+        if (GiveWay(craft, ignoreCraft, ignore) is { } giveWay) return giveWay;
+        if (AvoidStations(craft, goal, ignoreCraft, maxSpeed) is { } avoid) return avoid; // stations are solid (#34)
 
         for (var i = 0; i < _bodies.Count; i++)
         {

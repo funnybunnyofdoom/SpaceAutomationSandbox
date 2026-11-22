@@ -136,7 +136,7 @@ public class TimeAndDiagnosticsTests
         Assert.Contains(history, e => e.Text == "mining");
         Assert.True(history.Zip(history.Skip(1)).All(p => p.First.Tick <= p.Second.Tick && p.First.Text != p.Second.Text));
 
-        for (var i = 0; i < 30 * 60 * FixedStepClock.TicksPerSecond; i++) sector.Step();
+        for (var i = 0; i < 60 * 60 * FixedStepClock.TicksPerSecond; i++) sector.Step();
         Assert.Equal(ShipJob.HistoryLength, job.History.Count); // capped
     }
 }

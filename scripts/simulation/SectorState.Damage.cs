@@ -18,16 +18,20 @@ namespace SpaceAutomationSandbox.Simulation;
 /// bounding circles, so docking and parking side by side still work. Overlapping craft are pushed
 /// apart and their closing speed along the contact is removed (an inelastic bump). Landed and
 /// parked craft (stations) don't move; docked and cruising craft don't collide.</item>
-/// <item>PLACEHOLDER traffic control: two craft that are both flown by running jobs don't collide
-/// with each other (automated traffic has no avoidance yet). They do collide with stations (which
-/// the autopilot steers around and approaches slowly) and with craft the player flies.</item>
+/// <item>Automated craft follow traffic rules to avoid each other (#55, SectorState.Traffic).</item>
 /// </list>
 /// No repairs yet (maintenance, #3). Sectors without a part catalog (bare test sectors) take no damage.
 /// </summary>
 public sealed partial class SectorState
 {
-    /// <summary>Landings and bumps up to this closing speed are harmless.</summary>
+    /// <summary>Landings up to this speed are harmless.</summary>
     public const double SafeImpactSpeedMps = 6;
+
+    /// <summary>
+    /// Craft-to-craft bumps up to this closing speed are harmless (#55): hulls nudging each other in a
+    /// crowd are not ships slamming into rock. Faster ones damage both.
+    /// </summary>
+    public const double SafeBumpSpeedMps = 12;
 
     /// <summary>Health lost per m/s of closing speed above the safe speed, at the contact point.</summary>
     public const double DamagePerMps = 0.08;
@@ -44,12 +48,12 @@ public sealed partial class SectorState
     public IReadOnlyCollection<ImpactEvent> RecentImpacts => _impacts;
 
     /// <summary>Damages the parts of <paramref name="craft"/> near a contact point after an impact.</summary>
-    private void ApplyImpact(CraftState craft, Vector2D contactPoint, double closingSpeedMps, string with = "")
+    private void ApplyImpact(CraftState craft, Vector2D contactPoint, double closingSpeedMps, string with = "", double safeSpeedMps = SafeImpactSpeedMps)
     {
-        if (closingSpeedMps <= SafeImpactSpeedMps || Parts is null) return;
+        if (closingSpeedMps <= safeSpeedMps || Parts is null) return;
         if (_impacts.Count == 20) _impacts.Dequeue();
         _impacts.Enqueue(new ImpactEvent(Tick, craft.Id, with, closingSpeedMps));
-        var damage = (closingSpeedMps - SafeImpactSpeedMps) * DamagePerMps;
+        var damage = (closingSpeedMps - safeSpeedMps) * DamagePerMps;
         var changed = false;
         List<DesignCell>? broken = null;
         foreach (var (cell, position) in CellPositions(craft, craft.Position, craft.HeadingRad).ToList())
@@ -137,29 +141,22 @@ public sealed partial class SectorState
     /// <summary>
     /// Finds overlapping craft (a spatial grid, then the cells of close pairs), pushes them apart and
     /// removes their closing speed; fast bumps damage both. Deterministic: pairs in craft id order.
-    /// Automated craft never collide with each other (placeholder traffic control), so only the other
-    /// craft (stations, ships flown by the player or idle) go in the grid; each automated craft only
-    /// looks for those. Cost stays small even with thousands of automated ships crowding a station.
+    /// Craft can't overlap, so even a crowd at a station has few craft per grid cell.
     /// </summary>
     private void ResolveCraftCollisions()
     {
         if (_crafts.Count < 2) return;
         double maxRadius = 0;
-        var anyInGrid = false;
-        foreach (var c in _crafts)
-            if (Collides(c) && !c.IsAutomated) { maxRadius = Math.Max(maxRadius, c.CollisionRadiusM); anyInGrid = true; }
-        if (!anyInGrid) return;
-        foreach (var c in _crafts) if (Collides(c) && c.IsAutomated) maxRadius = Math.Max(maxRadius, c.CollisionRadiusM);
+        foreach (var c in _crafts) if (Collides(c)) maxRadius = Math.Max(maxRadius, c.CollisionRadiusM);
         var cellSize = Math.Max(50, 2 * maxRadius + 1);
 
         if (_gridNext.Length < _crafts.Count) _gridNext = new int[Math.Max(_crafts.Count, 2 * _gridNext.Length)];
         _gridHead.Clear();
-        static long Key(long x, long y) => (x << 32) ^ (y & 0xFFFFFFFF);
         for (var i = 0; i < _crafts.Count; i++)
         {
             var c = _crafts[i];
-            if (!Collides(c) || c.IsAutomated) continue;
-            var key = Key((long)Math.Floor(c.Position.X / cellSize), (long)Math.Floor(c.Position.Y / cellSize));
+            if (!Collides(c)) continue;
+            var key = GridKey((long)Math.Floor(c.Position.X / cellSize), (long)Math.Floor(c.Position.Y / cellSize));
             _gridNext[i] = _gridHead.TryGetValue(key, out var head) ? head : -1;
             _gridHead[key] = i;
         }
@@ -173,32 +170,61 @@ public sealed partial class SectorState
             for (var dx = -1; dx <= 1; dx++)
             for (var dy = -1; dy <= 1; dy++)
             {
-                if (!_gridHead.TryGetValue(Key(cx + dx, cy + dy), out var j)) continue;
+                if (!_gridHead.TryGetValue(GridKey(cx + dx, cy + dy), out var j)) continue;
                 for (; j >= 0; j = _gridNext[j])
                 {
-                    if (j == i || (!a.IsAutomated && j < i)) continue; // each grid pair once; automated craft meet only grid craft
+                    if (j <= i) continue; // each pair once, in id order
                     var b = _crafts[j];
                     if (!Movable(a) && !Movable(b)) continue;
                     if (a.Position.DistanceTo(b.Position) >= a.CollisionRadiusM + b.CollisionRadiusM) continue;
-                    if (a.Id.Value < b.Id.Value) ResolvePair(a, b); else ResolvePair(b, a);
+                    ResolvePair(a, b);
                 }
             }
         }
     }
 
+    private Vector2D[] _cellsA = new Vector2D[32], _cellsB = new Vector2D[32];
+
+    /// <summary>World positions of a craft's cell centres into a reused buffer; returns how many.</summary>
+    private static int FillCellPositions(CraftState craft, ref Vector2D[] buffer)
+    {
+        var cells = craft.Design.Cells;
+        if (buffer.Length < cells.Count) buffer = new Vector2D[Math.Max(cells.Count, 2 * buffer.Length)];
+        var (sin, cos) = Math.SinCos(craft.HeadingRad);
+        var comX = craft.Stats.CenterOfMassX;
+        var comY = craft.Stats.CenterOfMassY;
+        for (var i = 0; i < cells.Count; i++)
+        {
+            var x = (cells[i].Pos.X - comX) * ShipDesign.CellSizeM;
+            var y = (cells[i].Pos.Y - comY) * ShipDesign.CellSizeM;
+            buffer[i] = craft.Position + new Vector2D(x * cos - y * sin, x * sin + y * cos);
+        }
+        return cells.Count;
+    }
+
     private void ResolvePair(CraftState a, CraftState b)
     {
-        // Deepest overlapping cell pair.
+        // Deepest overlapping cell pair (cell positions into reused buffers: this runs for every close pair).
         var minDistance = 2 * CellContactRadiusM * 0.9; // cells touching face to face don't count (docked neighbours)
-        double deepest = 0;
-        Vector2D pa = default, pb = default;
-        foreach (var (_, ca) in CellPositions(a, a.Position, a.HeadingRad))
-        foreach (var (_, cb) in CellPositions(b, b.Position, b.HeadingRad))
+        var countA = FillCellPositions(a, ref _cellsA);
+        var countB = FillCellPositions(b, ref _cellsB);
+        var deepestSq = minDistance * minDistance;
+        int bestA = -1, bestB = -1;
+        for (var i = 0; i < countA; i++)
         {
-            var overlap = minDistance - ca.DistanceTo(cb);
-            if (overlap > deepest) { deepest = overlap; pa = ca; pb = cb; }
+            var ca = _cellsA[i];
+            for (var j = 0; j < countB; j++)
+            {
+                var dx = ca.X - _cellsB[j].X;
+                var dy = ca.Y - _cellsB[j].Y;
+                var dSq = dx * dx + dy * dy;
+                if (dSq < deepestSq) { deepestSq = dSq; bestA = i; bestB = j; }
+            }
         }
-        if (deepest <= 0) return;
+        if (bestA < 0) return;
+        var pa = _cellsA[bestA];
+        var pb = _cellsB[bestB];
+        var deepest = minDistance - Math.Sqrt(deepestSq);
 
         var between = pb - pa;
         var normal = between.Length > 1e-9 ? between * (1 / between.Length) : (b.Position - a.Position) * (1 / Math.Max((b.Position - a.Position).Length, 1e-9));
@@ -217,8 +243,8 @@ public sealed partial class SectorState
             a.Velocity -= normal * (closing * shareA);
             b.Velocity += normal * (closing * shareB);
             var contact = (pa + pb) * 0.5;
-            ApplyImpact(a, contact, closing, b.Name);
-            ApplyImpact(b, contact, closing, a.Name);
+            ApplyImpact(a, contact, closing, b.Name, SafeBumpSpeedMps);
+            ApplyImpact(b, contact, closing, a.Name, SafeBumpSpeedMps);
         }
     }
 }

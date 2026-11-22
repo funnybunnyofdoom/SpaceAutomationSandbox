@@ -51,7 +51,7 @@ public sealed partial class SectorState
                 switch (FlyToDock(craft, pickup))
                 {
                     case DockApproach.Docked: job.State = HaulJobState.Loading; break;
-                    case DockApproach.NoFreePort: WaitHaul(craft, job, HaulJobState.ToPickup, $"no free docking port at {pickup.Name}"); break;
+                    case DockApproach.NoFreePort: WaitHaul(craft, job, HaulJobState.ToPickup, $"queued for a berth at {pickup.Name}"); break;
                 }
                 return;
 
@@ -76,7 +76,7 @@ public sealed partial class SectorState
                 switch (FlyToDock(craft, destination))
                 {
                     case DockApproach.Docked: job.State = HaulJobState.Unloading; break;
-                    case DockApproach.NoFreePort: WaitHaul(craft, job, HaulJobState.ToDropoff, $"no free docking port at {destination.Name}"); break;
+                    case DockApproach.NoFreePort: WaitHaul(craft, job, HaulJobState.ToDropoff, $"queued for a berth at {destination.Name}"); break;
                 }
                 return;
 
@@ -162,7 +162,7 @@ public sealed partial class SectorState
     /// </summary>
     private DockApproach FlyToDock(CraftState craft, CraftState station)
     {
-        if (craft.IsDocked && craft.DockedToCraftId == station.Id) return DockApproach.Docked;
+        if (craft.IsDocked && craft.DockedToCraftId == station.Id) { ReleaseClaim(craft); return DockApproach.Docked; }
         if (craft.IsLanded)
         {
             if (craft.IsAnchored) TryRelease(craft.Id);
@@ -173,18 +173,37 @@ public sealed partial class SectorState
         }
         if (craft.IsDocked) TryUndock(craft.Id);
         SetTargetCraft(craft.Id, station.Id);
-        var ports = FreePorts(station);
-        if (ports.Count == 0) return DockApproach.NoFreePort;
-
-        var berth = BerthPosition(station, ports[0], craft.CollisionRadiusM, station.Position);
         var stationVelocity = CraftVelocityAt(station, TimeS);
         // A landed station's berth sits just above its body: don't treat that body as an obstacle to detour around.
         var ignore = station.IsLanded ? station.LandedOnBodyId : BodyId.None;
-        craft.Controls = NavigateTo(craft, DockingWaypoint(craft, station, ports[0], berth), stationVelocity, ignore,
+        // Far out, just head for the station; berths are only claimed close in, so far-off ships don't block them (#55).
+        var gap = craft.Position.DistanceTo(station.Position) - station.CollisionRadiusM;
+        if (gap > ClaimRangeM && craft.DockClaimStation != station.Id)
+        {
+            craft.Controls = NavigateTo(craft, HoldPoint(craft, station), stationVelocity, ignore, DockingSpeedLimit(craft, station), 0, station.Id);
+            return DockApproach.Underway;
+        }
+        var port = ClaimPort(craft, station, FreePorts(station));
+        if (port < 0)
+        {
+            // Every berth is taken or claimed: wait on the holding ring, out of the approach lanes (#55).
+            var hold = HoldPoint(craft, station);
+            if (Math.Abs(craft.Position.DistanceTo(station.Position) - hold.DistanceTo(station.Position)) > 50)
+            {
+                // Not on the ring yet (too close, or still on the way): fly to it first.
+                craft.Controls = NavigateTo(craft, hold, stationVelocity, ignore, DockingSpeedLimit(craft, station), 0, station.Id);
+                return DockApproach.Underway;
+            }
+            return DockApproach.NoFreePort;
+        }
+
+        var berth = BerthPosition(station, port, craft.CollisionRadiusM, station.Position);
+        craft.Controls = NavigateTo(craft, DockingWaypoint(craft, station, port, berth), stationVelocity, ignore,
             DockingSpeedLimit(craft, station), 0, station.Id);
         if (berth.DistanceTo(craft.Position) < 30 && (craft.Velocity - stationVelocity).Length < DockMaxRelativeSpeedMps * 0.8
-            && TryDock(craft.Id).Done)
+            && TryDockAt(craft, station, port))
         {
+            ReleaseClaim(craft);
             craft.Controls = ShipControls.Idle; // this tick's throttle would undock it again
             return DockApproach.Docked;
         }

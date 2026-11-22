@@ -107,6 +107,8 @@ public static class SaveGameSerializer
                         : null,
                     PartsLost = c.PartsLost,
                     Crew = c.Crew,
+                    DockClaimStationId = c.DockClaimStation.Value,
+                    DockClaimPort = c.DockClaimPort,
                     FoodRemainderKg = c.FoodRemainderKg,
                     WaterRemainderKg = c.WaterRemainderKg,
                     FarmRemainderKg = c.FarmRemainderKg,
@@ -126,7 +128,7 @@ public static class SaveGameSerializer
                         MiningJob j => new JobDto
                         {
                             Kind = j.Kind, SourceBodyId = j.SourceBodyId.Value, MaterialId = j.MaterialId, DestinationId = j.DestinationId.Value,
-                            ReturnFraction = j.ReturnFraction, Active = j.Active, State = j.State, ResumeState = j.ResumeState,
+                            ReturnFraction = j.ReturnFraction, Active = j.Active, State = j.State, ResumeState = j.ResumeState, SpotBearingRad = j.SpotBearingRad,
                             WaitReason = j.WaitReason, CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg, RetryAtTick = j.RetryAtTick,
                         },
                         HaulJob h => new JobDto
@@ -288,6 +290,7 @@ public static class SaveGameSerializer
             {
                 if (c.TargetCraftId != 0) sector.SetTargetCraft(new CraftId(c.Id), new CraftId(c.TargetCraftId));
                 if (c.DockedToCraftId != 0) sector.RestoreDock(new CraftId(c.Id), new CraftId(c.DockedToCraftId), c.DockPort);
+                if (c.DockClaimStationId != 0) sector.RestoreDockClaim(new CraftId(c.Id), new CraftId(c.DockClaimStationId), c.DockClaimPort);
                 var restored = sector.GetCraft(new CraftId(c.Id));
                 if (c.MiningRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has a drill remainder of {c.MiningRemainderKg} kg.");
                 restored.MiningRemainderKg = c.MiningRemainderKg;
@@ -334,6 +337,7 @@ public static class SaveGameSerializer
                         {
                             Active = j.Active, State = j.State, ResumeState = j.ResumeState, WaitReason = j.WaitReason,
                             CompletedCycles = j.CompletedCycles, DeliveredKg = j.DeliveredKg, RetryAtTick = j.RetryAtTick,
+                            SpotBearingRad = j.SpotBearingRad,
                         });
                     }
                 }
@@ -480,6 +484,12 @@ public static class SaveGameSerializer
         public int Crew { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint DockClaimStationId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int DockClaimPort { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double FoodRemainderKg { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
@@ -558,6 +568,10 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public long ContractAmountKg { get; set; }
+
+        /// <summary>Mining: this trip's landing spot bearing (v14+, #55); null when not picked yet.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? SpotBearingRad { get; set; }
     }
 
     private sealed class OrderDto

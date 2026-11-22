@@ -195,7 +195,7 @@ public sealed partial class SectorState
         foreach (var craft in _crafts)
         {
             if (craft.Cruising) { StepCruise(craft, endS); continue; } // no thrust, no contact: it drops out first
-            var reference = !craft.TargetCraftId.IsNone ? CraftVelocityAt(GetCraft(craft.TargetCraftId), midTickS)
+            var reference = !craft.TargetCraftId.IsNone ? BrakeReferenceForCraft(craft, GetCraft(craft.TargetCraftId), midTickS)
                 : !craft.TargetBodyId.IsNone ? GetVelocityAt(craft.TargetBodyId, midTickS)
                 : Vector2D.Zero;
             var velocityBefore = craft.Velocity;

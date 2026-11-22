@@ -120,6 +120,12 @@ public sealed class MiningJob : ShipJob
     /// <summary>State to resume after a wait clears.</summary>
     public MiningJobState ResumeState { get; internal set; } = MiningJobState.ToSource;
 
+    /// <summary>
+    /// This trip's landing spot on the source (#55): a bearing from the body's centre, picked on the
+    /// side the craft comes from, nudged per craft so miners land apart. Null until picked; reset each trip.
+    /// </summary>
+    public double? SpotBearingRad { get; internal set; }
+
     public override string Kind => "mining";
 
     protected override int StateKey => (int)State;

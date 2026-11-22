@@ -263,7 +263,7 @@ public partial class JobPanel : PanelContainer
                                   + (s.Contract is { } c ? $" (now {c.AmountKg / 1000.0:0.0} t {c.MaterialId}, {Station(c.PickupId)} → {Station(c.DestinationId)})" : ""),
             _ => job.Kind,
         };
-        _state.Text = $"{what}\nState: {job.Status}{(craft.PowerShort && !craft.LegacyFreePower ? "  (NO POWER)" : "")}{(craft.CrewShortReason is { } why ? $"  (STOPPED: {why})" : "")}\n"
+        _state.Text = $"{what}\nState: {job.Status}{(craft.PowerShort && !craft.LegacyFreePower ? "  (NO POWER)" : "")}{(craft.CrewShortReason is { } why ? $"  (STOPPED: {why})" : "")}{(craft.GivingWayTo.IsNone ? "" : "  (giving way to traffic)")}\n"
                       + $"Cycles: {job.CompletedCycles}    Delivered: {job.DeliveredKg / 1000.0:0.0} t    "
                       + $"Hold: {craft.CargoKg / 1000.0:0.0} / {craft.CargoCapacityKg / 1000.0:0} t"
                       + (job.History.Count == 0 ? "" : "\nRecent (newest first):\n" + string.Join("\n", job.History.Reverse().Take(6).Select(e =>

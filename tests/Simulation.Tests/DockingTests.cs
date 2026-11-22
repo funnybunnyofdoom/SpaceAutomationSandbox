@@ -37,14 +37,18 @@ public class DockingTests
     }
 
     [Fact]
-    public void TargetingAStation_BrakeMatchesItsVelocity()
+    public void TargetingAStation_BrakeHoldsPositionRelativeToIt()
     {
         var (sector, ship, yard) = BesideYard(offsetM: 400, relativeSpeed: 30);
         ship.Controls = new ShipControls(0, 0, true);
         RunSeconds(sector, 5);
+        var gap = ship.Position.DistanceTo(yard.Position);
 
-        var rel = sector.GetRelativeMotionToCraft(ship.Id, yard.Id);
-        Assert.True(rel.RelativeSpeedMps < 0.1, $"relative {rel.RelativeSpeedMps}");
+        // Close to a station on an orbit the brake turns with that orbit (#55), so the craft keeps its
+        // place beside the station as it goes round (matching only its velocity would drift away).
+        RunSeconds(sector, 120);
+        Assert.InRange(ship.Position.DistanceTo(yard.Position), gap - 5, gap + 5);
+        Assert.True(sector.GetRelativeMotionToCraft(ship.Id, yard.Id).ClosingSpeedMps is > -0.5 and < 0.5);
     }
 
     [Fact]

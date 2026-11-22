@@ -63,6 +63,15 @@ public sealed class CraftState
     /// <summary>Set only by the save migration for craft from before power existed: they never run short.</summary>
     public bool LegacyFreePower { get; internal set; }
 
+    /// <summary>The craft this one is giving way to this tick (#55), for display. Not saved.</summary>
+    public CraftId GivingWayTo { get; internal set; } = CraftId.None;
+
+    /// <summary>Berth claimed for the approach (#55): the station, or None.</summary>
+    public CraftId DockClaimStation { get; internal set; } = CraftId.None;
+
+    /// <summary>The claimed port's index at <see cref="DockClaimStation"/>.</summary>
+    public int DockClaimPort { get; internal set; }
+
     /// <summary>Crew aboard (#11). Live in habitats; bigger craft need them to fly and work.</summary>
     public int Crew { get; internal set; }
 

@@ -173,7 +173,7 @@ public sealed partial class SectorState
                 switch (FlyToDock(craft, pickup))
                 {
                     case DockApproach.Docked: job.State = HaulJobState.Loading; break;
-                    case DockApproach.NoFreePort: WaitServe(craft, job, HaulJobState.ToPickup, $"no free docking port at {pickup.Name}"); break;
+                    case DockApproach.NoFreePort: WaitServe(craft, job, HaulJobState.ToPickup, $"queued for a berth at {pickup.Name}"); break;
                 }
                 return;
 
@@ -198,7 +198,7 @@ public sealed partial class SectorState
                 switch (FlyToDock(craft, destination))
                 {
                     case DockApproach.Docked: job.State = HaulJobState.Unloading; break;
-                    case DockApproach.NoFreePort: WaitServe(craft, job, HaulJobState.ToDropoff, $"no free docking port at {destination.Name}"); break;
+                    case DockApproach.NoFreePort: WaitServe(craft, job, HaulJobState.ToDropoff, $"queued for a berth at {destination.Name}"); break;
                 }
                 return;
 

@@ -261,7 +261,8 @@ public class ProductionNetworkTests
             var rock = rocks[i % rocks.Count];
             Assert.True(sector.StartJob(ship.Id, new MiningJob(rock.Id, rock.DepositsKg.Keys.First(), yard.Id, 0.25)).Done);
         }
-        var mass = TotalMass(sector);
+        // The full ledger: with collisions (#34, #55) a broken-off part moves from a craft to the debris ledger.
+        var mass = sector.ComputeMassLedger().TotalKg;
 
         var watch = Stopwatch.StartNew();
         Run(sector, 10 * TicksPerMinute);
@@ -269,7 +270,7 @@ public class ProductionNetworkTests
 
         var perTickMs = watch.Elapsed.TotalMilliseconds / (10 * TicksPerMinute);
         _log.WriteLine($"30 ships, 10 min sim: {watch.Elapsed.TotalSeconds:0.00} s real, {perTickMs:0.000} ms/tick (budget 50 ms/tick at 20 Hz)");
-        Assert.Equal(mass, TotalMass(sector));
+        Assert.Equal(mass, sector.ComputeMassLedger().TotalKg);
         Assert.True(perTickMs < 5, $"{perTickMs:0.000} ms per tick"); // generous: 10% of the 50 ms tick budget
     }
 

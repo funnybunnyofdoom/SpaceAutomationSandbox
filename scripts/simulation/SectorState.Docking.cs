@@ -35,6 +35,25 @@ public sealed partial class SectorState
         craft.TargetCraftId = target;
     }
 
+    /// <summary>
+    /// What the brake matches when a craft targets another craft. For a target on an orbit (a station
+    /// on rails) it's the velocity of the point where the craft is, turning with that orbit, so a craft
+    /// holding near a station stays put relative to it; matching only the station's own velocity would
+    /// keep a fixed offset in space while the station goes round, and drift the craft into the planet (#55).
+    /// </summary>
+    /// <summary>Within this distance of a station on an orbit, the brake turns with that orbit.</summary>
+    public const double CoRotateRangeM = 1_000;
+
+    private Vector2D BrakeReferenceForCraft(CraftState craft, CraftState target, double timeS)
+    {
+        // Only close in: far off, the station's own velocity is what the approach autopilot plans with.
+        if (target.RailOrbit is not { } orbit || craft.Position.DistanceTo(target.Position) > CoRotateRangeM) return CraftVelocityAt(target, timeS);
+        var centre = GetPositionAt(orbit.Parent, timeS);
+        var omega = 2 * Math.PI / orbit.PeriodS;
+        var offset = craft.Position - centre;
+        return GetVelocityAt(orbit.Parent, timeS) + new Vector2D(-offset.Y, offset.X) * omega;
+    }
+
     /// <summary>Velocity of a craft at a time, exact for craft on rails or docked to one; otherwise its current velocity.</summary>
     public Vector2D CraftVelocityAt(CraftState craft, double timeS)
     {
@@ -86,6 +105,19 @@ public sealed partial class SectorState
     /// Docks the ship at the nearest free berth: of its target craft if that has ports, otherwise of
     /// any station in range. Refused, with the reason, if too far, too fast, landed or no berth is free.
     /// </summary>
+    /// <summary>Docks an automated ship at the port it claimed (#55), if it's free, close and slow enough.</summary>
+    private bool TryDockAt(CraftState ship, CraftState station, int port)
+    {
+        if (!ship.DockedToCraftId.IsNone || ship.IsLanded) return false;
+        var free = false;
+        foreach (var p in FreePorts(station)) if (p == port) free = true;
+        if (!free) return false;
+        if (BerthPosition(station, port, ship.CollisionRadiusM, station.Position).DistanceTo(ship.Position) > DockRangeM) return false;
+        if ((ship.Velocity - station.Velocity).Length > DockMaxRelativeSpeedMps) return false;
+        DockAt(ship, station, port);
+        return true;
+    }
+
     public ActionResult TryDock(CraftId shipId)
     {
         var ship = GetCraft(shipId);

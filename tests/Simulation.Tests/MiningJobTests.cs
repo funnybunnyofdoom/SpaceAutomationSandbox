@@ -178,7 +178,7 @@ public class MiningJobTests
         Assert.True(sector.StartJob(game.PlayerCraftId, new MiningJob(rock.Id, "iron_ore", yard.Id, 0.25)).Done);
         var job = (MiningJob)sector.GetCraft(game.PlayerCraftId).Job!;
 
-        Assert.True(RunUntil(sector, () => job.Status.Contains("no free docking port"), 60 * TicksPerMinute), job.Status);
+        Assert.True(RunUntil(sector, () => job.Status.Contains("queued for a berth"), 60 * TicksPerMinute), job.Status);
     }
 
     [Fact]

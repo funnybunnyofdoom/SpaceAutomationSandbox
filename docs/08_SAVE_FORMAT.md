@@ -60,8 +60,9 @@ The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in
         "partHealth": [ { "x": 0, "y": 2, "health": 0.6 } ], "partsLost": 1,  // v13: damaged parts (omitted when none) and parts broken off
         "crew": 4, "foodRemainderKg": 0.3, "waterRemainderKg": 0.6, "farmRemainderKg": 0.1, "crewGrowthS": 120.5,  // v14; each omitted when 0
         "legacyNoCrew": false,                       // v14: only written (true) for craft from older saves: no crew rules
+        "dockClaimStationId": 2, "dockClaimPort": 0, // #55 (still v14, optional): the berth this craft has claimed; omitted when none
         "refiningBatch": { "recipeId": "smelt_iron", "inputsKg": { "iron_ore": 1000 }, "progressKg": 420.0 },  // v7
-        "job": { "sourceBodyId": 2, "materialId": "metal", "destinationId": 2, "returnFraction": 0.25,
+        "job": { "spotBearingRad": 1.2, /* #55, optional: this trip's landing spot */ "sourceBodyId": 2, "materialId": "metal", "destinationId": 2, "returnFraction": 0.25,
                  "active": true, "state": "Mining", "resumeState": "ToSource", "waitReason": null,
                  "completedCycles": 3, "deliveredKg": 30000 },  // v6, omitted when the craft has none
         "railOrbit": null,                           // v3: { parentId, radiusM, periodS, phaseAtZeroRad } for stations/parked ships
