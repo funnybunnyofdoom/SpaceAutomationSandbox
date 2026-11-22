@@ -46,6 +46,8 @@
     { "id": "refinery_mk2", "name": "Refinery Mk2", "massKg": 6000, "placeholderColor": "#efa76a", "refiningRateKgPerS": 400, "powerUseKW": 150,
       "materialsKg": { "metal": 3500, "electronics": 1700, "composites": 800 } },
     { "id": "fabricator_mk2", "name": "Fabricator Mk2", "massKg": 7000, "placeholderColor": "#a98bf0", "fabricationRateKgPerS": 1000, "powerUseKW": 300,
-      "materialsKg": { "metal": 4000, "electronics": 2200, "composites": 800 } }
+      "materialsKg": { "metal": 4000, "electronics": 2200, "composites": 800 } },
+    { "id": "warp_gate", "name": "Warp gate", "massKg": 30000, "placeholderColor": "#c86bf0", "isWarpGate": true,
+      "materialsKg": { "metal": 15000, "electronics": 10000, "composites": 5000 } }
   ]
 }

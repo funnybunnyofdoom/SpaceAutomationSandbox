@@ -199,6 +199,7 @@ public partial class BlueprintEditorView : Control
         : p.EjectionRateKgPerS > 0 ? $", ejects {p.EjectionRateKgPerS:0} kg/s"
         : p.CrewCapacity > 0 ? $", {p.CrewCapacity} crew"
         : p.RobotCount > 0 ? $", {p.RobotCount} robots, {p.PowerUseKW:0} kW"
+        : p.IsWarpGate ? ", warp gate"
         : p.FoodRateKgPerS > 0 ? $", {p.FoodRateKgPerS * 3600:0} kg food/h"
         : p.IsControlSource ? ", control" : "";
 

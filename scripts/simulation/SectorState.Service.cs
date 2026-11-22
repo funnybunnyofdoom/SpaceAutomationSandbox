@@ -221,6 +221,7 @@ public sealed partial class SectorState
             return false;
         }
 
+        if (StarAt(yard.Position)?.Id != StarAt(craft.Position)?.Id) return StepGateRoute(craft, job) || false; // yard in another system (#23)
         var damaged = craft.HealthList.Count;
         var missing = MissingParts(craft);
         var what = string.Join(", ", new[] { damaged > 0 ? $"{damaged} damaged" : "", missing > 0 ? $"{missing} broken off" : "" }.Where(s => s.Length > 0));

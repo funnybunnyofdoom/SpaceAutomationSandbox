@@ -177,14 +177,12 @@ public sealed partial class SectorState
     /// <summary>Solar output here, as a share of the output at Home's distance from the star (#53).</summary>
     public double SolarFactorAt(Vector2D point)
     {
-        foreach (var body in _bodies)
-        {
-            if (body.Kind != BodyKind.Star) continue;
-            var distance = Math.Max(GetPositionAt(body.Id, TimeS).DistanceTo(point), 1);
-            var factor = SectorGenerator.HomeOrbitRadiusM * SectorGenerator.HomeOrbitRadiusM / (distance * distance);
-            // In 10% steps, so everything around one planet gets the same power. 10% minimum (deep space), 400% maximum.
-            return Math.Clamp(Math.Round(factor * 10) / 10, 0.1, 4);
-        }
-        return 1; // saves from before the star existed
+        // The nearest star (#54: each system has its own).
+        if (StarAt(point) is not { } star) return 1; // saves from before the star existed
+        var distance = Math.Max(GetPosition(star.Id).DistanceTo(point), 1);
+        var factor = SectorGenerator.HomeOrbitRadiusM * SectorGenerator.HomeOrbitRadiusM / (distance * distance);
+        // In 10% steps, so everything around one planet gets the same power. 10% minimum (deep space), 400% maximum.
+        return Math.Clamp(Math.Round(factor * 10) / 10, 0.1, 4);
     }
+
 }

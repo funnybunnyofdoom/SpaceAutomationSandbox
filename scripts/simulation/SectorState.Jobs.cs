@@ -80,6 +80,7 @@ public sealed partial class SectorState
             craft.GivingWayTo = CraftId.None;
         }
         // Far from the player: abstract legs move on, waiting craft go dormant (#17).
+        BuildGateLinks(); // warp routes (#23)
         foreach (var craft in _crafts) if (craft.Transit is not null) StepTransit(craft);
         MarkDormant();
         BuildTrafficGrid(); // traffic rules (#55)
@@ -88,6 +89,7 @@ public sealed partial class SectorState
             if (craft.Transit is not null || TryStartTransit(craft)) { craft.Job?.NoteTick(Tick); continue; }
             if (craft.Job is { Active: true } held && StepYardOrder(craft, held)) { held.NoteTick(Tick); continue; } // refits pause the job (#56)
             if (craft.Job is { Active: true } active && StepService(craft, active)) { active.NoteTick(Tick); continue; } // repairs first (#3)
+            if (craft.Job is { Active: true } routed && StepGateRoute(craft, routed)) { routed.NoteTick(Tick); continue; } // via warp gates (#23)
             switch (craft.Job)
             {
                 case SurveyJob { Active: true } survey: StepSurveyJob(craft, survey); break;

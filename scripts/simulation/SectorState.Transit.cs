@@ -65,8 +65,23 @@ public sealed partial class SectorState
         return (centre + new Vector2D(Math.Cos(leg.AngleRad), Math.Sin(leg.AngleRad)) * leg.RadiusM, velocity);
     }
 
-    /// <summary>The leg a craft's job is on now, if it's a travel leg that may go abstract: target and arrival spot.</summary>
+    /// <summary>
+    /// The leg a craft's job is on now, if it's a travel leg that may go abstract: target and arrival
+    /// spot. A target in another star system means the warp gate on the way there (#23); none if
+    /// there's no route.
+    /// </summary>
     private (BodyId Body, CraftId Craft, double Angle, double Radius)? TravelTarget(CraftState craft)
+    {
+        if (TravelTargetForJob(craft) is not { } leg) return null;
+        if (JobTargetPoint(craft) is not { } point) return leg;
+        var gate = GateHop(craft, point, out var noRoute);
+        if (gate is null) return noRoute ? null : leg; // elsewhere with no route: no leg to fly
+        var from = craft.Position - gate.Position;
+        return (BodyId.None, gate.Id, Math.Atan2(from.Y, from.X), gate.CollisionRadiusM + craft.CollisionRadiusM + HoldDistanceM + 40);
+    }
+
+    /// <summary>The leg the job itself is on (its own target, wherever it is).</summary>
+    private (BodyId Body, CraftId Craft, double Angle, double Radius)? TravelTargetForJob(CraftState craft)
     {
         CraftState? station = null;
         var yardId = craft.YardOrder?.YardId ?? craft.ServiceAt; // going to a yard for a refit (#56) or repairs (#3)

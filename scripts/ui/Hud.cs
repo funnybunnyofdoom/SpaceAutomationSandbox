@@ -178,6 +178,7 @@ public partial class Hud : Control
            thrust: W or Up      reverse: X      turn: A / D      strafe: Q / E
            brake (matches the target's motion): S, Down or Space
            cruise drive: V      anchor / release: G      dock / undock: K      deploy a kit: U
+           warp jump (docked at a gate): N
            cycle target: Tab      target nearest body: T      zoom: mouse wheel
 
         Panels  (they open on the right; Esc closes them)

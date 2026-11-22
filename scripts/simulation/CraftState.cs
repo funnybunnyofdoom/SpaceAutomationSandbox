@@ -135,6 +135,21 @@ public sealed class CraftState
     /// <summary>What repairs on this craft are doing this tick, for display. Not saved.</summary>
     public string? RepairStatus { get; internal set; }
 
+    /// <summary>For a warp gate (#22): the gate it sends craft to (in another system); None until its first jump. Saved.</summary>
+    public CraftId GateLinkId { get; internal set; }
+
+    /// <summary>For a warp gate: the tick it can send the next craft (0 = ready now). Saved.</summary>
+    public long GateReadyTick { get; internal set; }
+
+    /// <summary>The tick this craft asked to jump through the gate it's docked at (0 = not asking). Saved; it sets the queue order.</summary>
+    public long JumpRequestTick { get; internal set; }
+
+    /// <summary>Jumps this craft has made (for display). Saved.</summary>
+    public int Jumps { get; internal set; }
+
+    /// <summary>Where it stands at a gate this tick ("queued at X, 2 ahead"), for display. Not saved.</summary>
+    public string? GateStatus { get; internal set; }
+
     /// <summary>Robots working this tick (#13): 0 without power. Recomputed every tick; not saved.</summary>
     public int RobotsWorking { get; internal set; }
 

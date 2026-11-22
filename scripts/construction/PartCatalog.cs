@@ -39,6 +39,9 @@ public sealed record PartDefinition
     /// <summary>Crew this part houses (habitat, #11).</summary>
     public int CrewCapacity { get; init; }
 
+    /// <summary>A warp gate (#22): the station it's on can send craft to its linked gate in another star system.</summary>
+    public bool IsWarpGate { get; init; }
+
     /// <summary>Robots this part holds (robot bay, #13): they count as crew for running a craft, using power instead of food.</summary>
     public int RobotCount { get; init; }
 

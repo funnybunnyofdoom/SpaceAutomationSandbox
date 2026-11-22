@@ -16,7 +16,7 @@ public class ConstructionTests
         {
             "anchor_clamp", "battery", "battery_mk2", "cargo", "cockpit", "docking_port", "drill", "drill_mk2", "fabricator", "fabricator_mk2",
             "farm", "foundation", "habitat", "hull", "refinery", "refinery_mk2", "robot_bay", "slag_ejector", "solar_panel", "solar_panel_mk2",
-            "storage_silo", "thruster", "thruster_mk2",
+            "storage_silo", "thruster", "thruster_mk2", "warp_gate",
         }, ids);
     }
 

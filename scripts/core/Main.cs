@@ -179,6 +179,7 @@ public partial class Main : Node2D
             ShowStatus(_sector.StartJob(_player.Id, new MiningJob(demoRock.Id, demoRock.DepositsKg.Keys.First(), demoYard.Id, 0.25)).Message);
             for (var i = 0; i < 300 * FixedStepClock.TicksPerSecond; i++) _sector.Step();
         }
+        if (System.Array.IndexOf(args, "--demo-warp") >= 0) DemoWarp();
         if (System.Array.IndexOf(args, "--open-job") >= 0) _jobPanel?.Open();
         if (System.Array.IndexOf(args, "--open-debug") >= 0) _debugPanel?.Open();
         if (System.Array.IndexOf(args, "--open-editor") >= 0) OpenEditor();
@@ -210,6 +211,33 @@ public partial class Main : Node2D
         if (_catalog == null || _player == null || _sector.Crafts.FirstOrDefault(c => c.IsShipyard) is not { } yard) return;
         for (var i = 0; i < 2; i++) _sector.OrderBuild(yard.Id, _player.Design, _catalog);
         for (var i = 0; i < 40 * FixedStepClock.TicksPerSecond; i++) _sector.Step();
+    }
+
+    // Dev/test hook (#54): a stocked gate station beside the yard, the player docked at it, one jump
+    // (which opens a new star system), so the new system can be looked at.
+    private void DemoWarp()
+    {
+        if (_catalog == null || _player == null || _sector.Crafts.FirstOrDefault(c => c.IsShipyard) is not { } yard) return;
+        var design = new ShipDesign("demo_gate", "Demo gate", new[]
+        {
+            new DesignCell(new GridPos(0, 0), "warp_gate"), new DesignCell(new GridPos(0, -1), "docking_port"),
+            new DesignCell(new GridPos(1, 0), "storage_silo"), new DesignCell(new GridPos(-1, 0), "solar_panel_mk2"),
+            new DesignCell(new GridPos(-1, -1), "battery_mk2"), new DesignCell(new GridPos(-1, 1), "battery_mk2"),
+        });
+        var bill = design.ComputeBillOfMaterials(_catalog).ToWholeKg();
+        var kit = new ConstructionKit(new OrderId(_sector.NextOrderId), "Gate", design, design.ComputeStats(_catalog), bill);
+        _sector.RestoreKit(yard.Id, kit);
+        _sector.RestoreNextOrderId(_sector.NextOrderId + 1);
+        var before = _sector.Crafts.Select(c => c.Id).ToHashSet();
+        _sector.TryDeployKit(yard.Id, kit.Id);
+        var gate = _sector.Crafts.First(c => !before.Contains(c.Id));
+        foreach (var (material, kg) in bill) _sector.DebugAddStock(gate.Id, material, kg);
+        if (_player.IsDocked) _sector.TryUndock(_player.Id);
+        _player.Position = _sector.BerthPosition(gate, 0, _player.CollisionRadiusM, gate.Position);
+        _player.Velocity = gate.Velocity;
+        _sector.TryDock(_player.Id);
+        ShowStatus(_sector.RequestJump(_player.Id).Message);
+        for (var i = 0; i < 40; i++) _sector.Step();
     }
 
     private void SetGameSpeed(int speed)
@@ -421,6 +449,7 @@ public partial class Main : Node2D
                 if (panel != null) panel.Visible = false;
         }
         else if (_player == null) return;
+        else if (Pressed(InputActions.Jump)) ShowStatus(_sector.RequestJump(_player.Id).Message);
         else if (Pressed(InputActions.Dock))
             ShowStatus((_player.IsDocked ? _sector.TryUndock(_player.Id) : _sector.TryDock(_player.Id)).Message);
         else if (Pressed(InputActions.Cruise))
@@ -487,7 +516,7 @@ public partial class Main : Node2D
         _warp.RecordFrame(delta, ran, due);
 
         _camera.Position = Vector2.Zero; // the world is drawn around _viewCentre instead (precision far from the star)
-        if (_mapMode && _sector.Bodies.FirstOrDefault(b => b.Orbit is null) is { } root) _viewCentre = _sector.GetPosition(root.Id);
+        if (_mapMode && MapStar() is { } root) _viewCentre = _sector.GetPosition(root.Id);
         else if (_player != null) _viewCentre = InterpolatedPosition(_player);
         _hud.Show(BuildHud());
         QueueRedraw();
@@ -544,6 +573,9 @@ public partial class Main : Node2D
                          + " - " + (p.RepairStatus ?? "dock at a shipyard to repair") + "\n"
                        : "")
                    + (p.YardStatus is { } yardWork ? $"SHIPYARD WORK: {yardWork}\n" : "")
+                   + (p.GateStatus is { } gateNow ? $"WARP: {gateNow}{(p.JumpRequestTick > 0 ? " - N to cancel" : "")}\n"
+                       : p.IsDocked && SectorState.IsGate(_sector.GetCraft(p.DockedToCraftId)) ? $"WARP GATE {_sector.GetCraft(p.DockedToCraftId).Name} - N to jump\n" : "")
+                   + (_sector.Stars.Count > 1 && _sector.StarAt(p.Position) is { } here ? $"system: {here.Name}\n" : "")
                    + (!p.IsLanded && !p.IsDocked && !p.IsOnRails && !p.Cruising && _sector.GravitySource(p.Position) is { } pull
                        ? $"gravity {_sector.GravityAt(p.Position, _sector.TimeS).Length:0.00} m/s² from {pull.Name} - land under {SectorState.SafeImpactSpeedMps:0} m/s\n"
                        : "")
@@ -613,7 +645,11 @@ public partial class Main : Node2D
     {
         var yards = _sector.Crafts.Where(c => c.IsShipyard).ToList();
         if (yards.Count == 0) return "No shipyard in this save - F7 starts a new game with one.\n";
-        return string.Concat(yards.Select(y => (y.BuildQueue.Count == 0
+        var gates = _sector.Crafts.Where(SectorState.IsGate).Select(g =>
+            $"{g.Name}: warp gate to " + (_sector.Crafts.FirstOrDefault(c => c.Id == g.GateLinkId) is { } far
+                ? $"{far.Name} ({_sector.StarAt(far.Position)?.Name} system)"
+                : "nowhere yet (its first jump opens a new star system)") + "\n");
+        return string.Concat(gates) + string.Concat(yards.Select(y => (y.BuildQueue.Count == 0
             ? $"{y.Name}: idle"
             : $"{y.Name}: building {y.BuildQueue[0].ShipName} {y.BuildQueue[0].Fraction * 100:0}%"
               + (y.BuildQueue.Count > 1 ? $" (+{y.BuildQueue.Count - 1} queued)" : ""))
@@ -688,7 +724,7 @@ public partial class Main : Node2D
     private void DrawBody(CelestialBodyState body, double renderTimeS)
     {
         // Orbits: skip ones too small to see, and huge ones (from close up they're a straight line off-screen).
-        var orbitPx = body.Orbit is { } o ? (float)o.RadiusM * _pixelsPerMetre : 0f;
+        var orbitPx = body.Orbit is { } o && body.Kind != BodyKind.Star ? (float)o.RadiusM * _pixelsPerMetre : 0f; // a star's place among the stars isn't an orbit to draw
         if (body.Orbit is { } orbit && orbitPx is > 3f and < 200_000f)
         {
             var parentPx = ToPixels(_sector.GetPositionAt(orbit.Parent, renderTimeS));
@@ -775,7 +811,9 @@ public partial class Main : Node2D
         if (_mapMode)
         {
             _zoomBeforeMap = _pixelsPerMetre;
-            var extent = _sector.Bodies.Where(b => b.Orbit is not null && _sector.GetBody(b.Orbit.Parent).Orbit is null)
+            // The system you're in (#54): its star's own planets and belt set the zoom.
+            var star = MapStar();
+            var extent = _sector.Bodies.Where(b => b.Kind != BodyKind.Star && b.Orbit is { } o && star is not null && o.Parent == star.Id)
                 .Select(b => b.Orbit!.RadiusM + b.RadiusM).DefaultIfEmpty(100_000).Max() * 1.1;
             var screen = _uiRoot.GetViewportRect().Size;
             _pixelsPerMetre = Mathf.Clamp((float)(Mathf.Min(screen.X - 420, screen.Y) / 2 / extent), MinPixelsPerMetre, MaxPixelsPerMetre);
@@ -787,6 +825,10 @@ public partial class Main : Node2D
             if (_mapPanel != null) _mapPanel.Visible = false;
         }
     }
+
+    /// <summary>The star of the system shown on the map: the one you're in (#54).</summary>
+    private CelestialBodyState? MapStar() =>
+        _player is { } p ? _sector.StarAt(p.Position) : _sector.Bodies.FirstOrDefault(b => b.Orbit is null);
 
     private static Vector2[] CirclePoints(Vector2 centre, float radius, int count)
     {

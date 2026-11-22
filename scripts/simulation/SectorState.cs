@@ -75,6 +75,8 @@ public sealed partial class SectorState
 
     private void ResetMotionCache()
     {
+        _stars.Clear();
+        foreach (var body in _bodies) if (body.Kind == BodyKind.Star) _stars.Add(body); // one per system (#54)
         _bodyIndex.Clear();
         for (var i = 0; i < _bodies.Count; i++) _bodyIndex[_bodies[i].Id] = i;
         _parentIndex = new int[_bodies.Count];
@@ -234,6 +236,7 @@ public sealed partial class SectorState
         // Shipyards advance after movement, so a finished craft is placed against the yard's new position.
         StepRepairs(); // the fabricator repairs before it builds (#3)
         StepFabrication(endS);
+        StepWarpGates(); // gates send queued craft, paid from their power (#22)
         StepEjection();
         EndPowerTick();
         Tick++;

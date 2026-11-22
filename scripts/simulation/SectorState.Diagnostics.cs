@@ -4,7 +4,11 @@ using System.Linq;
 
 namespace SpaceAutomationSandbox.Simulation;
 
-/// <summary>Where every kg in the sector is, by kind of holder (#19). The total never changes except through debug cheats.</summary>
+/// <summary>
+/// Where every kg in the sector is, by kind of holder (#19). The total never changes except through
+/// debug cheats. <see cref="DiscoveredKg"/> is the mineable mass of star systems generated since the
+/// start (#54): new world, not mass made from nothing, so it's taken out of the total.
+/// </summary>
 public sealed record MassLedger(
     long DepositsKg,
     long StockKg,
@@ -12,9 +16,10 @@ public sealed record MassLedger(
     long OrdersKg,
     long RefiningKg,
     long CraftKg,
-    long EjectedKg)
+    long EjectedKg,
+    long DiscoveredKg = 0)
 {
-    public long TotalKg => DepositsKg + StockKg + KitsKg + OrdersKg + RefiningKg + CraftKg + EjectedKg;
+    public long TotalKg => DepositsKg + StockKg + KitsKg + OrdersKg + RefiningKg + CraftKg + EjectedKg - DiscoveredKg;
 }
 
 /// <summary>Jobs that wait for the same reason, with the craft waiting.</summary>
@@ -45,7 +50,7 @@ public sealed partial class SectorState
         }
         long ejected = 0;
         foreach (var kg in _ejectedKg.Values) ejected += kg;
-        return new MassLedger(deposits, stock, kits, orders, refining, craftKg, ejected);
+        return new MassLedger(deposits, stock, kits, orders, refining, craftKg, ejected, DiscoveredKg);
     }
 
     /// <summary>Active jobs that are waiting, grouped by reason, most crowded first (then A–Z).</summary>

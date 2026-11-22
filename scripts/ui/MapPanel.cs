@@ -113,12 +113,20 @@ public partial class MapPanel : PanelContainer
                 var b = s.GetBody(id);
                 var what = b.Kind == BodyKind.Asteroid ? "" : $" ({b.Kind})";
                 if (pilot is null) return b.Name + what;
+                if (s.StarOf(id)?.Id != s.StarAt(pilot.Position)?.Id) return $"{b.Name}{what}  (another system: reached by warp)";
                 var d = Math.Max(0, s.GetPosition(id).DistanceTo(pilot.Position) - b.RadiusM);
                 return $"{b.Name}{what}  {Distance(d)}, ~{TravelTime(d)}";
             }, () => _targetBody(id));
-            foreach (var child in sector.Bodies.Where(b => b.Orbit?.Parent == body.Id)) AddBody(child, depth + 1);
+            foreach (var child in sector.Bodies.Where(b => b.Orbit?.Parent == body.Id && b.Kind != BodyKind.Star)) AddBody(child, depth + 1);
         }
-        foreach (var root in sector.Bodies.Where(b => b.Orbit is null)) AddBody(root, 0);
+        // One tree per star system (#54), yours first; other systems are reached by warp.
+        var here = _pilot() is { } me ? sector.StarAt(me.Position) : null;
+        foreach (var star in sector.Stars.OrderBy(s => s.Id == here?.Id ? 0 : 1).ThenBy(s => s.Id.Value))
+        {
+            if (sector.Stars.Count > 1)
+                _rows.AddChild(new Label { Text = star.Id == here?.Id ? $"{star.Name} system (you are here)" : $"{star.Name} system (by warp)", Modulate = new Color(0.75f, 0.85f, 1f) });
+            AddBody(star, 0);
+        }
 
         if (stations.Count > 0) _rows.AddChild(new Label { Text = "Stations", Modulate = new Color(1, 1, 1, 0.6f) });
         foreach (var id in stations)
@@ -130,6 +138,7 @@ public partial class MapPanel : PanelContainer
                 var c = s.Crafts.FirstOrDefault(x => x.Id == id);
                 if (c is null) return "(gone)";
                 if (pilot is null || pilot.Id == id) return c.Name;
+                if (s.StarAt(c.Position)?.Id != s.StarAt(pilot.Position)?.Id) return $"{c.Name}  ({s.StarAt(c.Position)?.Name} system, by warp)";
                 var d = c.Position.DistanceTo(pilot.Position);
                 return $"{c.Name}  {Distance(d)}, ~{TravelTime(d)}";
             }, () => _targetCraft(id));

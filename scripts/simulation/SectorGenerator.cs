@@ -117,6 +117,64 @@ public static class SectorGenerator
         return sector;
     }
 
+    // --- Further star systems (#54) ---
+
+    /// <summary>Distance between neighbouring star systems: far beyond any flight (warp is the way there).</summary>
+    public const double SystemSpacingM = 1e10;
+
+    private static readonly string[] NameStarts = { "Ar", "Bel", "Cor", "Dra", "El", "Fen", "Gal", "Hyr", "Ix", "Jor", "Kel", "Lum", "Mor", "Nyx", "Or", "Pel", "Quor", "Ry", "Sel", "Tor", "Ul", "Vex", "Wyr", "Zan" };
+    private static readonly string[] NameEnds = { "a", "is", "on", "ax", "eth", "ion", "ara", "ul", "ith", "or", "en", "ys" };
+
+    /// <summary>
+    /// Generates star system number <paramref name="index"/> (1 = the first beyond home), deterministically
+    /// from the sector's seed: a star placed <see cref="SystemSpacingM"/>-scale away on a fixed orbit around
+    /// the home star (it effectively doesn't move), two or three planets (one icy) with a moon, and a
+    /// small belt. Deposits are richer than at home: a reason to go. Returns the star and the planet a
+    /// warp gate is placed at. Mineable bodies start unsurveyed.
+    /// </summary>
+    public static (CelestialBodyState Star, CelestialBodyState GatePlanet) GenerateSystem(SectorState sector, int index)
+    {
+        if (index < 1) throw new ArgumentOutOfRangeException(nameof(index));
+        var rng = new DeterministicRandom(sector.Seed ^ (0x9E3779B97F4A7C15UL * (ulong)index));
+        var home = sector.Bodies.First(b => b.Kind == BodyKind.Star && b.Orbit is null);
+        var name = NameStarts[(int)rng.Range(0, NameStarts.Length - 0.001)] + NameEnds[(int)rng.Range(0, NameEnds.Length - 0.001)];
+
+        // A fixed place among the stars: a huge orbit with a period so long the star never moves in practice.
+        var place = new CircularOrbit(home.Id, SystemSpacingM * (1 + 0.15 * index), 1e18, rng.Range(0, 2 * Math.PI));
+        var star = Body(sector, name, BodyKind.Star, rng.Range(25_000, 40_000), StarDensityKgPerM3, false, place);
+
+        var phase = rng.Range(0, 2 * Math.PI);
+        var first = Body(sector, $"{name} I", BodyKind.Planet, rng.Range(3_500, 6_000), PlanetDensityKgPerM3, true,
+            AroundStar(star.Id, rng.Range(400_000, 600_000), phase),
+            new Dictionary<string, long>
+            {
+                ["iron_ore"] = 3_000_000 + 500_000 * (long)rng.Range(0, 6),
+                ["copper_ore"] = 1_500_000 + 500_000 * (long)rng.Range(0, 4),
+                ["silicate"] = 1_000_000 + 500_000 * (long)rng.Range(0, 4),
+            });
+        AddBody(sector, rng, first.Id, $"{name} I-a", BodyKind.Moon, MoonDensityKgPerM3, 900, 1_400, 15_000, 25_000, 1_000, 1_800, true,
+            new Dictionary<string, long> { ["iron_ore"] = 1_000_000, ["silicate"] = 800_000 });
+
+        Body(sector, $"{name} II", BodyKind.Planet, rng.Range(4_000, 5_500), IceDensityKgPerM3, true,
+            AroundStar(star.Id, rng.Range(900_000, 1_100_000), phase + rng.Range(-0.3, 0.3)),
+            new Dictionary<string, long> { ["ice"] = 4_000_000, ["silicate"] = 800_000 });
+
+        if (rng.Range(0, 1) < 0.5)
+            Body(sector, $"{name} III", BodyKind.Planet, rng.Range(3_000, 4_500), PlanetDensityKgPerM3, true,
+                AroundStar(star.Id, rng.Range(1_300_000, 1_500_000), phase + rng.Range(-0.3, 0.3)),
+                new Dictionary<string, long> { ["copper_ore"] = 3_000_000, ["iron_ore"] = 1_000_000 });
+
+        var belt = 4 + (int)rng.Range(0, 4.999);
+        for (var i = 1; i <= belt; i++)
+        {
+            var orbit = new CircularOrbit(star.Id, rng.Range(700_000, 800_000), 0, 2 * Math.PI * (i - 1) / belt + rng.Range(0, 0.3));
+            Body(sector, $"{name} belt-{i}", BodyKind.Asteroid, rng.Range(200, 500), AsteroidDensityKgPerM3, true,
+                orbit with { PeriodS = SlowPeriod(orbit.RadiusM) },
+                new Dictionary<string, long> { ["iron_ore"] = 100_000 + 20_000 * (long)rng.Range(0, 10), ["copper_ore"] = 80_000 });
+        }
+        return (star, first);
+    }
+
     /// <summary>
     /// A slow orbit around the star: speed falls with distance like real orbits (about 10 m/s at
     /// Home's distance), so planets barely move on a human timescale. Placeholder (no gravity, #32).

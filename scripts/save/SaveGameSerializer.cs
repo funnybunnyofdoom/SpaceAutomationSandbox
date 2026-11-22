@@ -32,11 +32,12 @@ public static class SaveGameSerializer
     /// part health (impact damage) and local gravity; v14 added crew and life support; v15 added abstract
     /// transit legs for craft far from the player; v16 added repairs (intact design, repair progress,
     /// servicing) and survey jobs; v17 added refit/dismantle/pack orders and the craft id counter
-    /// (removed craft's ids are never reused, and jobs may still name them).
+    /// (removed craft's ids are never reused, and jobs may still name them); v18 added warp gates and
+    /// further star systems (their bodies are ordinary bodies; gates record their link and queue).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 17;
+    public const int SchemaVersion = 18;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -62,6 +63,7 @@ public static class SaveGameSerializer
                 NextOrderId = sector.NextOrderId,
                 NextCraftId = sector.NextCraftId,
                 NextBodyId = sector.NextBodyId,
+                DiscoveredKg = sector.DiscoveredKg,
                 EjectedKg = sector.EjectedKg.Count > 0
                     ? new SortedDictionary<string, long>(sector.EjectedKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal)
                     : null,
@@ -119,6 +121,10 @@ public static class SaveGameSerializer
                         ? new YardOrderDto { Kind = yo.Kind, YardId = yo.YardId.Value, Target = yo.Target is { } t ? DesignToDto(t) : null }
                         : null,
                     YardProgressKg = c.YardProgressKg,
+                    GateLinkId = c.GateLinkId.Value,
+                    GateReadyTick = c.GateReadyTick,
+                    JumpRequestTick = c.JumpRequestTick,
+                    Jumps = c.Jumps,
                     Crew = c.Crew,
                     DockClaimStationId = c.DockClaimStation.Value,
                     Transit = c.Transit is { } leg
@@ -315,6 +321,8 @@ public static class SaveGameSerializer
             if (dto.NextOrderId > 0) sector.RestoreNextOrderId(dto.NextOrderId);
             if (dto.NextCraftId > 0) sector.RestoreNextCraftId(dto.NextCraftId);
             if (dto.NextBodyId > 0) sector.RestoreNextBodyId(dto.NextBodyId);
+            if (dto.DiscoveredKg < 0) throw new FormatException("Negative discovered mass.");
+            sector.RestoreDiscovered(dto.DiscoveredKg);
             foreach (var (material, kg) in dto.EjectedKg ?? new SortedDictionary<string, long>())
             {
                 if (!catalog.Materials.Contains(material)) throw new FormatException($"Unknown ejected material '{material}'.");
@@ -349,6 +357,8 @@ public static class SaveGameSerializer
                 }
                 if (c.RepairProgressKg < 0) throw new FormatException($"Craft {c.Id} has negative repair progress.");
                 sector.RestoreRepair(restored.Id, intactDesign, c.RepairProgressKg, new CraftId(c.ServiceAtId));
+                if (c.GateReadyTick < 0 || c.JumpRequestTick < 0 || c.Jumps < 0) throw new FormatException($"Craft {c.Id} has invalid warp gate data.");
+                sector.RestoreGate(restored.Id, new CraftId(c.GateLinkId), c.GateReadyTick, c.JumpRequestTick, c.Jumps);
                 if (c.YardOrder is { } yod)
                 {
                     ShipDesign? target = null;
@@ -492,6 +502,10 @@ public static class SaveGameSerializer
         /// <summary>#27 (still v17, optional): next body id (bodies mined away entirely are gone; their ids are never reused).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public uint NextBodyId { get; set; }
+
+        /// <summary>v18: mineable mass of the star systems generated since the start (keeps the mass ledger balanced).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public long DiscoveredKg { get; set; }
         public SortedDictionary<string, long>? EjectedKg { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] // omitted while every multiplier is 1
         public TuningDto? Tuning { get; set; }
@@ -560,6 +574,20 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int PartsLost { get; set; }
+
+        /// <summary>v18: for a warp gate, the gate it sends craft to (0 until its first jump).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint GateLinkId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public long GateReadyTick { get; set; }
+
+        /// <summary>v18: the tick this craft asked to jump (its place in the gate's queue); 0 when not asking.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public long JumpRequestTick { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int Jumps { get; set; }
 
         /// <summary>v17: a refit, dismantle or pack order a shipyard is working on.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
