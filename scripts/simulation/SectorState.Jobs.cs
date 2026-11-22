@@ -79,9 +79,13 @@ public sealed partial class SectorState
             if (!craft.IsAutomated && !craft.DockClaimStation.IsNone) { craft.DockClaimStation = CraftId.None; craft.DockClaimPort = 0; }
             craft.GivingWayTo = CraftId.None;
         }
+        // Far from the player: abstract legs move on, waiting craft go dormant (#17).
+        foreach (var craft in _crafts) if (craft.Transit is not null) StepTransit(craft);
+        MarkDormant();
         BuildTrafficGrid(); // traffic rules (#55)
         foreach (var craft in _crafts)
         {
+            if (craft.Transit is not null || TryStartTransit(craft)) { craft.Job?.NoteTick(Tick); continue; }
             switch (craft.Job)
             {
                 case MiningJob { Active: true } mining: StepJob(craft, mining, allowResume: true); break;

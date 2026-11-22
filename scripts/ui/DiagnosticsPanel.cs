@@ -105,6 +105,7 @@ public partial class DiagnosticsPanel : PanelContainer
         text.AppendLine($"  speed {_warp}" + (_warp.SkippedTicks > 0 ? $", {_warp.SkippedTicks} ticks skipped so far" : ""));
         text.AppendLine($"  tick cost {avg:0.00} ms avg, {_cost.MaxMs:0.00} ms max (last {_cost.Count} ticks)");
         text.AppendLine($"  simulating uses {budget:0}% of real time");
+        text.AppendLine($"  craft far away simulated cheaply (in transit or dormant): {_sector().AbstractCraftCount}");
         text.AppendLine();
     }
 

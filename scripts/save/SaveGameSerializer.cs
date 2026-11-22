@@ -29,11 +29,12 @@ public static class SaveGameSerializer
     /// times; v9 limited storage to storage parts; v10 added power and slag ejection; v11 replaced order
     /// landing sites with construction kits and added station requests and serve-requests freight.
     /// v12 added the star system (new games), the cruise drive and solar power by distance; v13 added
-    /// part health (impact damage) and local gravity; v14 added crew and life support.
+    /// part health (impact damage) and local gravity; v14 added crew and life support; v15 added abstract
+    /// transit legs for craft far from the player.
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 14;
+    public const int SchemaVersion = 15;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -108,6 +109,13 @@ public static class SaveGameSerializer
                     PartsLost = c.PartsLost,
                     Crew = c.Crew,
                     DockClaimStationId = c.DockClaimStation.Value,
+                    Transit = c.Transit is { } leg
+                        ? new TransitDto
+                        {
+                            StartTick = leg.StartTick, ArriveTick = leg.ArriveTick, Start = Vec(leg.Start),
+                            TargetBodyId = leg.TargetBody.Value, TargetCraftId = leg.TargetCraft.Value, AngleRad = leg.AngleRad, RadiusM = leg.RadiusM,
+                        }
+                        : null,
                     DockClaimPort = c.DockClaimPort,
                     FoodRemainderKg = c.FoodRemainderKg,
                     WaterRemainderKg = c.WaterRemainderKg,
@@ -291,6 +299,9 @@ public static class SaveGameSerializer
                 if (c.TargetCraftId != 0) sector.SetTargetCraft(new CraftId(c.Id), new CraftId(c.TargetCraftId));
                 if (c.DockedToCraftId != 0) sector.RestoreDock(new CraftId(c.Id), new CraftId(c.DockedToCraftId), c.DockPort);
                 if (c.DockClaimStationId != 0) sector.RestoreDockClaim(new CraftId(c.Id), new CraftId(c.DockClaimStationId), c.DockClaimPort);
+                if (c.Transit is { } leg)
+                    sector.RestoreTransit(new CraftId(c.Id), new TransitLeg(leg.StartTick, leg.ArriveTick, ToVec(leg.Start, "transit.start"),
+                        new BodyId(leg.TargetBodyId), new CraftId(leg.TargetCraftId), leg.AngleRad, leg.RadiusM));
                 var restored = sector.GetCraft(new CraftId(c.Id));
                 if (c.MiningRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has a drill remainder of {c.MiningRemainderKg} kg.");
                 restored.MiningRemainderKg = c.MiningRemainderKg;
@@ -486,6 +497,9 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public uint DockClaimStationId { get; set; }
 
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public TransitDto? Transit { get; set; }
+
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int DockClaimPort { get; set; }
 
@@ -514,6 +528,17 @@ public static class SaveGameSerializer
         public List<OrderDto>? BuildQueue { get; set; }
         public List<KitDto>? Kits { get; set; }
         public SortedDictionary<string, long>? RequestsKg { get; set; }
+    }
+
+    private sealed class TransitDto
+    {
+        public long StartTick { get; set; }
+        public long ArriveTick { get; set; }
+        public VecDto? Start { get; set; }
+        public uint TargetBodyId { get; set; }
+        public uint TargetCraftId { get; set; }
+        public double AngleRad { get; set; }
+        public double RadiusM { get; set; }
     }
 
     private sealed class HealthDto

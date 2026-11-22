@@ -194,10 +194,23 @@ public sealed partial class SectorState
         List<(CraftState, Vector2D)>? docked = null;
         foreach (var craft in _crafts)
         {
+            var brakeAgainst = craft.BrakeAgainst; // this tick only
+            craft.BrakeAgainst = CraftId.None;
             if (craft.Cruising) { StepCruise(craft, endS); continue; } // no thrust, no contact: it drops out first
-            var reference = !craft.TargetCraftId.IsNone ? BrakeReferenceForCraft(craft, GetCraft(craft.TargetCraftId), midTickS)
+            if (craft.Transit is not null) continue; // moved by its abstract leg (#17)
+            var reference = !brakeAgainst.IsNone && craft.Controls.Brake ? BrakeReferenceForCraft(craft, GetCraft(brakeAgainst), midTickS)
+                : !craft.TargetCraftId.IsNone ? BrakeReferenceForCraft(craft, GetCraft(craft.TargetCraftId), midTickS)
                 : !craft.TargetBodyId.IsNone ? GetVelocityAt(craft.TargetBodyId, midTickS)
                 : Vector2D.Zero;
+            if (craft.Dormant)
+            {
+                // Far off and waiting (#17): keep pace with what it holds beside, nothing else.
+                craft.PreviousPosition = craft.Position;
+                craft.PreviousHeadingRad = craft.HeadingRad;
+                craft.Velocity = reference;
+                craft.Position += reference * FixedStepClock.TickSeconds;
+                continue;
+            }
             var velocityBefore = craft.Velocity;
             var thrustPowered = Operational(craft) && TryUsePower(craft, ThrustEnergyKJ(craft, reference));
             // Gravity pulls free-flying craft only; landed, docked and parked ones are held in place.

@@ -63,6 +63,18 @@ public sealed class CraftState
     /// <summary>Set only by the save migration for craft from before power existed: they never run short.</summary>
     public bool LegacyFreePower { get; internal set; }
 
+    /// <summary>The travel leg it's on while simulated abstractly, far from the player (#17); null when flying for real.</summary>
+    public TransitLeg? Transit { get; internal set; }
+
+    /// <summary>Far from the player and waiting: moved with what it holds beside, not flown (#17). Recomputed each tick.</summary>
+    public bool Dormant { get; internal set; }
+
+    /// <summary>
+    /// This tick only: brake relative to this craft instead of the current target (giving way, #17/#55).
+    /// Set by the jobs step and cleared by the flight step of the same tick, so never saved.
+    /// </summary>
+    internal CraftId BrakeAgainst { get; set; }
+
     /// <summary>The craft this one is giving way to this tick (#55), for display. Not saved.</summary>
     public CraftId GivingWayTo { get; internal set; } = CraftId.None;
 

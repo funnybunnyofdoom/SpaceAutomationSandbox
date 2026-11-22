@@ -113,10 +113,11 @@ public class MiningJobTests
         Assert.True(RunUntil(sector, () => sector.Tick > 20 && job.State == state, 60 * TicksPerMinute), $"never reached {state}");
         while (reference.Tick < sector.Tick) reference.Step();
 
-        var loaded = SaveGameSerializer.FromJson(SaveGameSerializer.ToJson(sector, CraftId.None), Catalog).Sector;
+        // The piloted craft is saved too: it's the observer that decides what is simulated in full (#17).
+        var loaded = SaveGameSerializer.FromJson(SaveGameSerializer.ToJson(sector, sector.PilotCraftId), Catalog).Sector;
         for (var i = 0; i < 5 * TicksPerMinute; i++) { reference.Step(); loaded.Step(); }
 
-        Assert.Equal(SaveGameSerializer.ToJson(reference, CraftId.None), SaveGameSerializer.ToJson(loaded, CraftId.None));
+        Assert.Equal(SaveGameSerializer.ToJson(reference, reference.PilotCraftId), SaveGameSerializer.ToJson(loaded, loaded.PilotCraftId));
     }
 
     [Fact]

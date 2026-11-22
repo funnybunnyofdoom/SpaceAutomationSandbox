@@ -135,7 +135,7 @@ public sealed partial class SectorState
     private readonly Dictionary<long, int> _gridHead = new();
     private int[] _gridNext = Array.Empty<int>();
 
-    private static bool Collides(CraftState c) => !c.IsDocked && !c.Cruising;
+    private static bool Collides(CraftState c) => !c.IsDocked && !c.Cruising && c.Transit is null && !c.Dormant;
     private static bool Movable(CraftState c) => !c.IsLanded && !c.IsOnRails;
 
     /// <summary>

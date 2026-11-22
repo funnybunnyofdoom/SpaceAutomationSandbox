@@ -190,8 +190,12 @@ public sealed partial class SectorState
         craft.GivingWayTo = worst.Id;
         var forward = craft.Forward;
         var facing = forward.X * away.X + forward.Y * away.Y;
-        // Roughly facing away: thrust clear. Otherwise brake (stop adding speed towards it) while turning.
-        return new ShipControls(facing > 0.3 ? 1 : 0, Autopilot.TurnToward(craft, away), facing <= 0.3);
+        // Roughly facing away: thrust clear. Otherwise brake while turning, relative to the craft in the
+        // way (stop closing on it), not the far-off target: near an orbiting station, braking against a
+        // rock or a planet swerves the craft tens of m/s across the traffic there.
+        if (facing > 0.3) return new ShipControls(1, Autopilot.TurnToward(craft, away), false);
+        craft.BrakeAgainst = worst.Id;
+        return new ShipControls(0, Autopilot.TurnToward(craft, away), true);
     }
 
     /// <summary>The goal shifted into the right-hand lane for long legs (the real goal when close).</summary>
