@@ -101,8 +101,10 @@ public sealed partial class SectorState
 
     private void StepJob(CraftState craft, MiningJob job, bool allowResume)
     {
-        if (!_byId.TryGetValue(job.SourceBodyId, out var source)) { Wait(craft, job, job.State, "the source body is missing"); return; }
-        if (!_craftsById.TryGetValue(job.DestinationId, out var destination)) { Wait(craft, job, job.State, "the destination is missing"); return; }
+        // Keep the step to go back to (#24): waiting again mustn't overwrite it with "waiting".
+        var resume = job.State == MiningJobState.Waiting ? job.ResumeState : job.State;
+        if (!_byId.TryGetValue(job.SourceBodyId, out var source)) { Wait(craft, job, resume, "the source body is missing"); return; }
+        if (!_craftsById.TryGetValue(job.DestinationId, out var destination)) { Wait(craft, job, resume, StationGone("destination")); return; }
         var material = job.MaterialId;
         var held = craft.Inventory[material];
 

@@ -178,6 +178,8 @@ public static class SaveGameSerializer
                         ? c.Kits.Select(k => new KitDto
                         {
                             Id = k.Id.Value, Name = k.Name, Design = DesignToDto(k.Design),
+                            OriginalCraftId = k.OriginalCraftId.Value,
+                            RequestsKg = k.Requests.Count > 0 ? new SortedDictionary<string, long>(k.Requests.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal) : null,
                             MaterialsKg = new SortedDictionary<string, long>(k.MaterialsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal),
                         }).ToList()
                         : null,
@@ -293,7 +295,14 @@ public static class SaveGameSerializer
                     var materials = kitDto.MaterialsKg ?? new SortedDictionary<string, long>();
                     if (materials.Any(kv => !catalog.Materials.Contains(kv.Key)))
                         throw new FormatException($"Kit {kitDto.Id} holds unknown materials.");
-                    sector.RestoreKit(craft.Id, new ConstructionKit(new OrderId(kitDto.Id), kitDto.Name ?? "", kitDesign, kitDesign.ComputeStats(catalog), materials));
+                    var kitRequests = kitDto.RequestsKg ?? new SortedDictionary<string, long>();
+                    if (kitRequests.Any(kv => !catalog.Materials.Contains(kv.Key) || kv.Value <= 0))
+                        throw new FormatException($"Kit {kitDto.Id} has invalid requests.");
+                    sector.RestoreKit(craft.Id, new ConstructionKit(new OrderId(kitDto.Id), kitDto.Name ?? "", kitDesign, kitDesign.ComputeStats(catalog), materials)
+                    {
+                        OriginalCraftId = new CraftId(kitDto.OriginalCraftId), // a retired id: it doesn't exist now
+                        Requests = kitRequests,
+                    });
                 }
                 foreach (var (material, kg) in c.RequestsKg ?? new SortedDictionary<string, long>())
                 {
@@ -626,6 +635,13 @@ public static class SaveGameSerializer
         public string? Name { get; set; }
         public DesignDto? Design { get; set; }
         public SortedDictionary<string, long>? MaterialsKg { get; set; }
+
+        /// <summary>#24 (still v17, optional): the station this kit was packed from, which it comes back as.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint OriginalCraftId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public SortedDictionary<string, long>? RequestsKg { get; set; }
     }
 
     private sealed class TuningDto

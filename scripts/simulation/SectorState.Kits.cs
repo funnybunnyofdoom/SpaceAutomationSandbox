@@ -75,8 +75,11 @@ public sealed partial class SectorState
         if (kit is null) return new(false, $"{carrier.Name} has no such kit.");
         if (DeployBlocker(carrier, kit) is { } reason) return new(false, reason);
 
-        var station = new CraftState(AllocateCraftId(), kit.Name, kit.Design, kit.Stats, carrier.Position, carrier.HeadingRad);
+        // A packed station comes back as itself (same id), so jobs and requests that used it resume (#24).
+        var id = !kit.OriginalCraftId.IsNone && !_craftsById.ContainsKey(kit.OriginalCraftId) ? kit.OriginalCraftId : AllocateCraftId();
+        var station = new CraftState(id, kit.Name, kit.Design, kit.Stats, carrier.Position, carrier.HeadingRad);
         AddCraft(station);
+        foreach (var (material, kg) in kit.Requests) station.RequestsList[material] = kg;
         carrier.KitsList.Remove(kit);
         if (carrier.IsLanded) PlaceOnSurface(GetBody(carrier.LandedOnBodyId), carrier, station, TimeS);
         else if (carrier.IsOnRails) PlaceNextTo(carrier, station, TimeS);

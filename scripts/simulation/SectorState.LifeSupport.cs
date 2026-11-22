@@ -15,6 +15,8 @@ namespace SpaceAutomationSandbox.Simulation;
 /// Without supplies the crew stop working; nobody dies.</item>
 /// <item>A supplied habitat grows its population by one every <see cref="CrewGrowthS"/> up to capacity.</item>
 /// <item>Farms turn water into the same mass of food, using power.</item>
+/// <item>Robots (#13) in robot bays count as crew for running a craft. They need no food, water or
+/// habitat, only power (drawn first, before anything else); without it they stop. No other upkeep.</item>
 /// <item>Crew move between craft docked together (<see cref="TryTransferCrew"/>).</item>
 /// </list>
 /// Craft from saves older than v14 have <see cref="CraftState.LegacyNoCrew"/>: no crew rules apply to them.
@@ -70,10 +72,23 @@ public sealed partial class SectorState
             }
             else craft.CrewGrowthProgressS = 0;
 
+            // Robots (#13): power only.
+            var robots = craft.Stats.RobotCount;
+            string? robotReason = null;
+            if (robots > 0 && !TryUsePower(craft, craft.Stats.RobotPowerKW * FixedStepClock.TickSeconds))
+            {
+                robots = 0;
+                robotReason = "no power for the robots";
+            }
+            craft.RobotsWorking = robots;
+
             var required = craft.Stats.CrewRequired;
             if (required == 0) { craft.CrewShortReason = null; continue; }
-            if (craft.Crew < required) reason = $"needs {required} crew (has {craft.Crew})";
-            craft.CrewShortReason = reason;
+            var crewWorking = supplied ? craft.Crew : 0;
+            if (crewWorking + robots >= required) { craft.CrewShortReason = null; continue; }
+            craft.CrewShortReason = reason ?? robotReason
+                ?? (craft.Stats.RobotCount > 0 ? $"needs {required} crew or robots (has {craft.Crew} crew, {robots} robots)"
+                    : $"needs {required} crew (has {craft.Crew})");
         }
     }
 
@@ -144,8 +159,10 @@ public sealed partial class SectorState
     public static string CrewStatus(CraftState craft)
     {
         var stats = craft.Stats;
-        if (craft.LegacyNoCrew || (stats.CrewCapacity == 0 && stats.CrewRequired == 0 && craft.Crew == 0)) return "";
-        var text = $"crew {craft.Crew}/{stats.CrewCapacity}" + (stats.CrewRequired > 0 ? $" (needs {stats.CrewRequired})" : "");
+        if (craft.LegacyNoCrew || (stats.CrewCapacity == 0 && stats.CrewRequired == 0 && craft.Crew == 0 && stats.RobotCount == 0)) return "";
+        var text = $"crew {craft.Crew}/{stats.CrewCapacity}"
+                   + (stats.RobotCount > 0 ? $", robots {craft.RobotsWorking}/{stats.RobotCount} ({stats.RobotPowerKW:0} kW)" : "")
+                   + (stats.CrewRequired > 0 ? $" (needs {stats.CrewRequired}{(stats.RobotCount > 0 ? " crew or robots" : "")})" : "");
         if (craft.Crew > 0)
         {
             var hours = SuppliesLastHours(craft);

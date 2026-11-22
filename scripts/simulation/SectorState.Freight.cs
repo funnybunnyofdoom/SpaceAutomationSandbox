@@ -33,8 +33,10 @@ public sealed partial class SectorState
 
     private void StepHaul(CraftState craft, HaulJob job, bool allowResume)
     {
-        if (!_craftsById.TryGetValue(job.PickupId, out var pickup)) { WaitHaul(craft, job, job.State, "the pickup is missing"); return; }
-        if (!_craftsById.TryGetValue(job.DestinationId, out var destination)) { WaitHaul(craft, job, job.State, "the destination is missing"); return; }
+        // Keep the step to go back to (#24): waiting again mustn't overwrite it with "waiting".
+        var resume = job.State == HaulJobState.Waiting ? job.ResumeState : job.State;
+        if (!_craftsById.TryGetValue(job.PickupId, out var pickup)) { WaitHaul(craft, job, resume, StationGone("pickup")); return; }
+        if (!_craftsById.TryGetValue(job.DestinationId, out var destination)) { WaitHaul(craft, job, resume, StationGone("destination")); return; }
         var material = job.MaterialId;
 
         switch (job.State)
@@ -101,6 +103,13 @@ public sealed partial class SectorState
                 return;
         }
     }
+
+    /// <summary>
+    /// Why a job waits while a station it uses is gone (#24). A station packed into a kit comes back
+    /// with the same id when deployed again, and the job carries on by itself.
+    /// </summary>
+    private static string StationGone(string role) =>
+        $"the {role} is missing (dismantled, or packed into a kit): waiting for it to come back";
 
     private void WaitHaul(CraftState craft, HaulJob job, HaulJobState resume, string reason, double retryAfterS = 0)
     {

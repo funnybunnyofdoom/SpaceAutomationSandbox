@@ -98,6 +98,7 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 2 | Added `landedOnBodyId` and `landedOffset` per craft (solid bodies) | A v1 file loads with every craft flying. The next save writes v2. |
 | 3 | Added `railOrbit`, `inventoryKg` and `buildQueue` per craft, and `nextOrderId` (shipyards) | v1/v2 files load with empty inventories and no queues. They contain no shipyard; F7 starts a new game that has one. |
 | 4 | Added `anchored` per craft (anchor clamps and foundations) | Older files load with nothing anchored, except a landed foundation, which is always anchored. |
+| 17 (later additions, optional) | Kits record `originalCraftId` and `requestsKg` (a packed station comes back as itself, #24) | Older kits are new kits: they deploy with a fresh id. |
 | 17 | Refit, dismantle and pack orders (`yardOrder`, `yardProgressKg` per craft) and `sector.nextCraftId`. Jobs may now name craft that no longer exist (they were dismantled) | Nothing changes; the craft id counter follows from the craft. |
 | 16 | Repairs and survey jobs: optional `intactDesign`, `repairProgressKg`, `serviceAtId` per craft; `job.kind` "survey" (target in `sourceBodyId`, `surveyState`) | Nothing changes. Parts that broke off in an older save can't be rebuilt (the blueprint wasn't kept); damage can be repaired. |
 | 15 | Abstract transit for craft far from the player: optional `transit` per craft (start and arrival tick, start point, target body or craft, arrival angle and radius) | Nothing is in transit in an older file; the migration changes nothing. |

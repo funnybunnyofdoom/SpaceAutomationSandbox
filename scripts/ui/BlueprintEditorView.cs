@@ -198,6 +198,7 @@ public partial class BlueprintEditorView : Control
         : p.PowerGenerationKW > 0 ? $", +{p.PowerGenerationKW:0} kW"
         : p.EjectionRateKgPerS > 0 ? $", ejects {p.EjectionRateKgPerS:0} kg/s"
         : p.CrewCapacity > 0 ? $", {p.CrewCapacity} crew"
+        : p.RobotCount > 0 ? $", {p.RobotCount} robots, {p.PowerUseKW:0} kW"
         : p.FoodRateKgPerS > 0 ? $", {p.FoodRateKgPerS * 3600:0} kg food/h"
         : p.IsControlSource ? ", control" : "";
 
@@ -255,9 +256,9 @@ public partial class BlueprintEditorView : Control
               + (s.TotalPowerUseKW <= s.PowerGenerationKW ? "\n"
                   : s.EnergyCapacityKJ > 0 ? $"  battery: {s.EnergyCapacityKJ / (s.TotalPowerUseKW - s.PowerGenerationKW):0} s at max\n"
                   : "  NO BATTERY\n")
-              + (s.CrewRequired > 0 || s.CrewCapacity > 0
-                  ? $"Crew: needs {s.CrewRequired}, houses {s.CrewCapacity}"
-                    + (s.CrewRequired > s.CrewCapacity ? "  - can't house its own crew\n" : "\n")
+              + (s.CrewRequired > 0 || s.CrewCapacity > 0 || s.RobotCount > 0
+                  ? $"Crew: needs {s.CrewRequired}, houses {s.CrewCapacity}" + (s.RobotCount > 0 ? $", robots {s.RobotCount}" : "")
+                    + (s.CrewRequired > s.CrewCapacity + s.RobotCount ? "  - can't house its own crew\n" : "\n")
                   : $"Crew: none needed (up to {ShipStats.UncrewedMaxParts} parts)\n")
               + $"Collision radius {s.BoundingRadiusM:0.0} m";
 

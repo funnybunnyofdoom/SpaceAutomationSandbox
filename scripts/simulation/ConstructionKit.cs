@@ -40,6 +40,15 @@ public sealed class ConstructionKit
     /// <summary>Whole kg; the cargo room it takes and the mass it adds to whoever carries it.</summary>
     public long MassKg { get; }
 
+    /// <summary>
+    /// For a station packed up at a shipyard (#57): its id, so it comes back as the same station when
+    /// deployed again and jobs that used it carry on (#24). None for a newly built kit.
+    /// </summary>
+    public CraftId OriginalCraftId { get; init; }
+
+    /// <summary>The packed station's standing requests (#1), restored when it's deployed again (#24).</summary>
+    public IReadOnlyDictionary<string, long> Requests { get; init; } = new Dictionary<string, long>();
+
     /// <summary>A fixed structure (foundation) can only be deployed while landed.</summary>
     public bool NeedsSurface => Stats.IsFixedStructure;
 }

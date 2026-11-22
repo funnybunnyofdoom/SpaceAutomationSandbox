@@ -39,6 +39,9 @@ public sealed record PartDefinition
     /// <summary>Crew this part houses (habitat, #11).</summary>
     public int CrewCapacity { get; init; }
 
+    /// <summary>Robots this part holds (robot bay, #13): they count as crew for running a craft, using power instead of food.</summary>
+    public int RobotCount { get; init; }
+
     /// <summary>Food grown per second from the same mass of water (farm, #11).</summary>
     public double FoodRateKgPerS { get; init; }
 
@@ -88,7 +91,7 @@ public sealed class PartCatalog
             if (part.ThrustN < 0 || part.CargoCapacityKg < 0 || part.EnergyCapacityKJ < 0 || part.MiningRateKgPerS < 0
                 || part.FabricationRateKgPerS < 0 || part.RefiningRateKgPerS < 0
                 || part.PowerUseKW < 0 || part.PowerGenerationKW < 0 || part.EjectionRateKgPerS < 0
-                || part.CrewCapacity < 0 || part.FoodRateKgPerS < 0)
+                || part.CrewCapacity < 0 || part.FoodRateKgPerS < 0 || part.RobotCount < 0)
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
             ValidateMaterials(part, materials);
             if (!_parts.TryAdd(part.Id, part)) throw new FormatException($"Duplicate part id '{part.Id}'.");

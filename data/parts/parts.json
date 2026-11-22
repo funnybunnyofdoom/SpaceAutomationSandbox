@@ -32,6 +32,20 @@
     { "id": "habitat",  "name": "Habitat",      "massKg": 2000, "placeholderColor": "#7fd1b9", "crewCapacity": 6, "powerUseKW": 10,
       "materialsKg": { "metal": 1200, "composites": 500, "electronics": 300 } },
     { "id": "farm",     "name": "Farm",         "massKg": 3000, "placeholderColor": "#6abf4b", "foodRateKgPerS": 0.02, "powerUseKW": 30,
-      "materialsKg": { "metal": 1500, "composites": 1000, "electronics": 500 } }
+      "materialsKg": { "metal": 1500, "composites": 1000, "electronics": 500 } },
+    { "id": "robot_bay", "name": "Robot bay", "massKg": 1500, "placeholderColor": "#9aa5b8", "robotCount": 4, "powerUseKW": 40,
+      "materialsKg": { "metal": 600, "electronics": 700, "composites": 200 } },
+    { "id": "thruster_mk2", "name": "Thruster Mk2", "massKg": 1800, "placeholderColor": "#f2984f", "thrustN": 300000, "powerUseKW": 160,
+      "materialsKg": { "metal": 1200, "electronics": 450, "composites": 150 } },
+    { "id": "drill_mk2", "name": "Mining drill Mk2", "massKg": 3000, "placeholderColor": "#cfd5dd", "miningRateKgPerS": 200, "powerUseKW": 150,
+      "materialsKg": { "metal": 2100, "electronics": 700, "composites": 200 } },
+    { "id": "solar_panel_mk2", "name": "Solar panel Mk2", "massKg": 700, "placeholderColor": "#5a8cf0", "powerGenerationKW": 200,
+      "materialsKg": { "metal": 250, "electronics": 300, "composites": 150 } },
+    { "id": "battery_mk2", "name": "Battery Mk2", "massKg": 1800, "placeholderColor": "#efe06a", "energyCapacityKJ": 100000,
+      "materialsKg": { "metal": 300, "electronics": 1100, "composites": 400 } },
+    { "id": "refinery_mk2", "name": "Refinery Mk2", "massKg": 6000, "placeholderColor": "#efa76a", "refiningRateKgPerS": 400, "powerUseKW": 150,
+      "materialsKg": { "metal": 3500, "electronics": 1700, "composites": 800 } },
+    { "id": "fabricator_mk2", "name": "Fabricator Mk2", "massKg": 7000, "placeholderColor": "#a98bf0", "fabricationRateKgPerS": 1000, "powerUseKW": 300,
+      "materialsKg": { "metal": 4000, "electronics": 2200, "composites": 800 } }
   ]
 }

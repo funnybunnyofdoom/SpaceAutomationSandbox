@@ -73,7 +73,9 @@ public sealed record ShipStats(
     int CrewCapacity = 0,
     double FoodRateKgPerS = 0,
     double HabitatPowerKW = 0,
-    double FarmPowerKW = 0)
+    double FarmPowerKW = 0,
+    int RobotCount = 0,
+    double RobotPowerKW = 0)
 {
     /// <summary>Craft up to this many parts run without crew (#11).</summary>
     public const int UncrewedMaxParts = 15;
@@ -85,7 +87,7 @@ public sealed record ShipStats(
     public int CrewRequired => CellCount <= UncrewedMaxParts ? 0 : (CellCount + PartsPerCrew - 1) / PartsPerCrew;
 
     /// <summary>Everything running at once (full throttle, drilling, refining, building, ejecting), kW.</summary>
-    public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW + HabitatPowerKW + FarmPowerKW;
+    public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW + HabitatPowerKW + FarmPowerKW + RobotPowerKW;
 
     /// <summary>Can lock onto a body once landed (clamps release again; foundations never do).</summary>
     public bool CanAnchor => AnchorClampCount > 0 || FoundationCount > 0;
@@ -228,7 +230,7 @@ public sealed class ShipDesign
         double mass = 0, thrust = 0, otherThrust = 0, cargo = 0, energy = 0, fabrication = 0, mining = 0, refining = 0, momentX = 0, momentY = 0;
         double generation = 0, thrustPower = 0, drillPower = 0, refineryPower = 0, fabricatorPower = 0, ejectorPower = 0, ejection = 0;
         double reverse = 0, left = 0, right = 0, reversePower = 0, leftPower = 0, rightPower = 0;
-        double food = 0, habitatPower = 0, farmPower = 0;
+        double food = 0, habitatPower = 0, farmPower = 0, robots = 0, robotPower = 0;
         var crew = 0;
         int clamps = 0, foundations = 0;
         var ports = new List<DockingPortInfo>();
@@ -255,6 +257,7 @@ public sealed class ShipDesign
             ejection += part.EjectionRateKgPerS * h;
             crew += part.CrewCapacity;
             food += part.FoodRateKgPerS * h;
+            robots += part.RobotCount * h; // a damaged bay has fewer working robots
             // Each part's power use goes to the activity it powers; thrusters by the direction they push.
             if (part.ThrustN > 0)
             {
@@ -272,6 +275,7 @@ public sealed class ShipDesign
             else if (part.EjectionRateKgPerS > 0) ejectorPower += part.PowerUseKW;
             else if (part.CrewCapacity > 0) habitatPower += part.PowerUseKW;
             else if (part.FoodRateKgPerS > 0) farmPower += part.PowerUseKW;
+            else if (part.RobotCount > 0) robotPower += part.PowerUseKW;
             if (part.IsAnchorClamp) clamps++;
             if (part.IsFoundation) foundations++;
             if (part.IsDockingPort) ports.Add(new DockingPortInfo(cell.Pos, cell.Rotation));
@@ -294,7 +298,8 @@ public sealed class ShipDesign
         return new ShipStats(Cells.Count, mass, thrust, cargo, energy, comX, comY,
             Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations, otherThrust, ports, mining, refining,
             generation, thrustPower, drillPower, refineryPower, fabricatorPower, ejectorPower, ejection,
-            reverse, left, right, reversePower, leftPower, rightPower, crew, food, habitatPower, farmPower);
+            reverse, left, right, reversePower, leftPower, rightPower, crew, food, habitatPower, farmPower,
+            (int)Math.Floor(robots + 1e-9), robotPower);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

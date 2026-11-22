@@ -135,6 +135,9 @@ public sealed class CraftState
     /// <summary>What repairs on this craft are doing this tick, for display. Not saved.</summary>
     public string? RepairStatus { get; internal set; }
 
+    /// <summary>Robots working this tick (#13): 0 without power. Recomputed every tick; not saved.</summary>
+    public int RobotsWorking { get; internal set; }
+
     /// <summary>A refit, dismantle or pack-as-kit order a shipyard is working on (#56, #57); null when none. Saved.</summary>
     public YardOrder? YardOrder { get; internal set; }
 

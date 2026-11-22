@@ -400,7 +400,12 @@ public sealed partial class SectorState
             return true;
         }
         var materials = craft.Design.ComputeBillOfMaterials(Parts!).ToWholeKg();
-        yard.KitsList.Add(new ConstructionKit(new OrderId(_nextOrderId++), craft.Name, craft.Design, craft.Design.ComputeStats(Parts!), materials));
+        // The kit remembers the station, so deploying it brings back the same station (#24).
+        yard.KitsList.Add(new ConstructionKit(new OrderId(_nextOrderId++), craft.Name, craft.Design, craft.Design.ComputeStats(Parts!), materials)
+        {
+            OriginalCraftId = craft.Id,
+            Requests = new Dictionary<string, long>(craft.Requests),
+        });
         (removed ??= new()).Add(craft);
         return true;
     }
