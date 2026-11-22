@@ -8,9 +8,10 @@ using SpaceAutomationSandbox.Simulation;
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>
-/// Sets up and watches the job of the craft you're viewing (key J). Two kinds:
-/// Mining (source body, material, destination, return-at %) and Freight (pickup station, material,
-/// destination, minimum pickup, keep-stocked target). Shows state, wait reason, cycles and delivered
+/// Sets up and watches the job of the craft you're viewing (key J). Three kinds:
+/// Mining (source body, material, destination, return-at %), Freight on a fixed route (pickup station,
+/// material, destination, minimum pickup, keep-stocked target), and Freight serving station requests
+/// (minimum load only: it picks trips itself, #1). Shows state, wait reason, cycles and delivered
 /// mass. Starting goes through SectorState.StartJob, which refuses with the reason if it can't work.
 /// </summary>
 public partial class JobPanel : PanelContainer
@@ -29,6 +30,8 @@ public partial class JobPanel : PanelContainer
     private OptionButton _kind = null!;
     private GridContainer _miningRows = null!;
     private GridContainer _freightRows = null!;
+    private GridContainer _serveRows = null!;
+    private OptionButton _serveMinLoad = null!;
     private OptionButton _source = null!, _mineMaterial = null!, _mineDestination = null!, _returnAt = null!;
     private OptionButton _pickup = null!, _haulMaterial = null!, _haulDestination = null!, _minPickup = null!, _keepStocked = null!;
     private Label _state = null!;
@@ -67,7 +70,8 @@ public partial class JobPanel : PanelContainer
         kindRow.AddChild(new Label { Text = "Job" });
         _kind = new OptionButton { FocusMode = FocusModeEnum.None };
         _kind.AddItem("Mining");
-        _kind.AddItem("Freight");
+        _kind.AddItem("Freight: fixed route");
+        _kind.AddItem("Freight: serve requests");
         _kind.ItemSelected += _ => ShowKind();
         kindRow.AddChild(_kind);
         box.AddChild(kindRow);
@@ -90,6 +94,17 @@ public partial class JobPanel : PanelContainer
         foreach (var kg in MinPickups) _minPickup.AddItem($"{kg / 1000} t");
         _keepStocked = AddRow(_freightRows, "Keep destination at");
         foreach (var kg in KeepStocked) _keepStocked.AddItem(kg == 0 ? "no limit (deliver all)" : $"{kg / 1000} t");
+
+        _serveRows = new GridContainer { Columns = 2 };
+        box.AddChild(_serveRows);
+        _serveMinLoad = AddRow(_serveRows, "Smallest trip");
+        foreach (var kg in MinPickups) _serveMinLoad.AddItem($"{kg / 1000} t");
+        _serveRows.AddChild(new Label { Text = "" });
+        _serveRows.AddChild(new Label
+        {
+            Text = "Serves stations' requests (set them in the cargo panel, C, while docked).",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(250, 0), Modulate = new Color(1, 1, 1, 0.6f),
+        });
 
         var buttons = new HBoxContainer();
         var start = new Button { Text = "Start job", FocusMode = FocusModeEnum.None };
@@ -140,6 +155,7 @@ public partial class JobPanel : PanelContainer
     {
         _miningRows.Visible = _kind.Selected == 0;
         _freightRows.Visible = _kind.Selected == 1;
+        _serveRows.Visible = _kind.Selected == 2;
     }
 
     private void RefreshChoices()
@@ -173,6 +189,7 @@ public partial class JobPanel : PanelContainer
         Select(_haulMaterial, 0);
         Select(_minPickup, 1);
         Select(_keepStocked, 0);
+        Select(_serveMinLoad, 1);
 
         // Show the current job's settings, if any.
         switch (craft?.Job)
@@ -192,6 +209,11 @@ public partial class JobPanel : PanelContainer
                 Select(_haulMaterial, _materials.Materials.ToList().FindIndex(m => m.Id == haul.MaterialId));
                 Select(_minPickup, Array.IndexOf(MinPickups, haul.MinPickupKg));
                 Select(_keepStocked, Array.IndexOf(KeepStocked, haul.KeepStockedKg));
+                RefreshDeposits();
+                break;
+            case ServeRequestsJob serve:
+                _kind.Select(2);
+                Select(_serveMinLoad, Array.IndexOf(MinPickups, serve.MinLoadKg));
                 RefreshDeposits();
                 break;
             default:
@@ -234,11 +256,13 @@ public partial class JobPanel : PanelContainer
                            + $"{Station(m.DestinationId)}, return at {m.ReturnFraction * 100:0}%",
             HaulJob h => $"Freight: {job.MaterialId} from {Station(h.PickupId)} to {Station(h.DestinationId)}"
                          + (h.KeepStockedKg > 0 ? $", keep {h.KeepStockedKg / 1000} t there" : ""),
+            ServeRequestsJob s => "Freight: serving station requests"
+                                  + (s.Contract is { } c ? $" (now {c.AmountKg / 1000.0:0.0} t {c.MaterialId}, {Station(c.PickupId)} → {Station(c.DestinationId)})" : ""),
             _ => job.Kind,
         };
         _state.Text = $"{what}\nState: {job.Status}{(craft.PowerShort && !craft.LegacyFreePower ? "  (NO POWER)" : "")}\n"
                       + $"Cycles: {job.CompletedCycles}    Delivered: {job.DeliveredKg / 1000.0:0.0} t    "
-                      + $"Hold: {craft.Inventory.TotalKg / 1000.0:0.0} / {craft.CargoCapacityKg / 1000.0:0} t";
+                      + $"Hold: {craft.CargoKg / 1000.0:0.0} / {craft.CargoCapacityKg / 1000.0:0} t";
         _state.AddThemeColorOverride("font_color", job.Status.StartsWith("waiting") ? ErrorColor : new Color(1, 1, 1));
     }
 
@@ -246,7 +270,7 @@ public partial class JobPanel : PanelContainer
     {
         var craft = _craft();
         if (craft is null) return;
-        if (_stations.Count == 0) { Show(new ActionResult(false, "No station with a docking port.")); return; }
+        if (_stations.Count == 0 && _kind.Selected != 2) { Show(new ActionResult(false, "No station with a docking port.")); return; }
 
         if (_kind.Selected == 0)
         {
@@ -260,6 +284,10 @@ public partial class JobPanel : PanelContainer
             if (_mineMaterial.Selected < 0 || _mineMaterial.Selected >= _deposits.Count) { Show(new ActionResult(false, $"{source.Name} has nothing left to mine.")); return; }
             Show(_sector().StartJob(craft.Id, new MiningJob(source.Id, _deposits[_mineMaterial.Selected],
                 _stations[Math.Max(0, _mineDestination.Selected)], ReturnFractions[Math.Max(0, _returnAt.Selected)])));
+        }
+        else if (_kind.Selected == 2)
+        {
+            Show(_sector().StartJob(craft.Id, new ServeRequestsJob(MinPickups[Math.Max(0, _serveMinLoad.Selected)])));
         }
         else
         {

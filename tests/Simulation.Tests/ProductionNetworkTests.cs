@@ -19,7 +19,7 @@ public class ProductionNetworkTests
 
     private static long TotalMass(SectorState sector) =>
         sector.Bodies.Sum(b => b.DepositsKg.Values.Sum())
-        + sector.Crafts.Sum(c => c.Inventory.TotalKg + c.BuildQueue.Sum(o => o.MaterialsKg.Values.Sum())
+        + sector.Crafts.Sum(c => c.CargoKg + c.BuildQueue.Sum(o => o.MaterialsKg.Values.Sum())
                                  + (c.RefiningBatch?.InputsKg.Values.Sum() ?? 0))
         + sector.EjectedKg.Values.Sum();
 
@@ -89,7 +89,7 @@ public class ProductionNetworkTests
     // --- Survey -------------------------------------------------------------------------------
 
     [Fact]
-    public void NewGame_MineableBodiesStartUnsurveyed_AndBlockJobsAndStructures()
+    public void NewGame_MineableBodiesStartUnsurveyed_AndBlockJobs()
     {
         var game = TestData.NewGame(surveyAll: false);
         var sector = game.Sector;
@@ -99,11 +99,6 @@ public class ProductionNetworkTests
         var job = sector.StartJob(game.PlayerCraftId, new MiningJob(rock2.Id, "silicate", game.ShipyardId, 0.5));
         Assert.False(job.Done);
         Assert.Contains("hasn't been surveyed", job.Message);
-
-        var depot = sector.OrderBuild(game.ShipyardId, ShipDesign.FromJson(TestData.Read("data/blueprints/surface_depot.json")), Catalog,
-            landingSite: rock2.Id);
-        Assert.False(depot.Accepted);
-        Assert.Contains(depot.Errors, e => e.Contains("hasn't been surveyed"));
     }
 
     [Fact]
@@ -210,15 +205,21 @@ public class ProductionNetworkTests
     [Fact]
     public void Gate_AutonomousNetwork_ReplacesHaulingByHand()
     {
-        // Setup a player would do once: build a depot on Rock-2 and a second ship, then hand out two jobs.
+        // Setup a player would do once: build a depot kit and a second ship, carry the kit to Rock-2
+        // and deploy it, then hand out two jobs.
         var game = TestData.NewGame();
         var sector = game.Sector;
         var yard = sector.GetCraft(game.ShipyardId);
+        var player = sector.GetCraft(game.PlayerCraftId);
         var rock2 = Rock(sector, "Rock-2");
-        Assert.True(sector.OrderBuild(yard.Id, ShipDesign.FromJson(TestData.Read("data/blueprints/surface_depot.json")), Catalog,
-            landingSite: rock2.Id).Accepted);
+        Assert.True(sector.OrderBuild(yard.Id, TestData.SurfaceDepot(), Catalog).Accepted);
         Assert.True(sector.OrderBuild(yard.Id, TestData.StarterShip(), Catalog).Accepted);
-        Assert.True(RunUntil(sector, () => sector.Crafts.Count == 4 && yard.BuildQueue.Count == 0, 5 * TicksPerMinute));
+        Assert.True(RunUntil(sector, () => sector.Crafts.Count == 3 && yard.BuildQueue.Count == 0, 5 * TicksPerMinute));
+        if (player.IsDocked) sector.TryUndock(player.Id);
+        sector.RestoreDock(player.Id, yard.Id, sector.FreePorts(yard)[0]);
+        Assert.True(sector.TryTransferKit(yard.Id, player.Id, yard.Kits[0].Id).Done);
+        TestData.LandAt(sector, player, rock2);
+        Assert.True(sector.TryDeployKit(player.Id, player.Kits[0].Id).Done);
         var depot = sector.Crafts.Single(c => c.Design.Id == "surface_depot");
         var miner = sector.Crafts.Single(c => c.Design.Id == "starter_ship" && c.Id != game.PlayerCraftId);
         Assert.Equal(rock2.Id, depot.LandedOnBodyId);

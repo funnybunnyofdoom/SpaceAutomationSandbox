@@ -1,24 +1,48 @@
 using System;
 using System.Linq;
+using System.Text.Json.Nodes;
 using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Save;
 using Xunit;
 
 namespace SpaceAutomationSandbox.Simulation.Tests;
 
+/// <summary>Stations are built as construction kits, carried and deployed (#8).</summary>
 public class StationBuildTests
 {
     private static readonly PartCatalog Catalog = TestData.Catalog();
 
-    private static ShipDesign Depot() => ShipDesign.FromJson(TestData.Read("data/blueprints/surface_depot.json"));
+    private static ShipDesign Depot() => TestData.SurfaceDepot();
 
     private static void RunSeconds(SectorState sector, double seconds)
     {
         for (var i = 0; i < (int)Math.Ceiling(seconds * FixedStepClock.TicksPerSecond); i++) sector.Step();
     }
 
-    private static CraftState Built(NewGameResult game) =>
-        game.Sector.Crafts.Single(c => c.Id != game.PlayerCraftId && c.Id != game.ShipyardId);
+    /// <summary>Orders a depot kit and runs until it's in the yard's storage.</summary>
+    private static ConstructionKit BuildDepotKit(NewGameResult game)
+    {
+        var yard = game.Sector.GetCraft(game.ShipyardId);
+        Assert.True(game.Sector.OrderBuild(yard.Id, Depot(), Catalog).Accepted);
+        RunSeconds(game.Sector, 20);
+        return Assert.Single(yard.Kits);
+    }
+
+    /// <summary>Docks the player's ship at the yard and loads the yard's first kit.</summary>
+    private static CraftState LoadKitOnPlayer(NewGameResult game)
+    {
+        var sector = game.Sector;
+        var yard = sector.GetCraft(game.ShipyardId);
+        var ship = sector.GetCraft(game.PlayerCraftId);
+        if (!ship.IsDocked) sector.RestoreDock(ship.Id, yard.Id, sector.FreePorts(yard)[0]);
+        Assert.True(sector.TryTransferKit(yard.Id, ship.Id, yard.Kits[0].Id).Done);
+        return ship;
+    }
+
+    private static long Ledger(SectorState sector) =>
+        sector.Crafts.Sum(c => c.CargoKg + c.BuildQueue.Sum(o => o.MaterialsKg.Values.Sum()) + (c.RefiningBatch?.InputsKg.Values.Sum() ?? 0)
+                               + (long)c.Design.ComputeBillOfMaterials(Catalog).TotalKg)
+        + sector.EjectedKg.Values.Sum();
 
     [Fact]
     public void SurfaceDepot_IsAValidFixedStation()
@@ -30,86 +54,168 @@ public class StationBuildTests
     }
 
     [Fact]
-    public void FixedStructure_NeedsALandingSite()
+    public void StationOrder_FinishesAsAKit_InTheYardsStorage_NotAsACraft()
     {
         var game = TestData.NewGame();
+        var yard = game.Sector.GetCraft(game.ShipyardId);
+        var crafts = game.Sector.Crafts.Count;
+        var ledger = Ledger(game.Sector);
 
-        var result = game.Sector.OrderBuild(game.ShipyardId, Depot(), Catalog);
+        var kit = BuildDepotKit(game);
 
-        Assert.False(result.Accepted);
-        Assert.Contains(result.Errors, e => e.Contains("choose a body"));
-        Assert.Equal(NewGame.StartingStockKg, game.Sector.GetCraft(game.ShipyardId).Inventory.Kg);
+        Assert.Equal(crafts, game.Sector.Crafts.Count);
+        Assert.Equal(Depot().ComputeBillOfMaterials(Catalog).ToWholeKg(), kit.MaterialsKg);
+        Assert.Equal(kit.MassKg, yard.KitsKg);
+        Assert.True(kit.NeedsSurface);
+        Assert.Equal(ledger, Ledger(game.Sector));
     }
 
     [Fact]
-    public void FixedStructure_IsPlacedOnTheChosenBody_AnchoredAndUpright()
+    public void Kit_IsCarried_AndDeployedOnASurface_AnchoredAndUpright()
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
+        var kit = BuildDepotKit(game);
+        var ship = LoadKitOnPlayer(game);
+        var emptyMass = ship.Stats.TotalMassKg + ship.Inventory.TotalKg;
+        Assert.Equal(emptyMass + kit.MassKg, ship.MassKg); // carrying it is heavier
+        var ledger = Ledger(sector);
+
+        Assert.Equal("Undock first.", sector.DeployBlocker(ship.Id));
+        Assert.False(sector.TryDeployKit(ship.Id, kit.Id).Done);
+        sector.TryUndock(ship.Id);
+        Assert.Contains("land on a body", sector.DeployBlocker(ship.Id)); // foundations: not in flight
+
         var rock = sector.Bodies.First(b => b.IsMineable);
+        TestData.LandAt(sector, ship, rock);
+        sector.Step();
+        var result = sector.TryDeployKit(ship.Id, kit.Id);
+        Assert.True(result.Done, result.Message);
+        var depot = sector.Crafts.Single(c => c.Design.Id == "surface_depot");
 
-        Assert.True(sector.OrderBuild(game.ShipyardId, Depot(), Catalog, landingSite: rock.Id).Accepted);
-        RunSeconds(sector, 20);
-        var depot = Built(game);
-
+        Assert.Empty(ship.Kits);
         Assert.Equal(rock.Id, depot.LandedOnBodyId);
         Assert.True(depot.IsAnchored);
-        Assert.InRange(sector.SurfaceGap(depot, rock), -1e-6, 1e-6); // resting on its foundation row
-        // Nose points away from the rock, so the foundation row (rear) faces the ground.
+        Assert.InRange(sector.SurfaceGap(depot, rock), -1e-6, 1e-6);
         var outward = depot.Position - sector.GetPosition(rock.Id);
-        var forward = depot.Forward;
-        Assert.True((outward.X * forward.X + outward.Y * forward.Y) / outward.Length > 0.999);
+        Assert.True((outward.X * depot.Forward.X + outward.Y * depot.Forward.Y) / outward.Length > 0.999);
+        Assert.True(depot.Position.DistanceTo(ship.Position) >= depot.CollisionRadiusM + ship.CollisionRadiusM);
+        Assert.Equal(ledger, Ledger(sector)); // the kit became the depot
 
-        RunSeconds(sector, 120); // rides along with the orbiting rock
+        RunSeconds(sector, 60); // rides along with the rock
         Assert.InRange(sector.SurfaceGap(depot, rock), -1e-6, 1e-6);
     }
 
     [Fact]
-    public void OrbitalStation_IsPlacedOnAFixedOrbitNearTheYard()
+    public void OrbitalStationKit_DeploysBesideTheYard_OnRails()
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
         var yard = sector.GetCraft(game.ShipyardId);
         yard.Inventory.Add(NewGame.StartingStockKg);
-
         Assert.True(sector.OrderBuild(yard.Id, TestData.StarterShipyard(), Catalog).Accepted);
-        RunSeconds(sector, 60);
-        var station = Built(game);
+        RunSeconds(sector, 120);
+        var kit = Assert.Single(yard.Kits);
+        Assert.False(kit.NeedsSurface);
 
+        Assert.True(sector.TryDeployKit(yard.Id, kit.Id).Done);
+        var station = sector.Crafts.Single(c => c.Id != yard.Id && c.IsShipyard);
         Assert.True(station.IsOnRails);
-        Assert.False(station.IsDocked); // stations don't take a docking port
-        Assert.True(station.IsShipyard);
+        Assert.False(station.IsDocked);
         Assert.InRange(station.Position.DistanceTo(yard.Position) - station.CollisionRadiusM - yard.CollisionRadiusM, 0, 2 * SectorState.ParkingGapM);
     }
 
     [Fact]
-    public void BuildingAStation_ConservesMaterials()
+    public void OrbitalStationKit_DeploysInFlight_IntoOrbitAroundTheNearestBody_OnlyWhenMatched()
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
         var yard = sector.GetCraft(game.ShipyardId);
-        var bill = Depot().ComputeBillOfMaterials(Catalog).ToWholeKg();
-        sector.OrderBuild(yard.Id, Depot(), Catalog, landingSite: sector.Bodies[0].Id);
-        RunSeconds(sector, 20);
+        yard.Inventory.Add(NewGame.StartingStockKg);
+        Assert.True(sector.OrderBuild(yard.Id, TestData.StarterShipyard(), Catalog).Accepted);
+        RunSeconds(sector, 120);
+        // The starter ship holds 40 t and a yard kit is heavier: use a hauler with a storage silo.
+        var hauler = new ShipDesign("hauler", "Hauler", new[]
+        {
+            new DesignCell(new GridPos(0, 0), "cockpit"), new DesignCell(new GridPos(0, 1), "thruster"),
+            new DesignCell(new GridPos(1, 0), "storage_silo"),
+        });
+        var carrier = new CraftState(sector.AllocateCraftId(), "Hauler", hauler, hauler.ComputeStats(Catalog), yard.Position, 0);
+        sector.AddCraft(carrier);
+        sector.RestoreDock(carrier.Id, yard.Id, sector.FreePorts(yard)[0]);
+        Assert.True(sector.TryTransferKit(yard.Id, carrier.Id, yard.Kits[0].Id).Done);
+        sector.TryUndock(carrier.Id);
 
-        foreach (var (material, kg) in NewGame.StartingStockKg)
-            Assert.Equal(kg, yard.Inventory[material] + (bill.TryGetValue(material, out var used) ? used : 0));
-        Assert.Equal(Depot().ComputeStats(Catalog).TotalMassKg, bill.Values.Sum());
+        var rock = sector.Bodies.First(b => b.IsMineable);
+        var rockVelocity = sector.GetVelocityAt(rock.Id, sector.TimeS);
+        carrier.Position = sector.GetPosition(rock.Id) + new Vector2D(rock.RadiusM + 2_000, 0);
+        carrier.Velocity = rockVelocity + new Vector2D(0, 50);
+        Assert.Contains("Match speed", sector.DeployBlocker(carrier.Id));
+        carrier.Velocity = rockVelocity;
+        Assert.Null(sector.DeployBlocker(carrier.Id));
+
+        Assert.True(sector.TryDeployKit(carrier.Id, carrier.Kits[0].Id).Done);
+        var station = sector.Crafts.Single(c => c.Design.Id == TestData.StarterShipyard().Id && c.Id != yard.Id);
+        Assert.Equal(rock.Id, station.RailOrbit!.Parent);
+        Assert.InRange(station.RailOrbit.RadiusM, rock.RadiusM + 1_999, rock.RadiusM + 2_001);
+        RunSeconds(sector, 30);
+        Assert.InRange(station.Position.DistanceTo(sector.GetPosition(rock.Id)), rock.RadiusM + 1_999, rock.RadiusM + 2_001); // stays with the rock
     }
 
     [Fact]
-    public void LandingSite_IsSaved_ForAQueuedStructure()
+    public void FinishedKit_WaitsForStorageRoom()
     {
         var game = TestData.NewGame();
         var sector = game.Sector;
-        var rock = sector.Bodies.First(b => b.IsMineable);
-        sector.OrderBuild(game.ShipyardId, TestData.StarterShip(), Catalog);       // goes first
-        sector.OrderBuild(game.ShipyardId, Depot(), Catalog, landingSite: rock.Id); // waits
+        var yard = sector.GetCraft(game.ShipyardId);
+        Assert.True(sector.OrderBuild(yard.Id, Depot(), Catalog).Accepted);
+        yard.Inventory.Add("silicate", yard.FreeCargoKg); // storage full
+        RunSeconds(sector, 20);
 
-        var loaded = SaveGameSerializer.FromJson(SaveGameSerializer.ToJson(sector, game.PlayerCraftId), Catalog);
-        RunSeconds(loaded.Sector, 60);
+        var order = Assert.Single(yard.BuildQueue);
+        Assert.True(order.WaitingForRoom);
+        Assert.Empty(yard.Kits);
 
-        var depot = loaded.Sector.Crafts.Single(c => c.Design.Id == "surface_depot");
-        Assert.Equal(rock.Id, depot.LandedOnBodyId);
+        yard.Inventory.TryRemove(new System.Collections.Generic.Dictionary<string, long> { ["silicate"] = 10_000 });
+        sector.Step();
+        Assert.Empty(yard.BuildQueue);
+        Assert.Single(yard.Kits);
+    }
+
+    [Fact]
+    public void Kits_AndQueuedStationOrders_SurviveSaveLoad()
+    {
+        var game = TestData.NewGame();
+        var sector = game.Sector;
+        BuildDepotKit(game);
+        LoadKitOnPlayer(game);
+        sector.OrderBuild(game.ShipyardId, TestData.StarterShip(), Catalog); // goes first
+        sector.OrderBuild(game.ShipyardId, Depot(), Catalog);                // then becomes a kit
+
+        var json = SaveGameSerializer.ToJson(sector, game.PlayerCraftId);
+        var loaded = SaveGameSerializer.FromJson(json, Catalog).Sector;
+        Assert.Equal(json, SaveGameSerializer.ToJson(loaded, game.PlayerCraftId));
+        Assert.Single(loaded.GetCraft(game.PlayerCraftId).Kits);
+
+        RunSeconds(loaded, 60);
+        Assert.Single(loaded.GetCraft(game.ShipyardId).Kits);
+        Assert.True(loaded.NextOrderId > loaded.GetCraft(game.ShipyardId).Kits[0].Id.Value);
+    }
+
+    [Fact]
+    public void Version10Save_StationOrderWithALandingSite_BecomesAKit()
+    {
+        var game = TestData.NewGame();
+        var sector = game.Sector;
+        sector.OrderBuild(game.ShipyardId, Depot(), Catalog);
+        var root = JsonNode.Parse(SaveGameSerializer.ToJson(sector, game.PlayerCraftId))!.AsObject();
+        root["schemaVersion"] = 10;
+        var yard = root["sector"]!["crafts"]!.AsArray().OfType<JsonObject>().Single(c => c["id"]!.GetValue<uint>() == game.ShipyardId.Value);
+        yard["buildQueue"]![0]!.AsObject()["landingSiteBodyId"] = sector.Bodies.First(b => b.IsMineable).Id.Value;
+
+        var loaded = SaveGameSerializer.FromJson(root.ToJsonString(), Catalog).Sector;
+        Assert.True(loaded.GetCraft(game.ShipyardId).BuildQueue[0].IsKit);
+        RunSeconds(loaded, 20);
+        Assert.Single(loaded.GetCraft(game.ShipyardId).Kits);
     }
 }

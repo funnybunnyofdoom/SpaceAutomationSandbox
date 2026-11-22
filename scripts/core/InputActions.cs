@@ -16,6 +16,7 @@ public static class InputActions
     public const string Brake = "ship_brake";
     public const string Anchor = "ship_anchor";
     public const string Dock = "ship_dock";
+    public const string Deploy = "ship_deploy_kit";
     public const string TargetCycle = "target_cycle";
     public const string TargetNearest = "target_nearest";
     public const string ZoomIn = "view_zoom_in";
@@ -39,6 +40,7 @@ public static class InputActions
         Add(Brake, 0.5f, Keys(Key.S, Key.Down, Key.Space), Stick(JoyAxis.TriggerLeft, 1), Pad(JoyButton.B));
         Add(Anchor, 0.5f, Keys(Key.G), Pad(JoyButton.X));
         Add(Dock, 0.5f, Keys(Key.K), Pad(JoyButton.Y));
+        Add(Deploy, 0.5f, Keys(Key.U));
         Add(TargetCycle, 0.5f, Keys(Key.Tab), Pad(JoyButton.RightShoulder));
         Add(TargetNearest, 0.5f, Keys(Key.T), Pad(JoyButton.LeftShoulder));
         Add(ZoomIn, 0.5f, new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp }, Pad(JoyButton.DpadUp));

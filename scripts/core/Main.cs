@@ -343,6 +343,8 @@ public partial class Main : Node2D
         else if (_player == null) return;
         else if (Pressed(InputActions.Dock))
             ShowStatus((_player.IsDocked ? _sector.TryUndock(_player.Id) : _sector.TryDock(_player.Id)).Message);
+        else if (Pressed(InputActions.Deploy))
+            ShowStatus(_player.Kits.FirstOrDefault() is { } kit ? _sector.TryDeployKit(_player.Id, kit.Id).Message : "No construction kit on board.");
         else if (Pressed(InputActions.Anchor))
             ShowStatus((_player.IsAnchored ? _sector.TryRelease(_player.Id) : _sector.TryAnchor(_player.Id)).Message);
         else if (Pressed(InputActions.TargetCycle)) CycleTarget();
@@ -419,7 +421,11 @@ public partial class Main : Node2D
         var headingDeg = Mathf.PosMod(Mathf.RadToDeg((float)p.HeadingRad), 360f);
         text += $"Piloting {p.Name} ({p.Id}) - {p.Design.Name}: {p.Stats.TotalMassKg / 1000:0.0} t, {p.Stats.TotalThrustN / 1000:0} kN, "
                 + $"{p.Stats.TotalThrustN / p.MassKg:0.0} m/s²   "
-                + (p.HasCargoLimit ? $"cargo {p.Inventory.TotalKg / 1000.0:0.0} / {p.CargoCapacityKg / 1000.0:0} t\n" : $"stores {p.Inventory.TotalKg / 1000.0:0.0} t\n")
+                + (p.HasCargoLimit ? $"cargo {p.CargoKg / 1000.0:0.0} / {p.CargoCapacityKg / 1000.0:0} t\n" : $"stores {p.CargoKg / 1000.0:0.0} t\n")
+                + (p.Kits.Count > 0
+                    ? $"KIT on board: {p.Kits[0].Name} ({p.Kits[0].MassKg / 1000.0:0.0} t){(p.Kits.Count > 1 ? $" +{p.Kits.Count - 1} more" : "")} - "
+                      + (_sector.DeployBlocker(p.Id) is { } blocked ? blocked : "U to deploy here") + "\n"
+                    : "")
                 + $"speed {p.SpeedMps:0.0} m/s (sector)   heading {headingDeg:000}°   "
                 + $"pos ({p.Position.X / 1000:0.00}, {p.Position.Y / 1000:0.00}) km\n"
                 + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
@@ -467,7 +473,7 @@ public partial class Main : Node2D
 
         return text
                + $"nearest: {Describe(nearest)}   surface {FormatDistance(nearestSurface)}\n"
-               + "W/Up thrust   A/D turn   S/Space brake (matches target)   G anchor   K dock   Tab cycle target   T target nearest   wheel zoom\n"
+               + "W/Up thrust   A/D turn   S/Space brake (matches target)   G anchor   K dock   U deploy kit   Tab cycle target   T target nearest   wheel zoom\n"
                + "B blueprint editor   Y shipyard   F fleet   C cargo   J job (mining/freight)   F3 debug   F6 save   F9 load   F7 new game   (closing the window autosaves)";
     }
 
@@ -491,7 +497,8 @@ public partial class Main : Node2D
             : $"{y.Name}: building {y.BuildQueue[0].ShipName} {y.BuildQueue[0].Fraction * 100:0}%"
               + (y.BuildQueue.Count > 1 ? $" (+{y.BuildQueue.Count - 1} queued)" : ""))
             + (_sector.RefiningStatus(y) is { Length: > 0 } refining ? $"   {refining}" : "")
-            + (y.HasCargoLimit ? $"   storage {y.Inventory.TotalKg / 1000.0:0.0}/{y.CargoCapacityKg / 1000.0:0} t" : "")
+            + (y.Kits.Count > 0 ? $"   kits {y.Kits.Count}" : "")
+            + (y.HasCargoLimit ? $"   storage {y.CargoKg / 1000.0:0.0}/{y.CargoCapacityKg / 1000.0:0} t" : "")
             + (y.PowerShort && !y.LegacyFreePower ? "   NO POWER" : "")
             + (y.Stats.EjectionRateKgPerS > 0 && _sector.EjectedKg.TryGetValue("slag", out var ejected) ? $"   slag ejected {ejected / 1000.0:0.0} t" : "") + "\n"));
     }

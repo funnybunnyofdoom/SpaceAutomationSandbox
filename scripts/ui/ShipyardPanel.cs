@@ -9,8 +9,10 @@ namespace SpaceAutomationSandbox.UI;
 
 /// <summary>
 /// Side panel for ordering ships and stations at a shipyard (key Y): stock, a design picker with
-/// bill vs stock, a landing-site picker for fixed structures, Order, and the queue with progress and Cancel. Orders go through <see cref="SectorState.OrderBuild"/>,
-/// which takes the materials or refuses with the exact shortfall. Ordering works from anywhere (docs/06).
+/// bill vs stock, Order, the queue with progress and Cancel, and the construction kits in storage
+/// (stations are built as kits, #8: load one onto a ship in the cargo panel, or deploy an orbital
+/// one beside the yard). Orders go through <see cref="SectorState.OrderBuild"/>, which takes the
+/// materials or refuses with the exact shortfall. Ordering works from anywhere (docs/06).
 /// </summary>
 public partial class ShipyardPanel : PanelContainer
 {
@@ -26,9 +28,8 @@ public partial class ShipyardPanel : PanelContainer
     private Label _stock = null!;
     private OptionButton _designPicker = null!;
     private Label _bill = null!;
-    private Label _siteLabel = null!;
-    private OptionButton _sitePicker = null!;
-    private List<BodyId> _sites = new();
+    private VBoxContainer _kits = null!;
+    private string _kitsSignature = "";
     private Label _status = null!;
     private VBoxContainer _queue = null!;
     private List<CraftId> _yards = new();
@@ -76,10 +77,6 @@ public partial class ShipyardPanel : PanelContainer
         box.AddChild(_designPicker);
         _bill = new Label();
         box.AddChild(_bill);
-        _siteLabel = new Label { Text = "Place on (fixed structure):" };
-        box.AddChild(_siteLabel);
-        _sitePicker = new OptionButton { FocusMode = FocusModeEnum.None };
-        box.AddChild(_sitePicker);
 
         var order = new Button { Text = "Order", FocusMode = FocusModeEnum.None };
         order.Pressed += Order;
@@ -93,6 +90,10 @@ public partial class ShipyardPanel : PanelContainer
         box.AddChild(scroll);
         _queue = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         scroll.AddChild(_queue);
+
+        box.AddChild(new Label { Text = "Construction kits in storage:" });
+        _kits = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        box.AddChild(_kits);
     }
 
     /// <summary>Shows the panel, refreshing the yard and design lists (designs may have been saved in the editor).</summary>
@@ -140,7 +141,7 @@ public partial class ShipyardPanel : PanelContainer
                 var design = BlueprintLibrary.Load(entry);
                 var role = design.SuggestedRole(_catalog);
                 if (design.Validate(_catalog, role).Count > 0) continue;
-                var kind = role == DesignRole.Ship ? "" : design.ComputeStats(_catalog).IsFixedStructure ? "  [fixed structure]" : "  [station]";
+                var kind = role == DesignRole.Ship ? "" : design.ComputeStats(_catalog).IsFixedStructure ? "  [kit: surface]" : "  [kit: station]";
                 _designs.Add((entry.Label + kind, () => design));
             }
             catch (Exception) { /* unreadable files are listed as such in the editor; skip them here */ }
@@ -173,21 +174,22 @@ public partial class ShipyardPanel : PanelContainer
         string Name(string id) => materials.Contains(id) ? materials.Get(id).Name : id;
         var ids = materials.Materials.Select(m => m.Id).Concat(yard.Inventory.Kg.Keys).Distinct().ToList();
         _stock.Text = (yard.HasCargoLimit
-                          ? $"Stock ({yard.Inventory.TotalKg / 1000.0:0.0} / {yard.CargoCapacityKg / 1000.0:0} t storage):\n"
+                          ? $"Stock ({yard.CargoKg / 1000.0:0.0} / {yard.CargoCapacityKg / 1000.0:0} t storage, kits included):\n"
                           : $"Stock ({yard.Inventory.TotalKg / 1000.0:0.0} t, unlimited: old save):\n")
                       + string.Join("\n", ids.Select(id => $"  {Name(id)}  {yard.Inventory[id] / 1000.0:0.0##} t"));
 
         var selected = SelectedDesign();
-        var needsSite = selected is not null && selected.ComputeStats(_catalog).IsFixedStructure;
-        _siteLabel.Visible = _sitePicker.Visible = needsSite;
-        if (needsSite) RefreshSites();
 
         if (selected is { } design)
         {
             var bill = design.ComputeBillOfMaterials(_catalog).ToWholeKg();
             var short_ = yard.Inventory.Shortfall(bill);
             var stats = design.ComputeStats(_catalog);
-            _bill.Text = $"{stats.TotalMassKg / 1000:0.0} t, about {stats.TotalMassKg / yard.Stats.FabricationRateKgPerS:0} s to build\n"
+            var kit = design.SuggestedRole(_catalog) == DesignRole.Station
+                ? stats.IsFixedStructure ? "\nBuilt as a construction kit: carry it on a ship, land, and deploy (U)."
+                  : "\nBuilt as a construction kit: deploy it beside the yard below, or carry it and deploy (U) in orbit or on a surface."
+                : "";
+            _bill.Text = $"{stats.TotalMassKg / 1000:0.0} t, about {stats.TotalMassKg / yard.Stats.FabricationRateKgPerS:0} s to build{kit}\n"
                          + string.Join("\n", bill.Select(kv => $"  {Name(kv.Key)}  {kv.Value / 1000.0:0.0##} / {yard.Inventory[kv.Key] / 1000.0:0.0##} t"
                                                                + (short_.ContainsKey(kv.Key) ? "  SHORT" : "")));
             _bill.AddThemeColorOverride("font_color", short_.Count > 0 ? ShortColor : OkColor);
@@ -199,6 +201,36 @@ public partial class ShipyardPanel : PanelContainer
         }
 
         RefreshQueue(yard, force);
+        RefreshKits(yard, force);
+    }
+
+    private void RefreshKits(CraftState yard, bool force)
+    {
+        var signature = yard.Id + ":" + string.Join(",", yard.Kits.Select(k => k.Id.Value));
+        if (!force && signature == _kitsSignature) return;
+        _kitsSignature = signature;
+        foreach (var child in _kits.GetChildren()) { _kits.RemoveChild(child); child.QueueFree(); }
+        foreach (var kit in yard.Kits)
+        {
+            var row = new HBoxContainer();
+            row.AddChild(new Label { Text = $"{kit.Name}  {kit.MassKg / 1000.0:0.0} t{(kit.NeedsSurface ? "  (surface)" : "")}", SizeFlagsHorizontal = SizeFlags.ExpandFill });
+            if (!kit.NeedsSurface)
+            {
+                var deploy = new Button { Text = "Deploy here", FocusMode = FocusModeEnum.None };
+                var (yardId, kitId) = (yard.Id, kit.Id);
+                deploy.Pressed += () =>
+                {
+                    var result = _sector().TryDeployKit(yardId, kitId);
+                    _status.Text = result.Message;
+                    _status.AddThemeColorOverride("font_color", result.Done ? OkColor : ShortColor);
+                    Refresh(force: true);
+                };
+                row.AddChild(deploy);
+            }
+            _kits.AddChild(row);
+        }
+        if (yard.Kits.Count == 0)
+            _kits.AddChild(new Label { Text = "  (none)", Modulate = new Color(1, 1, 1, 0.6f) });
     }
 
     private void RefreshQueue(CraftState yard, bool force)
@@ -230,24 +262,13 @@ public partial class ShipyardPanel : PanelContainer
         {
             var order = yard.BuildQueue[i];
             var label = _queue.GetChild(i).GetNode<Label>("Text");
-            label.Text = i == 0 ? $"{order.ShipName}  {order.Fraction * 100:0}%" : $"{order.ShipName}  waiting";
+            var what = order.IsKit ? " (kit)" : "";
+            label.Text = i > 0 ? $"{order.ShipName}{what}  waiting"
+                : order.WaitingForRoom ? $"{order.ShipName}{what}  done, needs {order.TotalKg / 1000:0.0} t of storage room"
+                : $"{order.ShipName}{what}  {order.Fraction * 100:0}%";
         }
         if (yard.BuildQueue.Count == 0 && _queue.GetChildCount() == 0)
             _queue.AddChild(new Label { Text = "  (empty)", Modulate = new Color(1, 1, 1, 0.6f) });
-    }
-
-    private void RefreshSites()
-    {
-        var bodies = _sector().Bodies.Select(b => b.Id).ToList();
-        if (bodies.SequenceEqual(_sites)) return;
-        _sites = bodies;
-        _sitePicker.Clear();
-        foreach (var id in _sites)
-        {
-            var body = _sector().GetBody(id);
-            _sitePicker.AddItem($"{body.Name} ({body.Kind}{(body.IsMineable ? ", mineable" : "")})");
-        }
-        if (_sites.Count > 0) _sitePicker.Select(0);
     }
 
     private void ClearQueue()
@@ -263,9 +284,7 @@ public partial class ShipyardPanel : PanelContainer
         if (SelectedYard() is not { } yard) { _status.Text = "No shipyard selected."; return; }
         if (SelectedDesign() is not { } design) { _status.Text = "No design selected."; return; }
 
-        var site = _sitePicker.Visible && _sitePicker.Selected >= 0 && _sitePicker.Selected < _sites.Count
-            ? _sites[_sitePicker.Selected] : BodyId.None;
-        var result = _sector().OrderBuild(yard.Id, design, _catalog, landingSite: site);
+        var result = _sector().OrderBuild(yard.Id, design, _catalog);
         _status.Text = result.Accepted ? $"Ordered {design.Name} ({result.OrderId})." : string.Join("\n", result.Errors);
         _status.AddThemeColorOverride("font_color", result.Accepted ? OkColor : ShortColor);
         Refresh(force: true);

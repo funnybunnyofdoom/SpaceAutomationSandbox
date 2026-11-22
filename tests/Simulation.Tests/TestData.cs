@@ -26,6 +26,20 @@ internal static class TestData
 
     public static ShipDesign StarterShipyard() => ShipDesign.FromJson(Read("data/blueprints/starter_shipyard.json"));
 
+    public static ShipDesign SurfaceDepot() => ShipDesign.FromJson(Read("data/blueprints/surface_depot.json"));
+
+    /// <summary>Test setup shortcut: puts a craft down on a body's surface (top side), undocked and off rails.</summary>
+    public static void LandAt(SectorState sector, CraftState craft, CelestialBodyState body)
+    {
+        if (craft.IsDocked) sector.TryUndock(craft.Id);
+        craft.RailOrbit = null;
+        var offset = new Vector2D(0, -(body.RadiusM + craft.CollisionRadiusM + 1));
+        craft.Position = craft.PreviousPosition = sector.GetPosition(body.Id) + offset;
+        craft.HeadingRad = craft.PreviousHeadingRad = 0;
+        craft.Velocity = sector.GetVelocityAt(body.Id, sector.TimeS);
+        sector.RestoreLanding(craft.Id, body.Id, offset);
+    }
+
     /// <summary>The same starting state the game creates; by default with every body already surveyed.</summary>
     public static NewGameResult NewGame(ulong seed = Simulation.NewGame.DefaultSeed, bool surveyAll = true)
     {

@@ -11,12 +11,25 @@ public abstract class ShipJob
     protected ShipJob(string materialId, CraftId destinationId)
     {
         if (destinationId.IsNone) throw new ArgumentException("Job needs a destination.", nameof(destinationId));
-        MaterialId = materialId;
-        DestinationId = destinationId;
+        _materialId = materialId;
+        _destinationId = destinationId;
     }
 
-    public string MaterialId { get; }
-    public CraftId DestinationId { get; }
+    /// <summary>For jobs that pick what and where per trip (<see cref="ServeRequestsJob"/>).</summary>
+    protected ShipJob()
+    {
+        _materialId = "";
+        _destinationId = CraftId.None;
+    }
+
+    private readonly string _materialId;
+    private readonly CraftId _destinationId;
+
+    /// <summary>What it moves ("" when the job hasn't picked anything yet).</summary>
+    public virtual string MaterialId => _materialId;
+
+    /// <summary>Where it delivers (None when the job hasn't picked anything yet).</summary>
+    public virtual CraftId DestinationId => _destinationId;
 
     public bool Active { get; internal set; } = true;
 

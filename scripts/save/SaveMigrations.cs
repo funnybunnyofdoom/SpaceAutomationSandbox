@@ -28,6 +28,7 @@ public static class SaveMigrations
         [7] = ("v8 added debug tuning and job retry ticks: absent means default", (_, _) => { }),
         [8] = ("v9 limited storage to storage parts: stations that held stock without any keep unlimited storage", KeepLegacyStationsUnlimited),
         [9] = ("v10 added power: craft from older games have no solar panels, so they get free power and full batteries", GiveLegacyCraftFreePower),
+        [10] = ("v11 replaced landing sites with construction kits: queued station orders now finish as kits; requests and kits start empty", DropLandingSites),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>
@@ -86,6 +87,13 @@ public static class SaveMigrations
             craft["legacyFreePower"] = true;
             craft["storedEnergyKJ"] = Parts(craft, catalog).Sum(p => p.EnergyCapacityKJ);
         }
+    }
+
+    private static void DropLandingSites(JsonObject root, PartCatalog catalog)
+    {
+        foreach (var craft in Crafts(root))
+            foreach (var order in (craft["buildQueue"] as JsonArray)?.OfType<JsonObject>() ?? Enumerable.Empty<JsonObject>())
+                order.Remove("landingSiteBodyId");
     }
 
     private static void KeepLegacyStationsUnlimited(JsonObject root, PartCatalog catalog)

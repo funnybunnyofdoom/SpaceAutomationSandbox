@@ -123,7 +123,30 @@ public sealed class CraftState
 
     public long CargoCapacityKg => HasCargoLimit ? (long)Stats.CargoCapacityKg : long.MaxValue;
 
-    public long FreeCargoKg => HasCargoLimit ? Math.Max(0, CargoCapacityKg - Inventory.TotalKg) : long.MaxValue;
+    public long FreeCargoKg => HasCargoLimit ? Math.Max(0, CargoCapacityKg - CargoKg) : long.MaxValue;
+
+    /// <summary>Everything in the hold: materials plus packed construction kits (whole kg).</summary>
+    public long CargoKg => Inventory.TotalKg + KitsKg;
+
+    internal List<ConstructionKit> KitsList { get; } = new();
+
+    /// <summary>Construction kits carried or stored here (#8), in the order they arrived.</summary>
+    public IReadOnlyList<ConstructionKit> Kits => KitsList;
+
+    public long KitsKg
+    {
+        get
+        {
+            long kg = 0;
+            foreach (var kit in KitsList) kg += kit.MassKg;
+            return kg;
+        }
+    }
+
+    /// <summary>Station requests (#1): "keep at least this much here", by material (whole kg).</summary>
+    internal SortedDictionary<string, long> RequestsList { get; } = new(StringComparer.Ordinal);
+
+    public IReadOnlyDictionary<string, long> Requests => RequestsList;
 
     /// <summary>Automation: a job (mining or freight) that drives this craft's controls while active. Null = none.</summary>
     public ShipJob? Job { get; internal set; }
@@ -137,7 +160,7 @@ public sealed class CraftState
     public double MiningRemainderKg { get; internal set; }
 
     /// <summary>Dry mass plus cargo: what thrust has to push.</summary>
-    public double MassKg => Stats.TotalMassKg + Inventory.TotalKg;
+    public double MassKg => Stats.TotalMassKg + CargoKg;
 
     internal List<BuildOrder> BuildQueueList { get; } = new();
 

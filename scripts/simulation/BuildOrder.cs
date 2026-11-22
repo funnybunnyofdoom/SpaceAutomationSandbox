@@ -19,7 +19,7 @@ public readonly record struct OrderId(long Value)
 public sealed class BuildOrder
 {
     public BuildOrder(OrderId id, string shipName, ShipDesign design, ShipStats stats,
-        IReadOnlyDictionary<string, long> materialsKg, double progressKg = 0, BodyId landingSite = default)
+        IReadOnlyDictionary<string, long> materialsKg, double progressKg = 0, bool isKit = false)
     {
         if (!(stats.TotalMassKg > 0)) throw new ArgumentException("Order needs a design with mass.", nameof(stats));
         if (!(progressKg >= 0) || progressKg > stats.TotalMassKg) throw new ArgumentOutOfRangeException(nameof(progressKg));
@@ -29,11 +29,17 @@ public sealed class BuildOrder
         Stats = stats;
         MaterialsKg = new SortedDictionary<string, long>(new Dictionary<string, long>(materialsKg), StringComparer.Ordinal);
         ProgressKg = progressKg;
-        LandingSite = landingSite;
+        IsKit = isKit;
     }
 
-    /// <summary>For fixed structures (foundations): the body whose surface it is placed on. None otherwise.</summary>
-    public BodyId LandingSite { get; }
+    /// <summary>
+    /// A station design (#8): it finishes as a <see cref="ConstructionKit"/> in the yard's storage, to
+    /// be carried and deployed by a ship, instead of as a craft.
+    /// </summary>
+    public bool IsKit { get; }
+
+    /// <summary>True while a finished kit waits for room in the yard's storage.</summary>
+    public bool WaitingForRoom { get; internal set; }
 
     public OrderId Id { get; }
     public string ShipName { get; }

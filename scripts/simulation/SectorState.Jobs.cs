@@ -74,6 +74,7 @@ public sealed partial class SectorState
             {
                 case MiningJob { Active: true } mining: StepJob(craft, mining, allowResume: true); break;
                 case HaulJob { Active: true } haul: StepHaul(craft, haul, allowResume: true); break;
+                case ServeRequestsJob { Active: true } serve: StepServe(craft, serve, allowResume: true); break;
             }
         }
     }

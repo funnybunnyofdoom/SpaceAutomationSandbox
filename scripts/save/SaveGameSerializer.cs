@@ -26,10 +26,12 @@ public static class SaveGameSerializer
     /// and the order counter; v4 added the anchored flag; v5 added part rotation, craft targets,
     /// docking, and order landing sites; v6 added body deposits, the drill remainder and mining jobs;
     /// v7 added survey flags, refinery batches and freight jobs; v8 added debug tuning and job retry
-    /// times; v9 limited storage to storage parts; v10 added power and slag ejection. Older files are upgraded step by step by
+    /// times; v9 limited storage to storage parts; v10 added power and slag ejection; v11 replaced order
+    /// landing sites with construction kits and added station requests and serve-requests freight.
+    /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 10;
+    public const int SchemaVersion = 11;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -119,8 +121,26 @@ public static class SaveGameSerializer
                             HaulState = h.State, HaulResumeState = h.ResumeState,
                             WaitReason = h.WaitReason, CompletedCycles = h.CompletedCycles, DeliveredKg = h.DeliveredKg, RetryAtTick = h.RetryAtTick,
                         },
+                        ServeRequestsJob s => new JobDto
+                        {
+                            Kind = s.Kind, MinPickupKg = s.MinLoadKg, Active = s.Active,
+                            HaulState = s.State, HaulResumeState = s.ResumeState,
+                            PickupId = s.Contract?.PickupId.Value ?? 0, DestinationId = s.Contract?.DestinationId.Value ?? 0,
+                            MaterialId = s.Contract?.MaterialId, ContractAmountKg = s.Contract?.AmountKg ?? 0,
+                            WaitReason = s.WaitReason, CompletedCycles = s.CompletedCycles, DeliveredKg = s.DeliveredKg, RetryAtTick = s.RetryAtTick,
+                        },
                         _ => null,
                     },
+                    RequestsKg = c.Requests.Count > 0
+                        ? new SortedDictionary<string, long>(c.Requests.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal)
+                        : null,
+                    Kits = c.Kits.Count > 0
+                        ? c.Kits.Select(k => new KitDto
+                        {
+                            Id = k.Id.Value, Name = k.Name, Design = DesignToDto(k.Design),
+                            MaterialsKg = new SortedDictionary<string, long>(k.MaterialsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal),
+                        }).ToList()
+                        : null,
                     RailOrbit = c.RailOrbit is { } r ? OrbitToDto(r) : null,
                     InventoryKg = c.Inventory.Kg.Count > 0 ? new SortedDictionary<string, long>(c.Inventory.Kg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal) : null,
                     BuildQueue = c.BuildQueue.Count > 0
@@ -131,7 +151,6 @@ public static class SaveGameSerializer
                             Design = DesignToDto(o.Design),
                             MaterialsKg = new SortedDictionary<string, long>(o.MaterialsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal),
                             ProgressKg = o.ProgressKg,
-                            LandingSiteBodyId = o.LandingSite.Value,
                         }).ToList()
                         : null,
                 }).ToList(),
@@ -216,8 +235,22 @@ public static class SaveGameSerializer
                     if (materials.Any(kv => !catalog.Materials.Contains(kv.Key) || kv.Value < 0))
                         throw new FormatException($"Order {o.OrderId} holds unknown or negative materials.");
                     sector.RestoreOrder(craft.Id, new BuildOrder(new OrderId(o.OrderId), o.ShipName ?? "", orderDesign,
-                        orderDesign.ComputeStats(catalog), materials, o.ProgressKg, new BodyId(o.LandingSiteBodyId)));
-                    if (o.LandingSiteBodyId != 0) sector.GetBody(new BodyId(o.LandingSiteBodyId));
+                        orderDesign.ComputeStats(catalog), materials, o.ProgressKg, isKit: orderDesign.SuggestedRole(catalog) == DesignRole.Station));
+                }
+                foreach (var kitDto in c.Kits ?? new List<KitDto>())
+                {
+                    var kitDesign = DesignFromDto(kitDto.Design, $"Kit {kitDto.Id}");
+                    var kitErrors = kitDesign.Validate(catalog, DesignRole.Station);
+                    if (kitErrors.Count > 0) throw new FormatException($"Kit {kitDto.Id} design '{kitDesign.Id}' is invalid: {string.Join("; ", kitErrors)}");
+                    var materials = kitDto.MaterialsKg ?? new SortedDictionary<string, long>();
+                    if (materials.Any(kv => !catalog.Materials.Contains(kv.Key)))
+                        throw new FormatException($"Kit {kitDto.Id} holds unknown materials.");
+                    sector.RestoreKit(craft.Id, new ConstructionKit(new OrderId(kitDto.Id), kitDto.Name ?? "", kitDesign, kitDesign.ComputeStats(catalog), materials));
+                }
+                foreach (var (material, kg) in c.RequestsKg ?? new SortedDictionary<string, long>())
+                {
+                    if (!catalog.Materials.Contains(material)) throw new FormatException($"Craft {c.Id} requests unknown material '{material}'.");
+                    sector.RestoreRequest(craft.Id, material, kg);
                 }
             }
             if (dto.NextOrderId > 0) sector.RestoreNextOrderId(dto.NextOrderId);
@@ -242,7 +275,23 @@ public static class SaveGameSerializer
                         throw new FormatException($"Craft {c.Id} has an invalid refining batch.");
                     restored.RefiningBatch = new RefiningBatch(batch.RecipeId ?? "", inputs, batch.ProgressKg);
                 }
-                if (c.Job is { } j)
+                if (c.Job is { Kind: "requests" } r)
+                {
+                    HaulContract? contract = null;
+                    if (r.ContractAmountKg > 0)
+                    {
+                        if (!catalog.Materials.Contains(r.MaterialId ?? "")) throw new FormatException($"Craft {c.Id} job uses unknown material '{r.MaterialId}'.");
+                        sector.GetCraft(new CraftId(r.PickupId));
+                        sector.GetCraft(new CraftId(r.DestinationId));
+                        contract = new HaulContract(new CraftId(r.PickupId), new CraftId(r.DestinationId), r.MaterialId!, r.ContractAmountKg).Validated();
+                    }
+                    sector.RestoreJob(restored.Id, new ServeRequestsJob(r.MinPickupKg)
+                    {
+                        Active = r.Active, State = r.HaulState, ResumeState = r.HaulResumeState, WaitReason = r.WaitReason, Contract = contract,
+                        CompletedCycles = r.CompletedCycles, DeliveredKg = r.DeliveredKg, RetryAtTick = r.RetryAtTick,
+                    });
+                }
+                else if (c.Job is { } j)
                 {
                     if (!catalog.Materials.Contains(j.MaterialId ?? "")) throw new FormatException($"Craft {c.Id} job uses unknown material '{j.MaterialId}'.");
                     sector.GetCraft(new CraftId(j.DestinationId));
@@ -401,6 +450,16 @@ public static class SaveGameSerializer
         public OrbitDto? RailOrbit { get; set; }
         public SortedDictionary<string, long>? InventoryKg { get; set; }
         public List<OrderDto>? BuildQueue { get; set; }
+        public List<KitDto>? Kits { get; set; }
+        public SortedDictionary<string, long>? RequestsKg { get; set; }
+    }
+
+    private sealed class KitDto
+    {
+        public long Id { get; set; }
+        public string? Name { get; set; }
+        public DesignDto? Design { get; set; }
+        public SortedDictionary<string, long>? MaterialsKg { get; set; }
     }
 
     private sealed class TuningDto
@@ -419,7 +478,7 @@ public static class SaveGameSerializer
 
     private sealed class JobDto
     {
-        /// <summary>"mining" (v6 default) or "freight" (v7).</summary>
+        /// <summary>"mining" (v6 default), "freight" (v7) or "requests" (v11, contract in pickup/destination/material/contractAmountKg).</summary>
         public string? Kind { get; set; }
         public uint SourceBodyId { get; set; }
         public uint PickupId { get; set; }
@@ -437,6 +496,9 @@ public static class SaveGameSerializer
         public int CompletedCycles { get; set; }
         public long DeliveredKg { get; set; }
         public long RetryAtTick { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public long ContractAmountKg { get; set; }
     }
 
     private sealed class OrderDto
@@ -446,7 +508,6 @@ public static class SaveGameSerializer
         public DesignDto? Design { get; set; }
         public SortedDictionary<string, long>? MaterialsKg { get; set; }
         public double ProgressKg { get; set; }
-        public uint LandingSiteBodyId { get; set; }
     }
 
     private sealed class DesignDto
