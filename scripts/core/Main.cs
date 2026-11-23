@@ -192,6 +192,14 @@ public partial class Main : Node2D
             for (var i = 0; i < 300 * FixedStepClock.TicksPerSecond; i++) _sector.Step();
         }
         if (System.Array.IndexOf(args, "--demo-warp") >= 0) DemoWarp();
+        if (System.Array.IndexOf(args, "--demo-craters") >= 0 && _player is { IsLanded: true } miner)
+        {
+            // Dev/test hook (#28): big pits around where the player is mining, to see craters (no mass removed).
+            var at = System.Math.Atan2(miner.LandedOffset.Y, miner.LandedOffset.X);
+            _sector.DebugDigCrater(miner.LandedOnBodyId, at - 0.25, 20_000_000);
+            _sector.DebugDigCrater(miner.LandedOnBodyId, at + 0.3, 200_000_000);
+            _sector.DebugDigCrater(miner.LandedOnBodyId, at + 1.2, 2_000_000_000);
+        }
         if (System.Array.IndexOf(args, "--open-job") >= 0) _jobPanel?.Open();
         if (System.Array.IndexOf(args, "--open-debug") >= 0) _debugPanel?.Open();
         if (System.Array.IndexOf(args, "--open-editor") >= 0) OpenEditor();
@@ -767,6 +775,7 @@ public partial class Main : Node2D
         };
         if (radiusPx < 200f) DrawCircle(centre, radiusPx, color);
         else DrawColoredPolygon(CirclePoints(centre, radiusPx, 512), color); // smoother edge up close
+        DrawCraters(body, centre, radiusPx, color);
 
         // Zoomed out, a moon's or rock's name would sit on top of its planet's: only label bodies whose
         // orbit is big enough on screen to tell apart (and always the target).
@@ -844,6 +853,41 @@ public partial class Main : Node2D
             _pixelsPerMetre = _zoomBeforeMap;
             if (_mapPanel != null) _mapPanel.Visible = false;
         }
+    }
+
+    /// <summary>
+    /// Craters (#28): each a darker pit at the surface where mining dug, with a darker floor, kept inside
+    /// the body's disk (the body stays round for landing, so craft sit on the drawn surface).
+    /// </summary>
+    private void DrawCraters(CelestialBodyState body, Vector2 centre, float radiusPx, Color color)
+    {
+        if (body.Craters.Count == 0) return;
+        var pit = color.Darkened(0.35f);
+        var floor = color.Darkened(0.55f);
+        foreach (var crater in body.Craters)
+        {
+            var r = (float)body.CraterRadiusM(crater.MassKg) * _pixelsPerMetre;
+            if (r < 1.5f) continue; // too small to see at this zoom
+            var dir = new Vector2(Mathf.Cos((float)crater.BearingRad), Mathf.Sin((float)crater.BearingRad));
+            var rim = centre + dir * radiusPx;
+            if (rim.Length() - r > 2 * GetViewportRect().Size.Length()) continue; // off-screen
+            DrawColoredPolygon(ClippedToDisk(rim, r, centre, radiusPx), pit);
+            DrawColoredPolygon(ClippedToDisk(rim - dir * r * 0.15f, r * 0.55f, centre, radiusPx), floor);
+        }
+    }
+
+    /// <summary>A circle's outline with every point outside the disk pulled back onto its edge.</summary>
+    private static Vector2[] ClippedToDisk(Vector2 c, float r, Vector2 disk, float diskR)
+    {
+        var points = new Vector2[32];
+        for (var i = 0; i < points.Length; i++)
+        {
+            var a = Mathf.Tau * i / points.Length;
+            var p = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+            var d = p - disk;
+            points[i] = d.Length() > diskR ? disk + d.Normalized() * diskR : p;
+        }
+        return points;
     }
 
     /// <summary>The star of the system shown on the map: the one you're in (#54).</summary>

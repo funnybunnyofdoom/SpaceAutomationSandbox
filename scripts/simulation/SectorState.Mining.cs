@@ -31,8 +31,10 @@ public sealed partial class SectorState
 
             var drilled = craft.MiningRemainderKg + craft.Stats.MiningRateKgPerS * Tuning.DrillRateMultiplier * FixedStepClock.TickSeconds;
             var whole = (long)Math.Floor(drilled);
-            var taken = GetBody(craft.LandedOnBodyId).Extract(material, Math.Min(whole, craft.FreeCargoKg));
+            var body = GetBody(craft.LandedOnBodyId);
+            var taken = body.Extract(material, Math.Min(whole, craft.FreeCargoKg));
             craft.Inventory.Add(material, taken);
+            body.Dig(Math.Atan2(craft.LandedOffset.Y, craft.LandedOffset.X), taken); // a crater where it digs (#28)
             // Keep the unfinished fraction only while the drill can continue; a full hold or an
             // empty deposit stops the drill, and partly-cut material stays in the rock.
             craft.MiningRemainderKg = taken == whole ? drilled - whole : 0;

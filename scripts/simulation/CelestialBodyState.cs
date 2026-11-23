@@ -17,6 +17,9 @@ public enum BodyKind
     Star,
 }
 
+/// <summary>A pit dug by mining (#28): its direction from the body's centre and the mass taken out there.</summary>
+public readonly record struct Crater(double BearingRad, long MassKg);
+
 /// <summary>A star's type (#25): sets how much sunlight its system gets.</summary>
 public enum StarClass
 {
@@ -126,6 +129,53 @@ public sealed class CelestialBodyState
     }
 
     public BodyId Id { get; }
+
+    // --- Craters (#28) ---
+
+    /// <summary>A body keeps at most this many craters; a new one beyond that joins the nearest.</summary>
+    public const int MaxCraters = 64;
+
+    private readonly List<Crater> _craters = new();
+
+    /// <summary>Where mining has dug into the body (by direction from its centre), largest-first not guaranteed; saved.</summary>
+    public IReadOnlyList<Crater> Craters => _craters;
+
+    /// <summary>
+    /// Crater radius for a dug-out mass: a shallow bowl (depth about an eighth of its radius, like an
+    /// open-pit mine) holding that volume at the body's density: V ≈ πr³/16.
+    /// </summary>
+    public double CraterRadiusM(long massKg) => Math.Cbrt(16.0 * (massKg / DensityKgPerM3) / Math.PI);
+
+    /// <summary>
+    /// Records mass dug out at a direction (#28): it deepens the crater it falls in (within that crater's
+    /// radius on the surface), else starts a new one; past <see cref="MaxCraters"/> it joins the nearest.
+    /// Purely a record of where mining happened: the body's mass and radius already account for it.
+    /// </summary>
+    internal void Dig(double bearingRad, long massKg)
+    {
+        if (massKg <= 0) return;
+        var best = -1;
+        var bestGap = double.MaxValue;
+        for (var i = 0; i < _craters.Count; i++)
+        {
+            var gap = Math.Abs(Math.IEEERemainder(_craters[i].BearingRad - bearingRad, 2 * Math.PI)) * RadiusM; // along the surface
+            if (gap < bestGap) { best = i; bestGap = gap; }
+        }
+        if (best >= 0 && (bestGap <= CraterRadiusM(_craters[best].MassKg) || _craters.Count >= MaxCraters))
+            _craters[best] = _craters[best] with { MassKg = _craters[best].MassKg + massKg };
+        else _craters.Add(new Crater(bearingRad, massKg));
+    }
+
+    /// <summary>Restores saved craters.</summary>
+    internal void RestoreCraters(IEnumerable<Crater> craters)
+    {
+        _craters.Clear();
+        foreach (var crater in craters)
+        {
+            if (crater.MassKg <= 0 || !double.IsFinite(crater.BearingRad)) throw new ArgumentException("Invalid crater.");
+            if (_craters.Count < MaxCraters) _craters.Add(crater);
+        }
+    }
 
     /// <summary>For a star: its type (#25). Yellow for the home star and older saves.</summary>
     public StarClass StarClass { get; internal set; }

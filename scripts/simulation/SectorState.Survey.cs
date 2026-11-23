@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace SpaceAutomationSandbox.Simulation;
 
 /// <summary>
@@ -14,6 +16,9 @@ public sealed partial class SectorState
 
     /// <summary>Marks a body surveyed directly (scenario setup and tests).</summary>
     public void MarkSurveyed(BodyId bodyId) => GetBody(bodyId).Surveyed = true;
+
+    /// <summary>Restores a body's craters from a save (#28).</summary>
+    public void RestoreCraters(BodyId bodyId, IEnumerable<Crater> craters) => GetBody(bodyId).RestoreCraters(craters);
 
     private void StepSurvey()
     {

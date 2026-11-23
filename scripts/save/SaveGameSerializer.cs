@@ -85,6 +85,7 @@ public static class SaveGameSerializer
                     MassKg = b.MassKg,
                     OriginalMassKg = b.OriginalMassKg != b.MassKg ? b.OriginalMassKg : 0,
                     StarClass = b.StarClass,
+                    Craters = b.Craters.Count > 0 ? b.Craters.Select(c => new CraterDto { BearingRad = c.BearingRad, MassKg = c.MassKg }).ToList() : null,
                     DensityKgPerM3 = b.DensityKgPerM3,
                     IsMineable = b.IsMineable,
                     DepositsKg = b.DepositsKg.Count > 0
@@ -458,6 +459,11 @@ public static class SaveGameSerializer
                     b.DepositsKg));
                 if (b.OriginalMassKg > 0) sector.GetBody(new BodyId(b.Id)).OriginalMassKg = b.OriginalMassKg;
                 sector.GetBody(new BodyId(b.Id)).StarClass = b.StarClass;
+                if (b.Craters is { } craters)
+                {
+                    if (craters.Any(c => c.MassKg <= 0 || !double.IsFinite(c.BearingRad))) throw new FormatException($"Body {b.Id} has an invalid crater.");
+                    sector.RestoreCraters(new BodyId(b.Id), craters.Select(c => new Crater(c.BearingRad, c.MassKg)));
+                }
                 if (b.Surveyed) sector.MarkSurveyed(new BodyId(b.Id));
                 added.Add(b.Id);
                 pending.Remove(b);
@@ -548,6 +554,10 @@ public static class SaveGameSerializer
         /// <summary>v19: a star's type (#25); omitted for yellow.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public StarClass StarClass { get; set; }
+
+        /// <summary>v19 (later addition, optional, #28): pits dug by mining.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<CraterDto>? Craters { get; set; }
 
         public double DensityKgPerM3 { get; set; }
         public bool IsMineable { get; set; }
@@ -671,6 +681,12 @@ public static class SaveGameSerializer
         public List<OrderDto>? BuildQueue { get; set; }
         public List<KitDto>? Kits { get; set; }
         public SortedDictionary<string, long>? RequestsKg { get; set; }
+    }
+
+    private sealed class CraterDto
+    {
+        public double BearingRad { get; set; }
+        public long MassKg { get; set; }
     }
 
     private sealed class YardOrderDto

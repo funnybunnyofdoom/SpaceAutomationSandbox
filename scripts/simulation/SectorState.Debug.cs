@@ -54,6 +54,9 @@ public sealed partial class SectorState
         foreach (var body in _bodies) body.Surveyed = true;
     }
 
+    /// <summary>DEBUG: records a crater (#28) without removing any mass (only to look at how craters draw).</summary>
+    public void DebugDigCrater(BodyId bodyId, double bearingRad, long kg) => GetBody(bodyId).Dig(bearingRad, kg);
+
     /// <summary>
     /// DEBUG: damages one part as an impact would: sets its health, or breaks it off at 0 (its
     /// materials become debris). For tests and trying out repairs.
