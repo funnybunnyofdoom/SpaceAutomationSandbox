@@ -105,6 +105,13 @@ public static class SaveGameSerializer
                         : null,
                     Orbit = b.Orbit is { } o ? OrbitToDto(o) : null,
                     Surveyed = b.Surveyed,
+                    Sites = b.Sites.Count > 0
+                        ? b.Sites.Select(s => new SiteDto
+                        {
+                            Surveyed = s.Surveyed,
+                            DepositsKg = s.DepositsKg.Count > 0 ? new SortedDictionary<string, long>(s.DepositsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal) : null,
+                        }).ToList()
+                        : null,
                 }).ToList(),
                 Crafts = sector.Crafts.Select(c => new CraftDto
                 {
@@ -468,15 +475,23 @@ public static class SaveGameSerializer
             {
                 var orbit = b.Orbit is { } o ? new CircularOrbit(new BodyId(o.ParentId), o.RadiusM, o.PeriodS, o.PhaseAtZeroRad) : null;
                 sector.AddBody(new CelestialBodyState(new BodyId(b.Id), b.Name ?? "", b.Kind, b.MassKg, b.DensityKgPerM3, b.IsMineable, orbit,
-                    b.DepositsKg));
-                if (b.OriginalMassKg > 0) sector.GetBody(new BodyId(b.Id)).OriginalMassKg = b.OriginalMassKg;
+                    b.DepositsKg, b.OriginalMassKg > 0 ? b.OriginalMassKg : null));
                 sector.GetBody(new BodyId(b.Id)).StarClass = b.StarClass;
                 if (b.Craters is { } craters)
                 {
                     if (craters.Any(c => c.MassKg <= 0 || !double.IsFinite(c.BearingRad))) throw new FormatException($"Body {b.Id} has an invalid crater.");
                     sector.RestoreCraters(new BodyId(b.Id), craters.Select(c => new Crater(c.BearingRad, c.MassKg)));
                 }
-                if (b.Surveyed) sector.MarkSurveyed(new BodyId(b.Id));
+                // Sites (#70): saved ones as they were; older saves get the fixed layout from their deposits, surveyed as the body was.
+                if (b.Sites is { } sites)
+                {
+                    try
+                    {
+                        sector.RestoreSites(new BodyId(b.Id), sites.Select(s => (s.Surveyed, (IReadOnlyDictionary<string, long>)(s.DepositsKg ?? new SortedDictionary<string, long>()))).ToList());
+                    }
+                    catch (ArgumentException e) { throw new FormatException(e.Message); }
+                }
+                else if (b.Surveyed) sector.MarkSurveyed(new BodyId(b.Id));
                 added.Add(b.Id);
                 pending.Remove(b);
             }
@@ -581,6 +596,18 @@ public static class SaveGameSerializer
         public OrbitDto? Orbit { get; set; }
         public SortedDictionary<string, long>? DepositsKg { get; set; }
         public bool Surveyed { get; set; }
+
+        /// <summary>v19 (later addition, optional, #70): the rim's sites in order. Older saves: made from the deposits.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<SiteDto>? Sites { get; set; }
+    }
+
+    private sealed class SiteDto
+    {
+        public bool Surveyed { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public SortedDictionary<string, long>? DepositsKg { get; set; }
     }
 
     private sealed class OrbitDto

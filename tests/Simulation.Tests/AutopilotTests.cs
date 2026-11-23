@@ -50,7 +50,7 @@ public class AutopilotTests
                 if (m.IsLanded && !wasLanded[m.Id] && m.LandedOnBodyId != ((MiningJob)m.Job!).SourceBodyId)
                 {
                     accidents++;
-                    var key = $"{sector.GetBody(m.LandedOnBodyId).Name} during {((MiningJob)m.Job!).State}";
+                    var key = $"{sector.GetBody(m.LandedOnBodyId).Name} during {((MiningJob)m.Job!).State} ({m.Job!.WaitReason})";
                     Where[key] = Where.GetValueOrDefault(key) + 1;
                 }
                 wasLanded[m.Id] = m.IsLanded;

@@ -17,11 +17,8 @@ public class ProductionNetworkTests
 
     public ProductionNetworkTests(ITestOutputHelper log) => _log = log;
 
-    private static long TotalMass(SectorState sector) =>
-        sector.Bodies.Sum(b => b.DepositsKg.Values.Sum())
-        + sector.Crafts.Sum(c => c.CargoKg + c.BuildQueue.Sum(o => o.MaterialsKg.Values.Sum())
-                                 + (c.RefiningBatch?.InputsKg.Values.Sum() ?? 0))
-        + sector.EjectedKg.Values.Sum();
+    /// <summary>The whole mass ledger, bodies' bulk included: mining rock where a site has no ore (#70) counts too.</summary>
+    private static long TotalMass(SectorState sector) => sector.ComputeMassLedger().TotalKg;
 
     private static void Run(SectorState sector, int ticks, Action? everyTick = null)
     {
@@ -117,13 +114,16 @@ public class ProductionNetworkTests
         pilot.Position = sector.GetPosition(rock1.Id) + new Vector2D(0, -(rock1.RadiusM + SectorState.SurveyRangeM - 10));
         sector.Step();
 
-        Assert.True(rock1.Surveyed);
-        Assert.False(rock2.Surveyed);
-        Assert.False(Rock(sector, "Rock-3").Surveyed);
+        // The pilot sees the sites above its horizon (#70): the one below and its neighbour, not the far side.
+        Assert.True(rock1.AnySiteSurveyed);
+        Assert.True(rock1.SiteAt(-System.Math.PI / 2)!.Surveyed);
+        Assert.False(rock1.Surveyed);
+        Assert.False(rock2.AnySiteSurveyed);
+        Assert.False(Rock(sector, "Rock-3").AnySiteSurveyed);
 
         var loaded = SaveGameSerializer.FromJson(SaveGameSerializer.ToJson(sector, game.PlayerCraftId), Catalog).Sector;
-        Assert.True(Rock(loaded, "Rock-1").Surveyed);
-        Assert.False(Rock(loaded, "Rock-2").Surveyed);
+        Assert.Equal(rock1.Sites.Select(s => s.Surveyed), Rock(loaded, "Rock-1").Sites.Select(s => s.Surveyed));
+        Assert.False(Rock(loaded, "Rock-2").AnySiteSurveyed);
     }
 
     // --- Freight ------------------------------------------------------------------------------

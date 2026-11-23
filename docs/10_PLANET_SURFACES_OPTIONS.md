@@ -1,6 +1,6 @@
 # 10 — Planet surfaces: options (#33)
 
-**Status: decided 2026-11-23 (docs/06).** The creator chose **B, surface sites on the rim, built on A's flattened close-up view**. Goods move between structures on one body by craft only (shuttles), and bodies keep their true kilometre scale. The other options are kept below for the record.
+**Status: decided 2026-11-23 (docs/06).** The creator chose **B, surface sites on the rim, built on A's flattened close-up view**. Goods move between structures on one body by craft only (shuttles), and bodies keep their true kilometre scale. The other options are kept below for the record. **Built in #70** (see the docs/06 row "Surface sites built"): sites, per-site ore, survey by horizon, site-aware mining jobs, site markers. The close-up view needed no extra flattening at true scale.
 
 ## Where things stand
 

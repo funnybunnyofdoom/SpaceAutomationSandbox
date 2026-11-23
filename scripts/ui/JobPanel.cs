@@ -183,8 +183,10 @@ public partial class JobPanel : PanelContainer
         foreach (var id in _sources)
         {
             var body = sector.GetBody(id);
-            _source.AddItem(!body.Surveyed ? $"{body.Name} (unsurveyed)"
-                : $"{body.Name} ({body.DepositsKg.Values.Sum() / 1000.0:0} t of ore{(body.BulkKg > 0 ? $", {body.BulkKg / 1e9:0.###} Mt of {body.BulkMaterialId}" : "")})");
+            // Only what the surveyed sites hold counts (#70).
+            var surveyed = body.Sites.Where(s => s.Surveyed).ToList();
+            _source.AddItem(!body.AnySiteSurveyed ? $"{body.Name} (unsurveyed)"
+                : $"{body.Name} ({surveyed.Sum(s => s.DepositsKg.Values.Sum()) / 1000.0:0} t of ore in {surveyed.Count} of {body.Sites.Count} sites{(body.BulkKg > 0 ? $", {body.BulkKg / 1e9:0.###} Mt of {body.BulkMaterialId}" : "")})");
         }
 
         _stations = sector.Crafts.Where(c => c.Stats.DockingPorts.Count > 0 && c.Id != craft?.Id).Select(c => c.Id).ToList();
@@ -245,10 +247,11 @@ public partial class JobPanel : PanelContainer
     private void RefreshDeposits()
     {
         var body = _source.Selected >= 0 && _source.Selected < _sources.Count ? _sector().GetBody(_sources[_source.Selected]) : null;
-        _deposits = body is { Surveyed: true } ? body.MineableMaterials.ToList() : new List<string>(); // ore deposits and the body's bulk (#27)
+        // Ore in the surveyed sites (#70) and the body's bulk (#27).
+        _deposits = body is { AnySiteSurveyed: true } ? body.MineableMaterials.Where(m => body.SurveyedDeposit(m) > 0).ToList() : new List<string>();
         _mineMaterial.Clear();
         foreach (var m in _deposits) _mineMaterial.AddItem(_materials.Contains(m) ? _materials.Get(m).Name : m);
-        if (_deposits.Count == 0) _mineMaterial.AddItem(body is { Surveyed: false } ? "(unknown: survey it first)" : "(nothing left)");
+        if (_deposits.Count == 0) _mineMaterial.AddItem(body is { AnySiteSurveyed: false } ? "(unknown: survey it first)" : "(nothing in the surveyed sites)");
         Select(_mineMaterial, 0);
     }
 
@@ -305,7 +308,7 @@ public partial class JobPanel : PanelContainer
         {
             if (_source.Selected < 0 || _source.Selected >= _sources.Count) { Show(new ActionResult(false, "No mineable body.")); return; }
             var source = _sector().GetBody(_sources[_source.Selected]);
-            if (!source.Surveyed)
+            if (!source.AnySiteSurveyed)
             {
                 Show(new ActionResult(false, $"{source.Name} hasn't been surveyed: fly a ship you pilot within {SectorState.SurveyRangeM / 1000:0} km of it first."));
                 return;

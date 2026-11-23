@@ -39,7 +39,7 @@ public sealed partial class SectorState
         if (craft.Stats.AnchorClampCount <= 0) return new(false, $"{craft.Name} has no anchor clamp (needed to mine).");
         if (!_byId.TryGetValue(job.SourceBodyId, out var source) || !source.IsMineable)
             return new(false, "The source must be a mineable body.");
-        if (!source.Surveyed)
+        if (!source.AnySiteSurveyed)
             return new(false, $"{source.Name} hasn't been surveyed: fly a ship you pilot within {SurveyRangeM / 1000:0} km of it first.");
         if (!_craftsById.TryGetValue(job.DestinationId, out var destination) || destination.Id == craft.Id)
             return new(false, "The destination must be another craft.");
@@ -123,13 +123,18 @@ public sealed partial class SectorState
                 return;
 
             case MiningJobState.ToSource:
-                if (craft.IsDocked) TryUndock(craft.Id);
-                if (source.Deposit(material) == 0)
+                if (source.SurveyedDeposit(material) == 0) // only surveyed sites count (#70)
                 {
-                    if (held > 0) { job.State = MiningJobState.ToDestination; return; }
-                    Wait(craft, job, MiningJobState.ToSource, $"{source.Name} has no {material} left");
-                    return;
+                    if (held > 0) { if (craft.IsDocked) TryUndock(craft.Id); job.State = MiningJobState.ToDestination; return; }
+                    if (craft.IsLanded && craft.LandedOnBodyId == source.Id) // anchored on the source: wait there
+                    {
+                        Wait(craft, job, MiningJobState.ToSource, NothingToMine(source, material));
+                        return;
+                    }
+                    // Docked or in space: land on the source and wait there, anchored. Not docked (it would hold a
+                    // berth others need) and not in space (it would hang in a planet's gravity).
                 }
+                if (craft.IsDocked) TryUndock(craft.Id);
                 if (craft.IsLanded)
                 {
                     if (craft.LandedOnBodyId == source.Id) { job.State = MiningJobState.Landing; return; }
@@ -138,6 +143,17 @@ public sealed partial class SectorState
                 }
                 SetTarget(craft.Id, source.Id);
                 var hover = SurfacePoint(source, craft, JobHoverAltitudeM, job);
+                // The spot can be round the far side now that ore sits at sites (#70): until the craft is nearly
+                // above it, aim high over the spot and let the source count as an obstacle, so the path goes round.
+                var sourceCentre = GetPosition(source.Id);
+                var craftBearing = Math.Atan2(craft.Position.Y - sourceCentre.Y, craft.Position.X - sourceCentre.X);
+                if (Math.Abs(FlightModel.WrapAngle(job.SpotBearingRad!.Value - craftBearing)) > SpotDetourAngleRad)
+                {
+                    var spotDirection = new Vector2D(Math.Cos(job.SpotBearingRad.Value), Math.Sin(job.SpotBearingRad.Value));
+                    var high = sourceCentre + spotDirection * (source.RadiusM + craft.CollisionRadiusM + JobLiftAltitudeM);
+                    craft.Controls = NavigateTo(craft, high, GetVelocityAt(source.Id, TimeS), BodyId.None, JobCruiseSpeedMps, 20);
+                    return;
+                }
                 craft.Controls = NavigateTo(craft, hover, GetVelocityAt(source.Id, TimeS), source.Id, JobCruiseSpeedMps, 0);
                 if (hover.DistanceTo(craft.Position) < 40 && (craft.Velocity - GetVelocityAt(source.Id, TimeS)).Length < 2)
                     job.State = MiningJobState.Landing;
@@ -162,11 +178,17 @@ public sealed partial class SectorState
                 craft.Controls = ShipControls.Idle;
                 if (!craft.IsAnchored) { job.State = MiningJobState.Landing; return; }
                 var full = craft.FreeCargoKg == 0 || craft.Inventory.TotalKg >= job.ReturnFraction * craft.CargoCapacityKg;
-                if (full || source.Deposit(material) == 0)
+                if (full || source.DepositAt(material, LandedBearing(craft)) == 0)
                 {
                     if (held > 0) { Lift(craft, job, MiningJobState.ToDestination); return; }
+                    if (!full && source.SurveyedDeposit(material) > 0) // this site is dug out: on to another (#70)
+                    {
+                        job.SpotBearingRad = null;
+                        Lift(craft, job, MiningJobState.ToSource);
+                        return;
+                    }
                     Wait(craft, job, MiningJobState.Mining,
-                        full ? "the hold is full of other cargo" : $"{source.Name} has no {material} left");
+                        full ? "the hold is full of other cargo" : NothingToMine(source, material));
                 }
                 return;
 
@@ -262,7 +284,8 @@ public sealed partial class SectorState
     /// <summary>
     /// The point above this trip's landing spot. The spot is picked once per trip (saved with the job):
     /// on the side the craft is coming from, then nudged by up to three spacings either way by craft
-    /// id, so miners working the same rock land apart instead of on top of each other (#55).
+    /// id, so miners working the same rock land apart instead of on top of each other (#55); then
+    /// moved into the nearest surveyed site that holds the material (#70).
     /// </summary>
     private Vector2D SurfacePoint(CelestialBodyState body, CraftState craft, double altitudeM, MiningJob job)
     {
@@ -272,10 +295,40 @@ public sealed partial class SectorState
             var outward = craft.Position - centre;
             var bearing = Math.Atan2(outward.Y, outward.X);
             var nudge = (int)(craft.Id.Value % 7) - 3;
-            job.SpotBearingRad = FlightModel.WrapAngle(bearing + nudge * MiningSpotSpacingM / Math.Max(body.RadiusM, 1));
+            var spacing = MiningSpotSpacingM / Math.Max(body.RadiusM, 1);
+            // Into the site first (keeping room for the nudge), then apart by craft id: miners arriving
+            // from outside the site would otherwise all get the same edge spot.
+            if (MiningSite(body, job.MaterialId, bearing) is { } site) bearing = site.Clamp(bearing, 4 * spacing);
+            job.SpotBearingRad = FlightModel.WrapAngle(bearing + nudge * spacing);
         }
         var angle = job.SpotBearingRad.Value;
         return centre + new Vector2D(Math.Cos(angle), Math.Sin(angle)) * (body.RadiusM + craft.CollisionRadiusM + altitudeM);
+    }
+
+    /// <summary>Further round the body than this from its landing spot, a miner first flies high over the spot (#70).</summary>
+    public const double SpotDetourAngleRad = 0.4;
+
+    /// <summary>Why a mining job has nothing to mine: none left anywhere, or none in the surveyed sites (#70).</summary>
+    private static string NothingToMine(CelestialBodyState source, string material) =>
+        source.Deposit(material) > 0 ? $"no surveyed site on {source.Name} has {material}: fly over more of it" : $"{source.Name} has no {material} left";
+
+    /// <summary>
+    /// The surveyed site nearest a bearing where the material can be mined (#70): one holding its ore,
+    /// or for the body's bulk (rock or ice) any surveyed site. Null if there's none.
+    /// </summary>
+    public static SurfaceSite? MiningSite(CelestialBodyState body, string material, double nearBearingRad)
+    {
+        SurfaceSite? best = null;
+        var bestGap = double.MaxValue;
+        foreach (var site in body.Sites)
+        {
+            if (!site.Surveyed) continue;
+            var ok = site.DepositsKg.GetValueOrDefault(material) > 0 || (material == body.BulkMaterialId && body.BulkKg > 0);
+            if (!ok) continue;
+            var gap = Math.Abs(Math.IEEERemainder(nearBearingRad - site.CentreRad, 2 * Math.PI)) - site.WidthRad / 2;
+            if (gap < bestGap) { best = site; bestGap = gap; }
+        }
+        return best;
     }
 
     /// <summary>Seconds ahead the autopilot looks for an impact along its current velocity.</summary>

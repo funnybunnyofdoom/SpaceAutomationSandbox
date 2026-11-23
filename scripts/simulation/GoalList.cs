@@ -44,7 +44,7 @@ public static class GoalList
         ores.Add(CelestialBodyState.RockMaterial);
         ores.Add(CelestialBodyState.IceMaterial);
 
-        if (sector.Bodies.Any(b => b.IsMineable && b.Surveyed)) met.Add("survey");
+        if (sector.Bodies.Any(b => b.IsMineable && b.AnySiteSurveyed)) met.Add("survey");
         if (player is { IsLanded: true } && sector.GetBody(player.LandedOnBodyId).IsMineable) met.Add("land");
         if (player != null && ores.Any(ore => player.Inventory[ore] > 0)) met.Add("mine");
         if (sector.Crafts.Any(c => c.RefiningBatch != null)) met.Add("refine");

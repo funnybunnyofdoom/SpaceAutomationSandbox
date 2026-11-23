@@ -1034,6 +1034,8 @@ public partial class Main : Node2D
         }
         var (nearest, nearestSurface) = _sector.NearestBody(p.Position);
         target += $"nearest: {Describe(nearest)}, surface {FormatDistance(nearestSurface)}";
+        // The site below you when you're close to a body's surface (#70).
+        if (nearestSurface < SectorState.SurveyRangeM && SiteLine(p, nearest) is { Length: > 0 } siteLine) target += $"\n{siteLine}";
 
         return new HudSections(status, ship, ShipyardSummary(), target, GoalsText());
     }
@@ -1076,11 +1078,27 @@ public partial class Main : Node2D
 
     private static string Describe(CelestialBodyState body) =>
         $"{body.Name} ({body.Kind}"
-        + (!body.IsMineable ? "" : !body.Surveyed ? $", unsurveyed - fly within {SectorState.SurveyRangeM / 1000:0} km"
+        + (!body.IsMineable ? "" : !body.AnySiteSurveyed ? $", unsurveyed - fly within {SectorState.SurveyRangeM / 1000:0} km"
             : body.DepositsKg.Count == 0 && body.BulkKg == 0 ? ", mined out"
-            : ", " + string.Join(", ", body.DepositsKg.Select(kv => $"{kv.Key} {kv.Value / 1000.0:0} t")
-                .Concat(body.BulkKg > 0 ? new[] { $"bulk {body.BulkMaterialId} {body.BulkKg / 1e9:0.###} Mt" } : System.Array.Empty<string>())))
+            : $", {body.Sites.Count(s => s.Surveyed)} of {body.Sites.Count} sites surveyed"
+              + (body.BulkKg > 0 ? $", bulk {body.BulkMaterialId} {body.BulkKg / 1e9:0.###} Mt" : ""))
         + ")";
+
+    /// <summary>
+    /// The site below the player on a body (#70): the one landed on, or the one under its bearing when
+    /// near; with its ore if surveyed. Empty when not near a mineable body.
+    /// </summary>
+    private string SiteLine(CraftState p, CelestialBodyState body)
+    {
+        if (body.Sites.Count == 0) return "";
+        var centre = _sector.GetPosition(body.Id);
+        var bearing = p.IsLanded && p.LandedOnBodyId == body.Id ? SectorState.LandedBearing(p) : System.Math.Atan2(p.Position.Y - centre.Y, p.Position.X - centre.X);
+        if (body.SiteAt(bearing) is not { } site) return "";
+        var ore = !site.Surveyed ? "unsurveyed"
+            : site.DepositsKg.Count == 0 ? "no ore" + (body.BulkKg > 0 ? $" (bulk {body.BulkMaterialId})" : "")
+            : string.Join(", ", site.DepositsKg.Select(kv => $"{kv.Key} {kv.Value / 1000.0:0.#} t"));
+        return $"site {site.Name}: {ore}";
+    }
 
     private static string FormatDistance(double metres) =>
         System.Math.Abs(metres) >= 1000 ? $"{metres / 1000:0.00} km" : $"{metres:0} m";
@@ -1162,6 +1180,39 @@ public partial class Main : Node2D
         }
     }
 
+    private static readonly Color SiteTickColor = new(1f, 1f, 1f, 0.45f);
+    private static readonly Color SiteLabelColor = new(0.85f, 0.9f, 1f, 0.85f);
+    private static readonly Color SiteUnknownColor = new(0.7f, 0.7f, 0.75f, 0.55f);
+
+    /// <summary>
+    /// Surface sites (#70): a tick across the rim where each site starts, and the site's letter with its
+    /// ore (or "?" until surveyed) just outside the rim, once a site is wide enough on screen to label.
+    /// </summary>
+    /// <summary>Sites get labels once each is wide enough on screen.</summary>
+    private static bool SitesLabelled(CelestialBodyState body, float radiusPx) =>
+        body.Sites.Count > 0 && radiusPx >= 40f && radiusPx * (float)body.Sites[0].WidthRad > 70f;
+
+    private void DrawSites(CelestialBodyState body, Vector2 centre, float radiusPx)
+    {
+        if (body.Sites.Count == 0 || radiusPx < 40f) return;
+        var view = new Rect2(-GetViewportRect().Size / 2, GetViewportRect().Size).Grow(40);
+        var labelled = SitesLabelled(body, radiusPx);
+        foreach (var site in body.Sites)
+        {
+            var (sin, cos) = Mathf.SinCos((float)site.StartRad);
+            var edge = new Vector2(cos, sin);
+            var tickAt = centre + edge * radiusPx;
+            if (view.HasPoint(tickAt)) DrawLine(centre + edge * (radiusPx - 8), centre + edge * (radiusPx + 12), SiteTickColor, 2);
+            if (!labelled) continue;
+            var (cs, cc) = Mathf.SinCos((float)site.CentreRad);
+            var at = centre + new Vector2(cc, cs) * (radiusPx + 22);
+            if (!view.HasPoint(at)) continue;
+            var ore = !site.Surveyed ? "?" : site.DepositsKg.Count == 0 ? "no ore" : string.Join(", ", site.DepositsKg.Keys.Select(k => k.Replace("_ore", "")));
+            DrawString(ThemeDB.FallbackFont, at - new Vector2(20, 0), $"{SurfaceSite.Letter(site.Index)}: {ore}",
+                HorizontalAlignment.Left, -1, 12, site.Surveyed ? SiteLabelColor : SiteUnknownColor);
+        }
+    }
+
     private void DrawBody(CelestialBodyState body, double renderTimeS)
     {
         // Orbits: skip ones too small to see, and huge ones (from close up they're a straight line off-screen).
@@ -1186,13 +1237,17 @@ public partial class Main : Node2D
         if (radiusPx < 200f) DrawCircle(centre, radiusPx, color);
         else DrawColoredPolygon(CirclePoints(centre, radiusPx, 512), color); // smoother edge up close
         DrawCraters(body, centre, radiusPx, color);
+        DrawSites(body, centre, radiusPx);
 
         // Zoomed out, a moon's or rock's name would sit on top of its planet's: only label bodies whose
         // orbit is big enough on screen to tell apart (and always the target).
         var isTarget = _player is { } p && p.TargetBodyId == body.Id;
         if (body.Orbit is not null && orbitPx < 28f && !isTarget) return;
-        DrawString(ThemeDB.FallbackFont, centre + new Vector2(radiusPx + 4, 4), body.Surveyed || !body.IsMineable ? body.Name : $"{body.Name} (unsurveyed)",
-            HorizontalAlignment.Left, -1, 12, NameColor);
+        var name = body.AnySiteSurveyed ? body.Name : $"{body.Name} (unsurveyed)";
+        if (SitesLabelled(body, radiusPx)) // the rim carries site labels (#70): the name goes in the middle instead
+            DrawString(ThemeDB.FallbackFont, centre - new Vector2(ThemeDB.FallbackFont.GetStringSize(name, HorizontalAlignment.Left, -1, 14).X / 2, -5), name,
+                HorizontalAlignment.Left, -1, 14, NameColor);
+        else DrawString(ThemeDB.FallbackFont, centre + new Vector2(radiusPx + 4, 4), name, HorizontalAlignment.Left, -1, 12, NameColor);
     }
 
     private void DrawCraft(CraftState craft)

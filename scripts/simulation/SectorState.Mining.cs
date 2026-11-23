@@ -11,14 +11,22 @@ namespace SpaceAutomationSandbox.Simulation;
 /// </summary>
 public sealed partial class SectorState
 {
-    /// <summary>What a craft would mine right now: its job's material, else the body's first deposit.</summary>
+    /// <summary>The bearing of a landed craft from its body's centre (where it digs, and which site it's on).</summary>
+    public static double LandedBearing(CraftState craft) => Math.Atan2(craft.LandedOffset.Y, craft.LandedOffset.X);
+
+    /// <summary>The site a landed craft sits on (#70), or null.</summary>
+    public SurfaceSite? SiteUnder(CraftState craft) =>
+        craft.IsLanded ? GetBody(craft.LandedOnBodyId).SiteAt(LandedBearing(craft)) : null;
+
+    /// <summary>What a craft would mine right now: its job's material, else the first ore at its site, else the bulk.</summary>
     public string? MiningMaterial(CraftState craft)
     {
         if (!craft.IsAnchored || !craft.IsLanded || craft.Stats.MiningRateKgPerS <= 0) return null;
         var body = GetBody(craft.LandedOnBodyId);
-        if (craft.Job is MiningJob { Active: true } job) return body.Deposit(job.MaterialId) > 0 ? job.MaterialId : null;
-        // By hand: the deposits first, then the body's bulk (#27).
-        return body.DepositsKg.Keys.FirstOrDefault() ?? (body.BulkKg > 0 ? body.BulkMaterialId : null);
+        var bearing = LandedBearing(craft);
+        if (craft.Job is MiningJob { Active: true } job) return body.DepositAt(job.MaterialId, bearing) > 0 ? job.MaterialId : null;
+        // By hand: the ore at this site first (#70), then the body's bulk (#27).
+        return body.SiteAt(bearing)?.DepositsKg.Keys.FirstOrDefault() ?? (body.BulkKg > 0 ? body.BulkMaterialId : null);
     }
 
     private void StepMining()
@@ -32,9 +40,10 @@ public sealed partial class SectorState
             var drilled = craft.MiningRemainderKg + craft.Stats.MiningRateKgPerS * Tuning.DrillRateMultiplier * FixedStepClock.TickSeconds;
             var whole = (long)Math.Floor(drilled);
             var body = GetBody(craft.LandedOnBodyId);
-            var taken = body.Extract(material, Math.Min(whole, craft.FreeCargoKg));
+            var bearing = LandedBearing(craft);
+            var taken = body.Extract(material, Math.Min(whole, craft.FreeCargoKg), bearing); // from the site under the drill (#70)
             craft.Inventory.Add(material, taken);
-            body.Dig(Math.Atan2(craft.LandedOffset.Y, craft.LandedOffset.X), taken); // a crater where it digs (#28)
+            body.Dig(bearing, taken); // a crater where it digs (#28)
             // Keep the unfinished fraction only while the drill can continue; a full hold or an
             // empty deposit stops the drill, and partly-cut material stays in the rock.
             craft.MiningRemainderKg = taken == whole ? drilled - whole : 0;

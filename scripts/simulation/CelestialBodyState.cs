@@ -43,7 +43,7 @@ public sealed class CelestialBodyState
 {
     public CelestialBodyState(BodyId id, string name, BodyKind kind, double massKg,
         double densityKgPerM3, bool isMineable, CircularOrbit? orbit,
-        IReadOnlyDictionary<string, long>? depositsKg = null)
+        IReadOnlyDictionary<string, long>? depositsKg = null, double? originalMassKg = null)
     {
         if (id.IsNone) throw new ArgumentException("Body needs a real id.", nameof(id));
         if (!(massKg > 0)) throw new ArgumentOutOfRangeException(nameof(massKg));
@@ -56,14 +56,63 @@ public sealed class CelestialBodyState
         MassKg = massKg;
         IsMineable = isMineable;
         Orbit = orbit;
-        Surveyed = !isMineable; // nothing to discover on the others yet
         foreach (var (material, kg) in depositsKg ?? new Dictionary<string, long>())
         {
             if (kg < 0) throw new ArgumentOutOfRangeException(nameof(depositsKg), $"{material}: {kg} kg");
             if (kg > 0) _deposits[material] = kg;
         }
         if (_deposits.Values.Sum() > massKg) throw new ArgumentException("Deposits can't exceed the body's mass.", nameof(depositsKg));
-        OriginalMassKg = massKg;
+        OriginalMassKg = originalMassKg is > 0 ? originalMassKg.Value : massKg;
+        // Surface sites (#70): mineable bodies' rims are split into sites, each holding part of the deposits.
+        // The count comes from the body's starting size, so a mined, shrunken body keeps its sites.
+        if (isMineable)
+        {
+            var count = SurfaceSite.SiteCount(RadiusFromMass(OriginalMassKg, densityKgPerM3));
+            for (var i = 0; i < count; i++) _sites.Add(new SurfaceSite(i, count, name));
+            SurfaceSite.Distribute(_sites, id, _deposits);
+        }
+    }
+
+    // --- Surface sites (#70) ---
+
+    private readonly List<SurfaceSite> _sites = new();
+
+    /// <summary>The rim's sites, anticlockwise from bearing −π. Empty for bodies that can't be mined.</summary>
+    public IReadOnlyList<SurfaceSite> Sites => _sites;
+
+    /// <summary>The site at a bearing from the body's centre, or null if the body has none.</summary>
+    public SurfaceSite? SiteAt(double bearingRad) =>
+        _sites.Count == 0 ? null : _sites[SurfaceSite.IndexAt(bearingRad, _sites.Count)];
+
+    /// <summary>True once any site has been surveyed: jobs can use the surveyed ones.</summary>
+    public bool AnySiteSurveyed => !IsMineable || _sites.Any(s => s.Surveyed);
+
+    /// <summary>Kg of a material in the surveyed sites (what jobs can count on), plus the bulk if it's the bulk material.</summary>
+    public long SurveyedDeposit(string materialId) =>
+        _sites.Where(s => s.Surveyed).Sum(s => s.Deposits.GetValueOrDefault(materialId)) + (materialId == BulkMaterialId ? BulkKg : 0);
+
+    /// <summary>Kg of a material that can be mined at a bearing: that site's deposit, plus the bulk if it's the bulk material.</summary>
+    public long DepositAt(string materialId, double bearingRad) =>
+        (SiteAt(bearingRad)?.Deposits.GetValueOrDefault(materialId) ?? 0) + (materialId == BulkMaterialId ? BulkKg : 0);
+
+    /// <summary>Restores saved sites: their surveyed flags and deposits. The deposits must add up to the body's.</summary>
+    internal void RestoreSites(IReadOnlyList<(bool Surveyed, IReadOnlyDictionary<string, long> DepositsKg)> saved)
+    {
+        if (saved.Count != _sites.Count) throw new ArgumentException($"{Name}: {saved.Count} saved sites, expected {_sites.Count}.");
+        var totals = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        for (var i = 0; i < saved.Count; i++)
+        {
+            _sites[i].Surveyed = saved[i].Surveyed;
+            _sites[i].Deposits.Clear();
+            foreach (var (material, kg) in saved[i].DepositsKg)
+            {
+                if (kg < 0) throw new ArgumentException($"{Name}: negative deposit at a site.");
+                if (kg == 0) continue;
+                _sites[i].Deposits[material] = kg;
+                totals[material] = totals.GetValueOrDefault(material) + kg;
+            }
+        }
+        if (!totals.SequenceEqual(_deposits)) throw new ArgumentException($"{Name}: the sites' deposits don't add up to the body's.");
     }
 
     // --- Complete dismantling (#27) ---
@@ -109,20 +158,44 @@ public sealed class CelestialBodyState
     public long Deposit(string materialId) =>
         (_deposits.TryGetValue(materialId, out var kg) ? kg : 0) + (materialId == BulkMaterialId ? BulkKg : 0);
 
-    /// <summary>
-    /// Removes up to <paramref name="kg"/> of a material (from its deposit first, then the bulk) and the
-    /// same mass from the body. Returns what was removed.
-    /// </summary>
+    /// <summary>Removes up to <paramref name="kg"/> of a material from anywhere: the sites in order, then the bulk (tests and scenarios).</summary>
     internal long Extract(string materialId, long kg)
     {
-        var taken = Math.Min(kg, Deposit(materialId));
+        long taken = 0;
+        foreach (var site in _sites)
+        {
+            if (taken >= kg) break;
+            if (site.Deposits.ContainsKey(materialId)) taken += Extract(materialId, kg - taken, site.CentreRad);
+        }
+        if (taken < kg && materialId == BulkMaterialId) taken += Extract(materialId, kg - taken, 0);
+        if (_sites.Count == 0 && taken < kg && _deposits.TryGetValue(materialId, out var had)) // a body without sites
+        {
+            var more = Math.Min(kg - taken, had);
+            if (had == more) _deposits.Remove(materialId); else _deposits[materialId] = had - more;
+            MassKg -= more;
+            taken += more;
+        }
+        return taken;
+    }
+
+    /// <summary>
+    /// Removes up to <paramref name="kg"/> of a material at a bearing (#70): from that site's deposit
+    /// first, then the body's bulk; the same mass leaves the body. Returns what was removed.
+    /// </summary>
+    internal long Extract(string materialId, long kg, double bearingRad)
+    {
+        var taken = Math.Min(kg, DepositAt(materialId, bearingRad));
         if (taken <= 0) return 0;
-        var had = _deposits.TryGetValue(materialId, out var d) ? d : 0;
+        var site = SiteAt(bearingRad);
+        var had = site?.Deposits.GetValueOrDefault(materialId) ?? 0;
         var fromDeposit = Math.Min(taken, had);
         if (fromDeposit > 0)
         {
-            if (had - fromDeposit == 0) _deposits.Remove(materialId);
-            else _deposits[materialId] = had - fromDeposit;
+            if (had - fromDeposit == 0) site!.Deposits.Remove(materialId);
+            else site!.Deposits[materialId] = had - fromDeposit;
+            var total = _deposits[materialId] - fromDeposit; // the body's total is the sum of its sites
+            if (total == 0) _deposits.Remove(materialId);
+            else _deposits[materialId] = total;
         }
         MassKg -= taken; // the rest came from the bulk, which is simply the body's mass
         return taken;
@@ -184,10 +257,15 @@ public sealed class CelestialBodyState
     public double SunlightFactor => StarClass switch { StarClass.Red => 0.5, StarClass.Blue => 2.0, _ => 1.0 };
 
     /// <summary>
-    /// Whether the player has visited it (a piloted ship within <see cref="SectorState.SurveyRangeM"/>).
-    /// Mineable bodies start unsurveyed; jobs and structures can only use surveyed bodies (docs/06).
+    /// Whether every site has been surveyed (#70; bodies that can't be mined count as surveyed).
+    /// Setting it marks all sites (scouts circle a body; tests and scenarios). Jobs and structures can use
+    /// a body once any site is surveyed (<see cref="AnySiteSurveyed"/>), and mining jobs only its surveyed sites.
     /// </summary>
-    public bool Surveyed { get; internal set; }
+    public bool Surveyed
+    {
+        get => !IsMineable || _sites.All(s => s.Surveyed);
+        internal set { foreach (var site in _sites) site.Surveyed = value; }
+    }
     public string Name { get; }
     public BodyKind Kind { get; }
 
