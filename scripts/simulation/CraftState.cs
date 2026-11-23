@@ -135,6 +135,9 @@ public sealed class CraftState
     /// <summary>What repairs on this craft are doing this tick, for display. Not saved.</summary>
     public string? RepairStatus { get; internal set; }
 
+    /// <summary>Thrust the tugs docked to it gave this tick (#29), for display. Not saved.</summary>
+    public double TugThrustN { get; internal set; }
+
     /// <summary>Fraction of a kg of electronics the lab has used but not yet taken from stock (#37). Saved.</summary>
     public double LabRemainderKg { get; internal set; }
 

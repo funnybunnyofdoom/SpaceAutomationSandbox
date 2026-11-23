@@ -192,6 +192,14 @@ public partial class Main : Node2D
             for (var i = 0; i < 300 * FixedStepClock.TicksPerSecond; i++) _sector.Step();
         }
         if (System.Array.IndexOf(args, "--demo-warp") >= 0) DemoWarp();
+        if (System.Array.IndexOf(args, "--demo-tug") >= 0 && _player != null && _sector.Crafts.FirstOrDefault(c => c.IsShipyard) is { } tugYard)
+        {
+            // Dev/test hook (#29): the player's ship docked at the yard as a tug, and the yard flown.
+            _player.Position = _sector.BerthPosition(tugYard, 0, _player.CollisionRadiusM, tugYard.Position);
+            _player.Velocity = tugYard.Velocity;
+            _sector.TryDock(_player.Id);
+            Pilot(tugYard.Id);
+        }
         if (System.Array.IndexOf(args, "--demo-craters") >= 0 && _player is { IsLanded: true } miner)
         {
             // Dev/test hook (#28): big pits around where the player is mining, to see craters (no mass removed).
@@ -598,6 +606,9 @@ public partial class Main : Node2D
                          + " - " + (p.RepairStatus ?? "dock at a shipyard to repair") + "\n"
                        : "")
                    + (p.YardStatus is { } yardWork ? $"SHIPYARD WORK: {yardWork}\n" : "")
+                   + (_sector.TugsOf(p.Id) is { Count: > 0 } tugs
+                       ? $"TUGS: {tugs.Count} docked{(p.TugThrustN > 0 ? $", pushing {p.TugThrustN / 1000:0} kN" : " (they push the way they face)")}, moving {_sector.MovingMassKg(p) / 1000:0} t\n"
+                       : "")
                    + (p.GateStatus is { } gateNow ? $"WARP: {gateNow}{(p.JumpRequestTick > 0 ? " - N to cancel" : "")}\n"
                        : p.IsDocked && SectorState.IsGate(_sector.GetCraft(p.DockedToCraftId)) ? $"WARP GATE {_sector.GetCraft(p.DockedToCraftId).Name} - N to jump\n" : "")
                    + (_sector.Stars.Count > 1 && _sector.StarAt(p.Position) is { } here ? $"system: {here.Name}\n" : "")
@@ -621,7 +632,9 @@ public partial class Main : Node2D
                    + (p.RailOrbit is { } rail
                        ? (p.Stats.TotalThrustN > 0
                            ? $"PARKED in orbit around {_sector.GetBody(rail.Parent).Name} - thrust to leave the parking orbit\n"
-                           : $"On a fixed orbit around {_sector.GetBody(rail.Parent).Name} (no thrusters)\n")
+                           : _sector.TugsOf(p.Id).Count > 0
+                               ? $"PARKED in orbit around {_sector.GetBody(rail.Parent).Name} - thrust or strafe the way a tug faces to move it\n"
+                               : $"On a fixed orbit around {_sector.GetBody(rail.Parent).Name} (no thrusters: dock idle ships to it as tugs to move it)\n")
                        : "");
 
         string target;

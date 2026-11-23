@@ -194,6 +194,7 @@ public sealed partial class SectorState
         BeginPowerTick();
         StepLifeSupport(); // crew first: a craft without its crew can't fly or work this tick (#11)
         List<(CraftState, Vector2D)>? docked = null;
+        BuildAttached(); // what's docked to what: it moves with it, and idle ships push (#29)
         foreach (var craft in _crafts)
         {
             var brakeAgainst = craft.BrakeAgainst; // this tick only
@@ -217,7 +218,13 @@ public sealed partial class SectorState
             var thrustPowered = Operational(craft) && TryUsePower(craft, ThrustEnergyKJ(craft, reference));
             // Gravity pulls free-flying craft only; landed, docked and parked ones are held in place.
             var gravity = craft.IsDocked || craft.IsLanded || craft.IsOnRails ? Vector2D.Zero : GravityAt(craft.Position, TimeS);
-            FlightModel.Step(craft, FixedStepClock.TickSeconds, reference, thrustPowered, gravity);
+            FlightModel.Step(craft, FixedStepClock.TickSeconds, reference, thrustPowered, gravity, MovingMassKg(craft));
+            var tugs = TugDeltaV(craft, reference, FixedStepClock.TickSeconds);
+            if (tugs.Length > 0)
+            {
+                craft.Velocity += tugs;
+                craft.Position += tugs * FixedStepClock.TickSeconds;
+            }
 
             // Docked ships follow their station, which may move later in this loop: settled below.
             if (craft.IsDocked) (docked ??= new()).Add((craft, craft.Velocity - velocityBefore));
