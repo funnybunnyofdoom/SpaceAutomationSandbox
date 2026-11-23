@@ -62,7 +62,9 @@ public partial class ShipyardPanel : PanelContainer
         OffsetTop = 12;
         OffsetBottom = -12;
 
-        // Everything scrolls: the panel holds more than fits at 720p.
+        // Everything scrolls: the panel holds more than fits at 720p. Nothing may be wider than the panel
+        // (#69: an unwrapped line widened it, pushing the Order button's centred label out of view), so
+        // long text wraps and pickers clip long names.
         var outer = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         AddChild(outer);
         var box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -73,18 +75,18 @@ public partial class ShipyardPanel : PanelContainer
         title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(title);
 
-        _yardPicker = new OptionButton { FocusMode = FocusModeEnum.None };
+        _yardPicker = new OptionButton { FocusMode = FocusModeEnum.None, ClipText = true, CustomMinimumSize = new Vector2(340, 0) };
         _yardPicker.ItemSelected += _ => Refresh(force: true);
         box.AddChild(_yardPicker);
 
-        _stock = new Label();
+        _stock = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0) };
         box.AddChild(_stock);
 
         box.AddChild(new Label { Text = "Design (to build, or to refit a craft to):" });
-        _designPicker = new OptionButton { FocusMode = FocusModeEnum.None };
+        _designPicker = new OptionButton { FocusMode = FocusModeEnum.None, ClipText = true, CustomMinimumSize = new Vector2(340, 0) };
         _designPicker.ItemSelected += _ => Refresh(force: true);
         box.AddChild(_designPicker);
-        _bill = new Label();
+        _bill = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0) };
         box.AddChild(_bill);
 
         var order = new Button { Text = "Order", FocusMode = FocusModeEnum.None };
@@ -116,6 +118,14 @@ public partial class ShipyardPanel : PanelContainer
     {
         RefreshDesignList();
         Visible = true;
+        Refresh(force: true);
+    }
+
+    /// <summary>Dev/test: picks the design at this index in the list (if there is one).</summary>
+    public void SelectDesign(int index)
+    {
+        if (index < 0 || index >= _designPicker.ItemCount) return;
+        _designPicker.Select(index);
         Refresh(force: true);
     }
 
@@ -317,7 +327,11 @@ public partial class ShipyardPanel : PanelContainer
         foreach (var kit in yard.Kits)
         {
             var row = new HBoxContainer();
-            row.AddChild(new Label { Text = $"{kit.Name}  {kit.MassKg / 1000.0:0.0} t{(kit.NeedsSurface ? "  (surface)" : "")}", SizeFlagsHorizontal = SizeFlags.ExpandFill });
+            row.AddChild(new Label
+            {
+                Text = $"{kit.Name}  {kit.MassKg / 1000.0:0.0} t{(kit.NeedsSurface ? "  (surface)" : "")}", SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(200, 0),
+            });
             if (!kit.NeedsSurface)
             {
                 var deploy = new Button { Text = "Deploy here", FocusMode = FocusModeEnum.None };
@@ -348,7 +362,11 @@ public partial class ShipyardPanel : PanelContainer
             foreach (var order in yard.BuildQueue)
             {
                 var row = new HBoxContainer();
-                row.AddChild(new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill, Name = "Text" });
+                row.AddChild(new Label
+                {
+                    SizeFlagsHorizontal = SizeFlags.ExpandFill, Name = "Text",
+                    AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(240, 0),
+                });
                 var cancel = new Button { Text = "Cancel", FocusMode = FocusModeEnum.None };
                 var orderId = order.Id;
                 var yardId = yard.Id;

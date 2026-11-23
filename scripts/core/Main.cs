@@ -213,6 +213,8 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-editor") >= 0) OpenEditor();
         if (System.Array.IndexOf(args, "--open-cargo") >= 0) _cargoPanel?.Open();
         if (System.Array.IndexOf(args, "--open-shipyard") >= 0) _shipyardPanel?.Open();
+        if (args.FirstOrDefault(a => a.StartsWith("--shipyard-design=")) is { } designArg && int.TryParse(designArg["--shipyard-design=".Length..], out var designIndex))
+            _shipyardPanel?.SelectDesign(designIndex);
         if (System.Array.IndexOf(args, "--open-fleet") >= 0) _fleetPanel?.Open();
         if (System.Array.IndexOf(args, "--open-diagnostics") >= 0) _diagnosticsPanel?.Open();
         if (System.Array.IndexOf(args, "--open-settings") >= 0) _settingsPanel?.Open();
