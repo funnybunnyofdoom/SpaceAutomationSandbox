@@ -51,6 +51,7 @@ public static class InputActions
     public const string Help = "open_help";
     public const string Jump = "ship_warp_jump";
     public const string Research = "open_research";
+    public const string PanelFocus = "panel_focus";
 
     /// <summary>Every action the player can rebind, in the order the Controls screen lists them, with its name and group.</summary>
     public static readonly (string Action, string Name, string Group)[] All =
@@ -64,6 +65,7 @@ public static class InputActions
         (Editor, "Blueprint editor", "Panels"), (Shipyard, "Shipyard", "Panels"), (Fleet, "Fleet", "Panels"), (Cargo, "Cargo", "Panels"),
         (Job, "Job", "Panels"), (Research, "Research", "Panels"), (Settings, "Settings", "Panels"), (Debug, "Debug menu", "Panels"),
         (Diagnostics, "Diagnostics", "Panels"), (Help, "Keys and help", "Panels"),
+        (PanelFocus, "Use the open panel with keys / controller", "Panels"),
         (ClosePanels, "Close panels / pause menu", "Game"), (TimeFaster, "Time faster", "Game"), (TimeSlower, "Time slower", "Game"),
         (TimePause, "Pause time", "Game"), (QuickSave, "Quicksave", "Game"), (QuickLoad, "Quickload", "Game"), (Fullscreen, "Fullscreen", "Game"),
     };
@@ -106,6 +108,15 @@ public static class InputActions
         Add(Help, 0.5f, Keys(Key.H, Key.F1));
         Add(Jump, 0.5f, Keys(Key.N));
         Add(Research, 0.5f, Keys(Key.R));
+        Add(PanelFocus, 0.5f, Keys(Key.Quoteleft), Pad(JoyButton.Back)); // #68
+        // Menus with a controller (#68): A chooses, B goes back (Godot's own UI actions, not rebindable).
+        AddEvent("ui_accept", Pad(JoyButton.A));
+        AddEvent("ui_cancel", Pad(JoyButton.B));
+    }
+
+    private static void AddEvent(string action, InputEvent e)
+    {
+        if (InputMap.HasAction(action) && !InputMap.ActionGetEvents(action).Any(x => Same(x, e))) InputMap.ActionAddEvent(action, e);
     }
 
     /// <summary>Throttle 0..1 (analog on a trigger), turn −1..1 (analog on the stick), brake on/off.</summary>

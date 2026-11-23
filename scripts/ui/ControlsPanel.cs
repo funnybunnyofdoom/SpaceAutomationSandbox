@@ -26,7 +26,7 @@ public partial class ControlsPanel : Control
     /// <summary>The action and kind of input being waited for, if any.</summary>
     private (string Action, string Name, bool Controller)? _waiting;
 
-    private static readonly Color Warning = new(1f, 0.7f, 0.3f);
+    private static Color Warning => Palette.Warning; // colourblind-safe option (#68)
 
     public ControlsPanel(GameSettings settings, Action changed)
     {
@@ -136,7 +136,7 @@ public partial class ControlsPanel : Control
         if (!Visible) return;
         if (_waiting is not { } waiting)
         {
-            if (@event is InputEventKey { Pressed: true, Echo: false, PhysicalKeycode: Key.Escape })
+            if (@event.IsActionPressed("ui_cancel")) // Esc, or B on a controller
             {
                 Close();
                 GetViewport().SetInputAsHandled();
@@ -209,10 +209,13 @@ public partial class ControlsPanel : Control
             var waiting = _waiting is { } w && w.Action == action;
             var keyEvents = InputActions.Events(action).Where(e => !InputActions.IsController(e)).ToList();
             var padEvents = InputActions.Events(action).Where(InputActions.IsController).ToList();
-            keys.Text = waiting && !_waiting!.Value.Controller ? "press a key…" : keyEvents.Count > 0 ? InputActions.KeyText(action) : "—";
-            pad.Text = waiting && _waiting!.Value.Controller ? "press a button…" : padEvents.Count > 0 ? InputActions.PadText(action) : "—";
-            keys.Modulate = keyEvents.Any(e => InputActions.ActionsUsing(e, action).Any()) ? Warning : Colors.White;
-            pad.Modulate = padEvents.Any(e => InputActions.ActionsUsing(e, action).Any()) ? Warning : Colors.White;
+            var keyClash = keyEvents.Any(e => InputActions.ActionsUsing(e, action).Any());
+            var padClash = padEvents.Any(e => InputActions.ActionsUsing(e, action).Any());
+            // A "!" marks a clash as well as the colour (#68).
+            keys.Text = waiting && !_waiting!.Value.Controller ? "press a key…" : keyEvents.Count > 0 ? (keyClash ? "! " : "") + InputActions.KeyText(action) : "—";
+            pad.Text = waiting && _waiting!.Value.Controller ? "press a button…" : padEvents.Count > 0 ? (padClash ? "! " : "") + InputActions.PadText(action) : "—";
+            keys.Modulate = keyClash ? Warning : Colors.White;
+            pad.Modulate = padClash ? Warning : Colors.White;
             keys.TooltipText = keys.Modulate == Warning ? "Also used by: " + string.Join(", ", keyEvents.SelectMany(e => InputActions.ActionsUsing(e, action)).Distinct()) : "";
             pad.TooltipText = pad.Modulate == Warning ? "Also used by: " + string.Join(", ", padEvents.SelectMany(e => InputActions.ActionsUsing(e, action)).Distinct()) : "";
             reset.Disabled = InputActions.IsDefault(action);

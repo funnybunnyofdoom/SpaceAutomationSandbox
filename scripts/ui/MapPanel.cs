@@ -135,7 +135,7 @@ public partial class MapPanel : PanelContainer
                     Text = $"{star.Name} system, {kind}" + (star.Id == here?.Id ? " (you are here)" : " (by warp)"),
                     Modulate = new Color(0.75f, 0.85f, 1f), SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 });
-                var view = new Button { Text = "View map", FocusMode = FocusModeEnum.None };
+                var view = new Button { Text = "View map", FocusMode = FocusModeEnum.None, TooltipText = "Show this star system's map" };
                 var starId = star.Id;
                 view.Pressed += () => _viewSystem(starId);
                 header.AddChild(view);
@@ -167,7 +167,7 @@ public partial class MapPanel : PanelContainer
         var label = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipText = true };
         row.AddChild(new Label { Text = indent });
         row.AddChild(label);
-        var button = new Button { Text = "Target", FocusMode = FocusModeEnum.None };
+        var button = new Button { Text = "Target", FocusMode = FocusModeEnum.None, TooltipText = "Target it: the HUD shows distance and speed, and brake matches its motion" };
         button.Pressed += target;
         row.AddChild(button);
         _rows.AddChild(row);

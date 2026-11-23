@@ -15,11 +15,14 @@ public partial class PauseMenu : Control
     public event Action? LoadChosen;
     public event Action? SettingsChosen;
     public event Action? HelpChosen;
+    public event Action? GoalsToggled;
+    public event Action? GoalsRestarted;
     public event Action? QuitToMenuChosen;
     public event Action? QuitToDesktopChosen;
 
     private Button _resume = null!;
     private Label _about = null!;
+    private Button _goals = null!;
 
     public PauseMenu()
     {
@@ -47,6 +50,8 @@ public partial class PauseMenu : Control
         Item(box, "Load", () => LoadChosen?.Invoke());
         Item(box, "Settings", () => SettingsChosen?.Invoke());
         Item(box, "Help", () => HelpChosen?.Invoke());
+        _goals = Item(box, "Show goal list", () => GoalsToggled?.Invoke());
+        Item(box, "Restart goal list", () => GoalsRestarted?.Invoke());
         Item(box, "Quit to main menu", () => QuitToMenuChosen?.Invoke());
         Item(box, "Quit to desktop", () => QuitToDesktopChosen?.Invoke());
     }
@@ -60,9 +65,13 @@ public partial class PauseMenu : Control
         return button;
     }
 
+    /// <summary>Focus back on the first item (after a screen opened from the menu closes).</summary>
+    public void FocusFirst() => _resume.GrabFocus();
+
     /// <summary>Shows the menu; <paramref name="about"/> is the game's name, seed and play time.</summary>
-    public void Open(string about = "")
+    public void Open(string about = "", bool goalsOn = false)
     {
+        _goals.Text = goalsOn ? "Hide goal list" : "Show goal list";
         _about.Text = about;
         Visible = true;
         _resume.GrabFocus();

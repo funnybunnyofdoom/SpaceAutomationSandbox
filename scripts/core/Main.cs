@@ -126,7 +126,8 @@ public partial class Main : Node2D
         _uiRoot.AddChild(_hud);
         _audio = new AudioDirector(_settings);
         AddChild(_audio);
-        _settingsPanel = new SettingsPanel(_settings, () => { _settings.ApplyWindow(); _settings.Save(); LayoutUi(); _audio.ApplySettings(); }) { Visible = false };
+        ApplyTheme(); // text size, focus highlight, colours (#68)
+        _settingsPanel = new SettingsPanel(_settings, () => { _settings.ApplyWindow(); _settings.Save(); LayoutUi(); _audio.ApplySettings(); ApplyTheme(); }) { Visible = false };
         _uiRoot.AddChild(_settingsPanel);
         _controls = new ControlsPanel(_settings, () => { _settings.Save(); _hud.RefreshHint(); });
         _uiRoot.AddChild(_controls);
@@ -136,7 +137,11 @@ public partial class Main : Node2D
             _uiRoot.MoveChild(_controls, _uiRoot.GetChildCount() - 1);
             _controls.Open();
         };
-        _controls.Closed += () => _settingsPanel.Open(); // back to Settings
+        _controls.Closed += () => // back to Settings
+        {
+            _settingsPanel.Open();
+            if (InMenu || _pause.Visible) EnterPanelNav(_settingsPanel, fromMenu: true);
+        };
 
         LoadDefinitions();
         if (_catalog != null)
@@ -187,7 +192,7 @@ public partial class Main : Node2D
             // Dev/test: choose from the menu without clicking.
             if (System.Array.IndexOf(startArgs, "--title-pick=new") >= 0) LeaveTitle(StartNewGame);
             if (System.Array.IndexOf(startArgs, "--title-pick=setup") >= 0) { _uiRoot.MoveChild(_newGame, _uiRoot.GetChildCount() - 1); _newGame.Open(); } // #62 check
-            if (System.Array.IndexOf(startArgs, "--title-pick=continue") >= 0) LeaveTitle(() => { if (!LoadNewest()) StartNewGame(); });
+            if (System.Array.IndexOf(startArgs, "--title-pick=continue") >= 0) ContinueFromTitle();
             return;
         }
         // Continue where the player left off; a new game only if there's no usable save.
@@ -266,6 +271,16 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-saves=load") >= 0) { OpenPause(); _pause.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Load); }
         if (System.Array.IndexOf(args, "--open-galaxy") >= 0) { if (!_mapMode) ToggleMap(); _galaxyView = true; }
         if (System.Array.IndexOf(args, "--open-help") >= 0) _hud.ToggleHelp();
+        // #68 checks: use the open panel with keys/controller; text size and colours for this run only (not saved).
+        if (System.Array.IndexOf(args, "--panel-nav") >= 0 && SidePanels.Where(p => p is { Visible: true }).OrderByDescending(p => p!.GetIndex()).FirstOrDefault() is { } navPanel)
+            EnterPanelNav(navPanel, fromMenu: false);
+        if (args.FirstOrDefault(a => a.StartsWith("--text-scale=")) is { } textArg && float.TryParse(textArg["--text-scale=".Length..], System.Globalization.CultureInfo.InvariantCulture, out var textScale))
+        {
+            _settings.TextScale = textScale;
+            ApplyTheme();
+        }
+        if (System.Array.IndexOf(args, "--colorblind") >= 0) { _settings.ColorblindSafe = true; ApplyTheme(); }
+        if (System.Array.IndexOf(args, "--goals") >= 0) { _goalsOn = true; _goalsDone.Add("survey"); } // #65 check: one goal done
         if (System.Array.IndexOf(args, "--demo-crash") >= 0 && _player != null)
         {
             // Dev/test hook: drop the player onto Home tail first at 30 m/s, to see damage (#34).
@@ -364,7 +379,7 @@ public partial class Main : Node2D
     private bool HasUnsavedChanges => _player != null && !InMenu && (_sector.Tick != _savedTick || _changedSinceSave);
 
     /// <summary>The pause menu, the save screen or a question is showing: the game waits.</summary>
-    private bool ModalOpen => _pause is { Visible: true } || _saveScreen is { Visible: true } || _confirm is { Visible: true } || _controls is { Visible: true };
+    private bool ModalOpen => _loadingScreen is { Visible: true } || _pause is { Visible: true } || _saveScreen is { Visible: true } || _confirm is { Visible: true } || _controls is { Visible: true };
 
     private bool _pausedBeforeMenu;
 
@@ -372,6 +387,9 @@ public partial class Main : Node2D
     private string _gameName = "New game";
 
     private NewGameScreen _newGame = null!;
+
+    /// <summary>Shown while a save loads (#67).</summary>
+    private LoadingScreen _loadingScreen = null!;
 
     private void BuildMenus()
     {
@@ -385,21 +403,32 @@ public partial class Main : Node2D
         };
         _saveScreen.LoadChosen += path => AskIfUnsaved("Load this save? Progress since your last save will be lost.", () =>
         {
-            if (!LoadFrom(path)) { _saveScreen.ShowMessage(_status); return; }
-            _saveScreen.Visible = false;
-            if (InMenu) LeaveTitle(() => { });
-            else ResumeFromPause();
+            LoadWithScreen(path, "save", ok =>
+            {
+                if (!ok) { _saveScreen.ShowMessage(_status); return; }
+                _saveScreen.Visible = false;
+                if (InMenu) LeaveTitle(() => { });
+                else ResumeFromPause();
+            });
         });
         _saveScreen.Closed += () => { if (InMenu) ShowTitle(); else OpenPauseAgain(); };
         _newGame = new NewGameScreen();
-        _newGame.StartChosen += (name, seed) => LeaveTitle(() => StartNewGame(seed, name));
+        _newGame.StartChosen += (name, seed, goals) => LeaveTitle(() => { StartNewGame(seed, name); _goalsOn = goals; });
         _newGame.BackChosen += ShowTitle;
         _pause = new PauseMenu();
         _pause.ResumeChosen += ResumeFromPause;
         _pause.SaveChosen += () => { _pause.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Save); };
         _pause.LoadChosen += () => { _pause.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Load); };
-        _pause.SettingsChosen += () => _settingsPanel?.Open();
+        _pause.SettingsChosen += () => { _settingsPanel!.Open(); EnterPanelNav(_settingsPanel, fromMenu: true); };
         _pause.HelpChosen += () => { ResumeFromPause(); _hud.ToggleHelp(); };
+        _pause.GoalsToggled += () => { _goalsOn = !_goalsOn; _changedSinceSave = true; ResumeFromPause(); }; // #65
+        _pause.GoalsRestarted += () => _confirm.Ask("Restart the goal list from the first goal?", ("Restart", () =>
+        {
+            _goalsDone.Clear();
+            _goalsOn = true;
+            _changedSinceSave = true;
+            ResumeFromPause();
+        }));
         _pause.QuitToMenuChosen += () => AskToQuit("Quit to the main menu?", ReturnToTitle);
         _pause.QuitToDesktopChosen += () => AskToQuit("Quit the game?", () => GetTree().Quit());
         // Above everything else: pause menu, then the save screen, then questions on top.
@@ -408,6 +437,8 @@ public partial class Main : Node2D
         _uiRoot.AddChild(_newGame);
         if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1);
         _uiRoot.AddChild(_confirm);
+        _loadingScreen = new LoadingScreen(); // over everything (#67)
+        _uiRoot.AddChild(_loadingScreen);
         // Any button pressed in the game's own panels counts as a change to save (not in the menus themselves).
         GetTree().NodeAdded += node =>
         {
@@ -426,7 +457,7 @@ public partial class Main : Node2D
     {
         _pausedBeforeMenu = _warp.Paused;
         _warp.Paused = true;
-        _pause.Open(_sector is null ? "" : $"{_gameName}   ·   seed {_sector.Seed}   ·   played {(int)(_playTimeS / 3600)} h {(int)(_playTimeS / 60) % 60} min");
+        _pause.Open(_sector is null ? "" : $"{_gameName}   ·   seed {_sector.Seed}   ·   played {(int)(_playTimeS / 3600)} h {(int)(_playTimeS / 60) % 60} min", _goalsOn);
     }
 
     /// <summary>Back to the pause menu from a screen opened from it (the game stays paused as it was).</summary>
@@ -480,7 +511,7 @@ public partial class Main : Node2D
         if (_player == null) return false;
         try
         {
-            var header = new SaveHeader(name, System.DateTime.UtcNow.ToString("O"), _playTimeS, _sector.Tick, _sector.Seed, _gameName);
+            var header = new SaveHeader(name, System.DateTime.UtcNow.ToString("O"), _playTimeS, _sector.Tick, _sector.Seed, _gameName, _goalsOn, _goalsDone.ToArray());
             SaveStore.Write(path, SaveGameSerializer.ToJson(_sector, _player.Id, header));
             _savedTick = _sector.Tick;
             _changedSinceSave = false;
@@ -501,22 +532,56 @@ public partial class Main : Node2D
         if (_catalog == null) return false;
         try
         {
-            var loaded = SaveGameSerializer.FromJson(System.IO.File.ReadAllText(path), _catalog);
-            _sector = loaded.Sector;
-            _player = loaded.PlayerCraftId.IsNone ? null : _sector.GetCraft(loaded.PlayerCraftId);
-            _playTimeS = loaded.Header?.PlayTimeS ?? 0;
-            _gameName = loaded.Header is { GameName.Length: > 0 } h ? h.GameName : loaded.Header?.Name ?? System.IO.Path.GetFileNameWithoutExtension(path);
-            _savedTick = _sector.Tick;
-            _changedSinceSave = false;
-            _sinceAutosaveS = 0;
-            ShowStatus($"Loaded \"{loaded.Header?.Name ?? System.IO.Path.GetFileNameWithoutExtension(path)}\" at tick {_sector.Tick}.");
-            return true;
+            return ApplyLoaded(SaveGameSerializer.FromJson(System.IO.File.ReadAllText(path), _catalog), path);
         }
         catch (System.Exception e)
         {
             ShowStatus($"LOAD FAILED ({System.IO.Path.GetFileName(path)}): {e.Message}");
             GD.PushError(_status);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Loads a slot with the loading screen (#67): the file is read and parsed on a worker thread (the
+    /// simulation and save code don't touch Godot), then the game switches over here on the main thread.
+    /// <paramref name="done"/> gets true on success; on failure the current game is unchanged.
+    /// </summary>
+    private async void LoadWithScreen(string path, string what, System.Action<bool> done)
+    {
+        if (_catalog == null || _loadingScreen.Visible) return;
+        var catalog = _catalog;
+        _loadingScreen.Begin(what);
+        try
+        {
+            var loaded = await System.Threading.Tasks.Task.Run(() => SaveGameSerializer.FromJson(System.IO.File.ReadAllText(path), catalog));
+            _loadingScreen.End();
+            done(ApplyLoaded(loaded, path));
+        }
+        catch (System.Exception e)
+        {
+            _loadingScreen.End();
+            ShowStatus($"LOAD FAILED ({System.IO.Path.GetFileName(path)}): {e.Message}");
+            GD.PushError(_status);
+            done(false);
+        }
+    }
+
+    private bool ApplyLoaded(LoadedGame loaded, string path)
+    {
+        {
+            _sector = loaded.Sector;
+            _player = loaded.PlayerCraftId.IsNone ? null : _sector.GetCraft(loaded.PlayerCraftId);
+            _playTimeS = loaded.Header?.PlayTimeS ?? 0;
+            _gameName = loaded.Header is { GameName.Length: > 0 } h ? h.GameName : loaded.Header?.Name ?? System.IO.Path.GetFileNameWithoutExtension(path);
+            _goalsOn = loaded.Header?.GoalsOn ?? false; // #65
+            _goalsDone.Clear();
+            foreach (var id in loaded.Header?.GoalsDone ?? System.Array.Empty<string>()) _goalsDone.Add(id);
+            _savedTick = _sector.Tick;
+            _changedSinceSave = false;
+            _sinceAutosaveS = 0;
+            ShowStatus($"Loaded \"{loaded.Header?.Name ?? System.IO.Path.GetFileNameWithoutExtension(path)}\" at tick {_sector.Tick}.");
+            return true;
         }
     }
 
@@ -563,19 +628,26 @@ public partial class Main : Node2D
     }
 
     /// <summary>Shows the title screen: no game runs behind it (the HUD and panels are hidden).</summary>
+    /// <summary>Continue: the newest save, with the loading screen (#67); on failure the menu stays and says why.</summary>
+    private void ContinueFromTitle()
+    {
+        if (SaveStore.Newest(SavesFolder) is not { } newest) { _title!.Open(SaveSummary(), "No save to continue."); return; }
+        LoadWithScreen(newest.Path, newest.Name, ok =>
+        {
+            if (ok) LeaveTitle(() => { });
+            else _title!.Open(SaveSummary(), _status);
+        });
+    }
+
     private void ShowTitle()
     {
         if (_title == null)
         {
             _title = new TitleScreen();
-            _title.ContinueChosen += () =>
-            {
-                if (LoadNewest()) LeaveTitle(() => { });
-                else _title.Open(SaveSummary(), _status); // stays on the menu and says why
-            };
+            _title.ContinueChosen += ContinueFromTitle;
             _title.LoadChosen += () => { _title.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Load); _title.Visible = true; _uiRoot.MoveChild(_saveScreen, _uiRoot.GetChildCount() - 1); _uiRoot.MoveChild(_confirm, _uiRoot.GetChildCount() - 1); };
             _title.NewGameChosen += () => { _uiRoot.MoveChild(_newGame, _uiRoot.GetChildCount() - 1); _newGame.Open(); }; // name and seed first (#62)
-            _title.SettingsChosen += () => _settingsPanel?.Open();
+            _title.SettingsChosen += () => { _settingsPanel!.Open(); EnterPanelNav(_settingsPanel, fromMenu: true); };
             if (_settingsPanel != null) _settingsPanel.Closed += () => { if (InMenu) ShowTitle(); }; // focus back on the menu
             _title.QuitChosen += () => GetTree().Quit();
             _uiRoot.AddChild(_title);
@@ -609,6 +681,8 @@ public partial class Main : Node2D
     private void StartNewGame(ulong seed, string name)
     {
         _gameName = name;
+        _goalsOn = false;
+        _goalsDone.Clear();
         _player = null;
         _playTimeS = 0;
         _sinceAutosaveS = 0;
@@ -673,6 +747,11 @@ public partial class Main : Node2D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (PanelNavInput(@event)) // using a panel with keys or a controller (#68)
+        {
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (InMenu)
         {
             // The menu takes the keys (its buttons have focus); Esc closes Settings opened from it.
@@ -690,7 +769,7 @@ public partial class Main : Node2D
         if (ModalOpen)
         {
             // The pause menu, save screen and questions have focus; Esc (or Start) on the pause menu resumes.
-            if (Pressed(InputActions.ClosePanels) && _pause.Visible && !_confirm.Visible)
+            if ((Pressed(InputActions.ClosePanels) || @event.IsActionPressed("ui_cancel")) && _pause.Visible && !_confirm.Visible && !_saveScreen.Visible)
             {
                 if (_settingsPanel is { Visible: true }) _settingsPanel.Visible = false;
                 else ResumeFromPause();
@@ -721,7 +800,7 @@ public partial class Main : Node2D
         {
             var quick = SaveStore.QuickPath(SavesFolder);
             if (!System.IO.File.Exists(quick)) ShowStatus($"No quicksave yet ({InputActions.Key1(InputActions.QuickSave)} makes one).");
-            else AskIfUnsaved("Load the quicksave? Progress since your last save will be lost.", () => LoadFrom(quick));
+            else AskIfUnsaved("Load the quicksave? Progress since your last save will be lost.", () => LoadWithScreen(quick, "quicksave", _ => { }));
         }
         else if (Pressed(InputActions.Editor)) OpenEditor();
         else if (Pressed(InputActions.Shipyard)) Toggle(_shipyardPanel, () => _shipyardPanel!.Open());
@@ -797,6 +876,8 @@ public partial class Main : Node2D
     public override void _Process(double delta)
     {
         _audio.Watch(InMenu ? null : _sector, InMenu ? null : _player, delta); // ship sounds; music plays throughout (#64)
+        UpdatePanelNav();
+        UpdateGoals(delta);
         if (InMenu)
         {
             QueueRedraw(); // just the starfield
@@ -808,7 +889,7 @@ public partial class Main : Node2D
         // A ship running a job is flown by it; the keyboard only flies ships without one.
         // Typing into a text/number box (e.g. the debug menu) mustn't fly the ship either.
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit;
-        if (_player is { IsAutomated: false }) _player.Controls = EditorOpen || typing || _controls is { Visible: true } ? ShipControls.Idle : ReadControls();
+        if (_player is { IsAutomated: false }) _player.Controls = EditorOpen || typing || PanelNavActive || _controls is { Visible: true } ? ShipControls.Idle : ReadControls();
 
         if (!ModalOpen && !_warp.Paused)
         {
@@ -868,9 +949,9 @@ public partial class Main : Node2D
     {
         var status = "";
         if (Time.GetTicksMsec() < _statusUntilMs) status += $">> {_status}\n";
-        if (_warp.Speed != 1 || _warp.Paused) status += $"TIME {_warp}   ([ slower, ] faster, P pause)\n";
+        if (_warp.Speed != 1 || _warp.Paused) status += $"TIME {_warp}   ({InputActions.Key1(InputActions.TimeSlower)} slower, {InputActions.Key1(InputActions.TimeFaster)} faster, {InputActions.Key1(InputActions.TimePause)} pause)\n";
         if (!_sector.Tuning.IsDefault) status += $"DEBUG: {_sector.Tuning}  (F3)\n";
-        if (_player is not { } p) return new HudSections(status + _setupError, "", ShipyardSummary(), "");
+        if (_player is not { } p) return new HudSections(status + _setupError, "", ShipyardSummary(), "", GoalsText());
 
         var headingDeg = Mathf.PosMod(Mathf.RadToDeg((float)p.HeadingRad), 360f);
         var ship = $"{p.Name} - {p.Design.Name}: {p.SpeedMps:0.0} m/s, heading {headingDeg:000}°, "
@@ -948,7 +1029,7 @@ public partial class Main : Node2D
         var (nearest, nearestSurface) = _sector.NearestBody(p.Position);
         target += $"nearest: {Describe(nearest)}, surface {FormatDistance(nearestSurface)}";
 
-        return new HudSections(status, ship, ShipyardSummary(), target);
+        return new HudSections(status, ship, ShipyardSummary(), target, GoalsText());
     }
 
     private string LandedLine(CraftState p)
@@ -1109,6 +1190,8 @@ public partial class Main : Node2D
             // Damaged parts (#34) darken towards black-red as they lose health.
             if (craft.PartHealth.TryGetValue(cell.Pos, out var health)) colour = colour.Lerp(new Color(0.25f, 0.05f, 0.05f), (float)(1 - health) * 0.8f);
             DrawRect(rect, colour);
+            if (craft.PartHealth.TryGetValue(cell.Pos, out var cracked) && cracked < 0.75 && cellPx >= 4f) // a crack marks damage beyond the darker colour (#68)
+                DrawLine(rect.Position + rect.Size * new Vector2(0.2f, 0.15f), rect.Position + rect.Size * new Vector2(0.75f, 0.85f), new Color(0, 0, 0, 0.7f), Mathf.Max(1f, cellPx / 8));
 
             // Only rear-facing thrusters fire on throttle (docs/06); others stay dark for now.
             if (cell.PartId == "thruster" && cell.Rotation == 0 && craft.Controls.Throttle > 0 && !craft.Controls.Brake)

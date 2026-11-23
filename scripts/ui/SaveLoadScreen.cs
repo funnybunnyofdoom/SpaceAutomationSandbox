@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Save;
 
 namespace SpaceAutomationSandbox.UI;
@@ -155,7 +156,7 @@ public partial class SaveLoadScreen : Control
             var info = slot.Broken
                 ? $"{slot.Name}  ({kind}, {when})\n  BROKEN: {slot.Error}"
                 : $"{slot.Name}  ({kind}, {when})" + (slot.Header is { } h ? $"\n  played {Played(h.PlayTimeS)}, tick {h.Tick}, seed {h.Seed}, format v{slot.SchemaVersion}" : $"\n  format v{slot.SchemaVersion} (no summary: an older save)");
-            row.AddChild(new Label { Text = info, Modulate = slot.Broken ? new Color(1f, 0.55f, 0.5f) : Colors.White, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(600, 0) });
+            row.AddChild(new Label { Text = info, Modulate = slot.Broken ? Palette.Bad : Colors.White, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(600, 0) });
             var buttons = new HBoxContainer();
             row.AddChild(buttons);
             var path = slot.Path;

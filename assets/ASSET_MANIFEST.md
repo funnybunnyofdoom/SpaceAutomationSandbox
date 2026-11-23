@@ -6,7 +6,9 @@ Module cell size is **not decided yet** (16×16 or 32×32 proposed; choose after
 
 | Exported file | Source | Cell size / pivot | Author / license | Notes |
 | --- | --- | --- | --- | --- |
-| `icon.svg` (project root) | hand-written SVG | 16×16 grid | original, project-owned | Placeholder project icon |
+| `icon.svg` (project root) | hand-written SVG | 16×16 grid | original, project-owned | Old placeholder icon (no longer used by the project) |
+| `assets/art/ui/app_icon.png`, `assets/art/ui/app_icon.ico` | `tools/art/make_placeholder_art.py` | 16×16 drawing, scaled ×1–×16 | original, project-owned | Placeholder app/window/.exe icon (#67); replace with Pixelorama art (#46) |
+| `assets/art/ui/boot_splash.png` | `tools/art/make_placeholder_art.py` | 320×180 drawing, scaled ×4 | original, project-owned | Placeholder boot splash (#67) |
 | `assets/art/test/test_tile.png` | `art_source/pixelorama/test/test_tile.pxo` | 16×16, top-left | original, project-owned | Phase 0 pipeline check only (to be created) |
 | `assets/audio/sfx/thrust_loop.ogg` | `thrusterFire_000.ogg` from [https://opengameart.org/content/sci-fi-sounds](https://opengameart.org/content/sci-fi-sounds) | — | Kenney (www.kenney.nl), "Sci-Fi Sounds" 1.0, CC0 1.0 (licence text: `assets/audio/sfx/LICENSE_kenney_sci-fi_sounds.txt`) | Thrust loop |
 | `assets/audio/sfx/drill_loop.ogg` | `engineCircular_000.ogg` from [https://opengameart.org/content/sci-fi-sounds](https://opengameart.org/content/sci-fi-sounds) | — | Kenney (www.kenney.nl), "Sci-Fi Sounds" 1.0, CC0 1.0 (licence text: `assets/audio/sfx/LICENSE_kenney_sci-fi_sounds.txt`) | Drill loop |

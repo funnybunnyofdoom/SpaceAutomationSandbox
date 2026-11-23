@@ -173,10 +173,10 @@ public partial class FleetPanel : PanelContainer
             Name = "Text", SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipText = true,
             Modulate = you ? new Color(0.6f, 1f, 0.7f) : new Color(1, 1, 1),
         });
-        var fly = new Button { Text = you ? "Flying" : "Fly", Disabled = you, FocusMode = FocusModeEnum.None };
+        var fly = new Button { Text = you ? "Flying" : "Fly", Disabled = you, FocusMode = FocusModeEnum.None, TooltipText = "Take control of this craft (stations too: docked ships push them as tugs)" };
         fly.Pressed += () => { CraftChosen?.Invoke(id); Refresh(force: true); };
         row.AddChild(fly);
-        var target = new Button { Text = "Target", Disabled = you, FocusMode = FocusModeEnum.None };
+        var target = new Button { Text = "Target", Disabled = you, FocusMode = FocusModeEnum.None, TooltipText = "Target it: the HUD shows distance and speed, and brake matches its motion" };
         target.Pressed += () => CraftTargeted?.Invoke(id);
         row.AddChild(target);
         return row;

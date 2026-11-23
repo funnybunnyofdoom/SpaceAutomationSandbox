@@ -1,13 +1,14 @@
 using System;
 using Godot;
+using SpaceAutomationSandbox.Core;
 
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>
 /// Title screen and main menu (#58): the game's (working) name over the starfield, then Continue
-/// (the save, if there is one), New Game, Load, Settings, Credits and Quit. Keyboard and controller
+/// (the save, if there is one), New Game, Load, Settings and Quit. Keyboard and controller
 /// drive it with the usual UI keys (arrows/D-pad to move, Enter/A to choose); the first available
-/// button has focus. Load opens the save list (#60); Credits waits for the credits screen (#66).
+/// button has focus. Load opens the save list (#60). No credits screen for now (#66).
 /// </summary>
 public partial class TitleScreen : Control
 {
@@ -63,14 +64,10 @@ public partial class TitleScreen : Control
         box.AddChild(_newGame);
         box.AddChild(MenuButton("Load", () => LoadChosen?.Invoke()));
         box.AddChild(MenuButton("Settings", () => SettingsChosen?.Invoke()));
-        var credits = MenuButton("Credits", () => { });
-        credits.Disabled = true;
-        credits.TooltipText = "Comes with the credits screen (#66).";
-        box.AddChild(credits);
         box.AddChild(MenuButton("Quit", () => QuitChosen?.Invoke()));
         _message = new Label
         {
-            HorizontalAlignment = HorizontalAlignment.Center, Modulate = new Color(1f, 0.6f, 0.55f),
+            HorizontalAlignment = HorizontalAlignment.Center, Modulate = Palette.Bad,
             AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(420, 0),
         };
         box.AddChild(_message);

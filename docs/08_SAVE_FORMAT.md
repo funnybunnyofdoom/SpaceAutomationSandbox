@@ -112,6 +112,7 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 4 | Added `anchored` per craft (anchor clamps and foundations) | Older files load with nothing anchored, except a landed foundation, which is always anchored. |
 | 19 (later addition, optional) | `header` (`name`, `savedAtUtc`, `playTimeS`, `tick`, `seed`) before `sector` (#60) | Saves without one are listed by file name and time. |
 | 19 (later addition, optional) | `header.gameName`: the game's name from the new-game screen (#62) | Without it the game is named after the save. |
+| 19 (later addition, optional) | `header.goalsOn`, `header.goalsDone`: the new-player goal list and the ids of goals met (#65) | Without them the goal list is off. |
 | 19 (later addition, optional) | `craters` per body: `[{ "bearingRad": 1.2, "massKg": 30000 }]` (#28) | No craters in older files. |
 | 19 | Research (`researchPoints`, `unlockedTech`, `researchAllUnlocked`; `labRemainderKg` per craft) and star types (`starClass` per body, omitted for yellow) | The migration sets `researchAllUnlocked`: everything stays open in a game started before research. |
 | 18 | Warp gates and further star systems: `gateLinkId`, `gateReadyTick`, `jumpRequestTick`, `jumps` per craft; `sector.discoveredKg` | An older save has one system and no gates; nothing changes. |

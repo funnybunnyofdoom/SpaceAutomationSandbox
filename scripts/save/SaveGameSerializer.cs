@@ -16,7 +16,12 @@ public sealed record LoadedGame(SectorState Sector, CraftId PlayerCraftId, SaveH
 /// The small summary at the top of a save (#60): what the save list shows without reading the sector.
 /// Optional: saves from before slots have none.
 /// </summary>
-public sealed record SaveHeader(string Name, string SavedAtUtc, double PlayTimeS, long Tick, ulong Seed, string GameName = "");
+/// <remarks>
+/// Later optional fields: <c>GameName</c> (#62); <c>GoalsOn</c> and <c>GoalsDone</c>, the new-player goal
+/// list and the ids of goals met (#65). Saves without them load with the goal list off.
+/// </remarks>
+public sealed record SaveHeader(string Name, string SavedAtUtc, double PlayTimeS, long Tick, ulong Seed, string GameName = "",
+    bool GoalsOn = false, string[]? GoalsDone = null);
 
 /// <summary>
 /// Converts a whole <see cref="SectorState"/> to and from versioned JSON (format in docs/08_SAVE_FORMAT.md).

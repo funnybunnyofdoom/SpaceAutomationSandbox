@@ -129,6 +129,7 @@ public partial class BlueprintEditorView : Control
                 Alignment = HorizontalAlignment.Left,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 FocusMode = FocusModeEnum.None,
+                TooltipText = PartTooltip(part), // #65
             };
             var id = part.Id;
             button.Pressed += () => _selectedPart = id;
@@ -214,6 +215,33 @@ public partial class BlueprintEditorView : Control
         : p.ResearchRatePerS > 0 ? $", {p.ResearchRatePerS * 60:0.#} research/min"
         : p.FoodRateKgPerS > 0 ? $", {p.FoodRateKgPerS * 3600:0} kg food/h"
         : p.IsControlSource ? ", control" : "";
+
+    /// <summary>Everything a part does, for its palette tooltip (#65).</summary>
+    private static string PartTooltip(PartDefinition p)
+    {
+        var lines = new System.Collections.Generic.List<string> { $"{p.Name}: {p.MassKg / 1000:0.##} t" };
+        if (p.IsControlSource) lines.Add("Control: a craft needs one to be flown or automated.");
+        if (p.ThrustN > 0) lines.Add($"Thrust {p.ThrustN / 1000:0} kN, pushing the way it faces (place it facing back to go forward).");
+        if (p.CargoCapacityKg > 0) lines.Add($"Cargo {p.CargoCapacityKg / 1000:0.#} t.");
+        if (p.EnergyCapacityKJ > 0) lines.Add($"Stores {p.EnergyCapacityKJ / 1000:0.#} MJ of power.");
+        if (p.PowerGenerationKW > 0) lines.Add($"Makes {p.PowerGenerationKW:0} kW of power.");
+        if (p.PowerUseKW > 0) lines.Add($"Uses {p.PowerUseKW:0} kW while working.");
+        if (p.MiningRateKgPerS > 0) lines.Add($"Drill: mines {p.MiningRateKgPerS:0.#} kg/s while landed.");
+        if (p.RefiningRateKgPerS > 0) lines.Add($"Refinery: {p.RefiningRateKgPerS:0.#} kg/s of ore into materials.");
+        if (p.FabricationRateKgPerS > 0) lines.Add($"Fabricator: builds ships at {p.FabricationRateKgPerS:0.#} kg/s.");
+        if (p.EjectionRateKgPerS > 0) lines.Add($"Throws out slag at {p.EjectionRateKgPerS:0.#} kg/s.");
+        if (p.CrewCapacity > 0) lines.Add($"Houses {p.CrewCapacity} crew (they need food and water).");
+        if (p.RobotCount > 0) lines.Add($"{p.RobotCount} robots: work like crew, need only power.");
+        if (p.FoodRateKgPerS > 0) lines.Add($"Farm: {p.FoodRateKgPerS * 3600:0} kg of food per hour.");
+        if (p.ResearchRatePerS > 0) lines.Add($"Lab: {p.ResearchRatePerS * 60:0.#} research points per minute.");
+        if (p.IsDockingPort) lines.Add("Docking port: other craft dock here.");
+        if (p.IsAnchorClamp) lines.Add("Anchor clamp: holds the craft to a surface.");
+        if (p.IsFoundation) lines.Add("Foundation: the craft stays fixed where it's deployed.");
+        if (p.IsWarpGate) lines.Add("Warp gate: jumps to another star system.");
+        if (p.MaterialsKg is { Count: > 0 } materials)
+            lines.Add("Made of: " + string.Join(", ", materials.Select(m => $"{m.Value / 1000:0.##} t {m.Key}")));
+        return string.Join("\n", lines);
+    }
 
     private static Label Heading(string text)
     {

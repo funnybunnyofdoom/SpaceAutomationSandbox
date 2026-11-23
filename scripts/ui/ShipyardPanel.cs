@@ -91,7 +91,7 @@ public partial class ShipyardPanel : PanelContainer
         _bill = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0) };
         box.AddChild(_bill);
 
-        var order = new Button { Text = "Order", FocusMode = FocusModeEnum.None };
+        var order = new Button { Text = "Order", FocusMode = FocusModeEnum.None, TooltipText = "Build this design at the yard: ships launch when done, station designs become kits to carry and deploy" };
         order.Pressed += Order;
         box.AddChild(order);
 
@@ -336,7 +336,7 @@ public partial class ShipyardPanel : PanelContainer
             });
             if (!kit.NeedsSurface)
             {
-                var deploy = new Button { Text = "Deploy here", FocusMode = FocusModeEnum.None };
+                var deploy = new Button { Text = "Deploy here", FocusMode = FocusModeEnum.None, TooltipText = "Unpack the kit at the yard's position" };
                 var (yardId, kitId) = (yard.Id, kit.Id);
                 deploy.Pressed += () =>
                 {
@@ -369,7 +369,7 @@ public partial class ShipyardPanel : PanelContainer
                     SizeFlagsHorizontal = SizeFlags.ExpandFill, Name = "Text",
                     AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(240, 0),
                 });
-                var cancel = new Button { Text = "Cancel", FocusMode = FocusModeEnum.None };
+                var cancel = new Button { Text = "Cancel", FocusMode = FocusModeEnum.None, TooltipText = "Cancel the order; materials already used come back to the yard" };
                 var orderId = order.Id;
                 var yardId = yard.Id;
                 cancel.Pressed += () =>

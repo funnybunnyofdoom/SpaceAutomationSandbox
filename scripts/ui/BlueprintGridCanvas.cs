@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Construction;
 
 namespace SpaceAutomationSandbox.UI;
@@ -19,11 +20,11 @@ public partial class BlueprintGridCanvas : Control
     private static readonly Color Background = new(0.06f, 0.07f, 0.10f);
     private static readonly Color GridLine = new(1f, 1f, 1f, 0.07f);
     private static readonly Color AxisLine = new(1f, 1f, 1f, 0.18f);
-    private static readonly Color HoverPlace = new(0.4f, 1f, 0.6f, 0.9f);
-    private static readonly Color HoverErase = new(1f, 0.35f, 0.3f, 0.9f);
+    private static Color HoverPlace => Palette.Good with { A = 0.9f }; // colourblind-safe option (#68)
+    private static Color HoverErase => Palette.Bad with { A = 0.9f };
     private static readonly Color ComColor = new(1f, 1f, 1f, 0.9f);
     private static readonly Color UnknownPart = new(1f, 0f, 1f);
-    private static readonly Color LooseCell = new(1f, 0.25f, 0.2f, 0.95f);
+    private static Color LooseCell => Palette.Bad with { A = 0.95f };
 
     private readonly BlueprintEditor _model;
     private readonly IReadOnlyDictionary<string, Color> _colors;
@@ -114,7 +115,11 @@ public partial class BlueprintGridCanvas : Control
             var tag = id.Length >= 2 ? id[..2].ToUpperInvariant() : id.ToUpperInvariant();
             DrawString(font, origin + new Vector2(5, CellPx - 9), tag, HorizontalAlignment.Left, -1, 11, new Color(0, 0, 0, 0.75f));
             DrawFacing(origin, cell.Rotation, new Color(0, 0, 0, 0.6f));
-            if (loose.Contains(pos)) DrawRect(new Rect2(origin, new Vector2(CellPx, CellPx)), LooseCell, false, 3); // not connected (#35)
+            if (loose.Contains(pos)) // not connected (#35); the "!" says so without colour (#68)
+            {
+                DrawRect(new Rect2(origin, new Vector2(CellPx, CellPx)), LooseCell, false, 3);
+                DrawString(font, origin + new Vector2(CellPx - 11, 14), "!", HorizontalAlignment.Left, -1, 14, LooseCell);
+            }
         }
 
         if (_model.Stats is { } stats) // centre of mass (cell centres are at integer coordinates)
@@ -129,6 +134,12 @@ public partial class BlueprintGridCanvas : Control
             var erase = _dragButton == MouseButton.Right;
             DrawRect(new Rect2(CellOrigin(hover), new Vector2(CellPx, CellPx)), erase ? HoverErase : HoverPlace, false, 2);
             if (!erase) DrawFacing(CellOrigin(hover), _rotation(), HoverPlace); // shows the rotation that will be placed
+            else // an × marks erasing, not just the colour (#68)
+            {
+                var o = CellOrigin(hover);
+                DrawLine(o + new Vector2(6, 6), o + new Vector2(CellPx - 6, CellPx - 6), HoverErase, 2);
+                DrawLine(o + new Vector2(CellPx - 6, 6), o + new Vector2(6, CellPx - 6), HoverErase, 2);
+            }
         }
 
         // Forward indicator above the grid centre.

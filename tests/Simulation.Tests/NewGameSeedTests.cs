@@ -48,3 +48,51 @@ public sealed class NewGameSeedTests
         Assert.Equal(5UL, loaded.Sector.Seed);
     }
 }
+
+/// <summary>#65 goal list: checked from the simulation state, kept once met, saved in the header.</summary>
+public sealed class GoalListTests
+{
+    [Fact]
+    public void A_new_game_meets_no_goals()
+    {
+        var game = TestData.NewGame(surveyAll: false, keepPlayerFuel: true);
+        Assert.Empty(GoalList.MetNow(game.Sector, game.PlayerCraftId, savedDesigns: 0));
+        Assert.Equal("survey", GoalList.Current(new System.Collections.Generic.HashSet<string>())!.Id);
+    }
+
+    [Fact]
+    public void Goals_are_met_from_state_and_stay_done()
+    {
+        var game = TestData.NewGame(surveyAll: false);
+        var done = new System.Collections.Generic.HashSet<string>();
+        var asteroid = System.Linq.Enumerable.First(game.Sector.Bodies, b => b.IsMineable);
+        game.Sector.MarkSurveyed(asteroid.Id);
+        Assert.True(GoalList.Update(done, game.Sector, game.PlayerCraftId, savedDesigns: 1));
+        Assert.Contains("survey", done);
+        Assert.Contains("design", done);
+        Assert.False(GoalList.Update(done, game.Sector, game.PlayerCraftId, savedDesigns: 0)); // nothing new; design stays done
+        Assert.Contains("design", done);
+        Assert.Equal("land", GoalList.Current(done)!.Id);
+    }
+
+    [Fact]
+    public void Ore_in_the_hold_meets_the_mining_goal()
+    {
+        var game = TestData.NewGame();
+        var player = game.Sector.GetCraft(game.PlayerCraftId);
+        player.Inventory.Add(new System.Collections.Generic.Dictionary<string, long> { [CelestialBodyState.RockMaterial] = 100 });
+        Assert.Contains("mine", GoalList.MetNow(game.Sector, game.PlayerCraftId, 0));
+    }
+
+    [Fact]
+    public void Goal_progress_is_kept_in_the_save_header()
+    {
+        var game = TestData.NewGame(seed: 9);
+        var header = new SaveHeader("G", "2026-11-23T00:00:00Z", 1, 0, 9, "G", GoalsOn: true, GoalsDone: new[] { "survey", "land" });
+        var loaded = SaveGameSerializer.FromJson(SaveGameSerializer.ToJson(game.Sector, game.PlayerCraftId, header), TestData.Catalog());
+        Assert.True(loaded.Header!.GoalsOn);
+        Assert.Equal(new[] { "survey", "land" }, loaded.Header.GoalsDone);
+        var old = SaveGameSerializer.FromJson(SaveGameSerializer.ToJson(game.Sector, game.PlayerCraftId, new SaveHeader("G", "x", 1, 0, 9)), TestData.Catalog());
+        Assert.False(old.Header!.GoalsOn);
+    }
+}

@@ -20,6 +20,8 @@ public partial class SettingsPanel : PanelContainer
     private readonly Dictionary<string, (HSlider Slider, CheckBox Mute, Label Value)> _audio = new();
     private CheckBox _muteUnfocused = null!;
     private OptionButton _autosave = null!;
+    private OptionButton _textSize = null!;
+    private CheckBox _colorblind = null!;
     private List<Vector2I> _sizes = new();
     private bool _updating;
 
@@ -37,8 +39,8 @@ public partial class SettingsPanel : PanelContainer
         SetAnchorsPreset(LayoutPreset.Center);
         OffsetLeft = -230;
         OffsetRight = 230;
-        OffsetTop = -280;
-        OffsetBottom = 280;
+        OffsetTop = -310;
+        OffsetBottom = 310;
 
         var box = new VBoxContainer();
         box.AddThemeConstantOverride("separation", 8);
@@ -79,6 +81,16 @@ public partial class SettingsPanel : PanelContainer
         _autosave.ItemSelected += i => Change(() => _settings.AutosaveMinutes = GameSettings.AutosaveChoices[i]);
         grid.AddChild(_autosave);
 
+        grid.AddChild(new Label { Text = "Text size" }); // #68
+        _textSize = new OptionButton { FocusMode = FocusModeEnum.None };
+        foreach (var t in GameSettings.TextScales) _textSize.AddItem(t == 1f ? "Normal" : $"{t * 100:0}%");
+        _textSize.ItemSelected += i => Change(() => _settings.TextScale = GameSettings.TextScales[i]);
+        grid.AddChild(_textSize);
+        grid.AddChild(new Label { Text = "Colours" });
+        _colorblind = new CheckBox { Text = "Colourblind-safe", FocusMode = FocusModeEnum.None, TooltipText = "Blue / orange / yellow instead of green / red for placing, problems and warnings" };
+        _colorblind.Toggled += on => Change(() => _settings.ColorblindSafe = on);
+        grid.AddChild(_colorblind);
+
         _info = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(420, 0), Modulate = new Color(1, 1, 1, 0.65f) };
         box.AddChild(_info);
 
@@ -113,7 +125,7 @@ public partial class SettingsPanel : PanelContainer
         bottom.AddChild(controls);
         bottom.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
         var close = new Button { Text = "Close" };
-        close.Pressed += () => { Visible = false; Closed?.Invoke(); };
+        close.Pressed += Close;
         bottom.AddChild(close);
     }
 
@@ -122,6 +134,13 @@ public partial class SettingsPanel : PanelContainer
 
     /// <summary>Raised when the Close button hides the panel.</summary>
     public event Action? Closed;
+
+    /// <summary>Hides the panel and raises <see cref="Closed"/> (the Close button, or B on a controller).</summary>
+    public void Close()
+    {
+        Visible = false;
+        Closed?.Invoke();
+    }
 
     public void Open()
     {
@@ -159,6 +178,8 @@ public partial class SettingsPanel : PanelContainer
             mute.ButtonPressed = _settings.Muted.Contains(bus);
         }
         _muteUnfocused.ButtonPressed = _settings.MuteWhenUnfocused;
+        _textSize.Select(Math.Max(0, Array.FindIndex(GameSettings.TextScales, t => Math.Abs(t - _settings.TextScale) < 0.001f)));
+        _colorblind.ButtonPressed = _settings.ColorblindSafe;
         _autosave.Select(Math.Max(0, Array.IndexOf(GameSettings.AutosaveChoices, _settings.AutosaveMinutes)));
         var window = DisplayServer.WindowGetSize();
         _info.Text = $"Interface at {_settings.EffectiveUiScale(window) * 100:0}% for this {window.X} × {window.Y} window. "

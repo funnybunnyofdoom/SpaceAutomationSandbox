@@ -6,7 +6,7 @@ using SpaceAutomationSandbox.Core;
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>What the HUD shows this frame, by area. Empty strings hide an area.</summary>
-public sealed record HudSections(string Status, string Ship, string Stations, string Target);
+public sealed record HudSections(string Status, string Ship, string Stations, string Target, string Goals = "");
 
 /// <summary>
 /// The in-flight HUD (#51), in separate areas with a translucent background so they stay readable
@@ -28,7 +28,7 @@ public partial class Hud : Control
 
     private readonly GameSettings _settings;
     private readonly Action _saveSettings;
-    private Section _status = null!, _ship = null!, _stations = null!, _target = null!;
+    private Section _status = null!, _ship = null!, _stations = null!, _target = null!, _goals = null!;
     private PanelContainer _help = null!;
     private Label _helpLabel = null!;
     private Label _hintLabel = null!;
@@ -71,6 +71,8 @@ public partial class Hud : Control
         left.AddChild(_status.Panel);
         left.AddChild(_ship.Panel);
         left.AddChild(_stations.Panel);
+        _goals = new Section("Goals", this); // new-player goal list (#65)
+        left.AddChild(_goals.Panel);
 
         // Bottom left, growing upwards.
         var bottom = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore, GrowVertical = GrowDirection.Begin };
@@ -104,6 +106,7 @@ public partial class Hud : Control
         _ship.Set(sections.Ship);
         _stations.Set(sections.Stations);
         _target.Set(sections.Target);
+        _goals.Set(sections.Goals);
     }
 
     private static PanelContainer Panel(Control content)
@@ -205,6 +208,9 @@ public partial class Hud : Control
             Time and game
                slower: {K(InputActions.TimeSlower)}      faster: {K(InputActions.TimeFaster)}      pause: {K(InputActions.TimePause)}
                quicksave: {K(InputActions.QuickSave)}      quickload: {K(InputActions.QuickLoad)}      pause menu (save, load, quit): {K(InputActions.ClosePanels)}      (closing the window autosaves)
+
+            Using panels with keys or a controller: {K(InputActions.PanelFocus)} (controller: {InputActions.PadText(InputActions.PanelFocus)}) moves into the open panel;
+               arrows / d-pad move, Enter / A choose, {K(InputActions.PanelFocus)} or B back to flying.
 
             HUD: click Ship, Stations or Target to fold them away.
             """;

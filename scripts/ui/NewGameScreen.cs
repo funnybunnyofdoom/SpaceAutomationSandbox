@@ -12,11 +12,13 @@ namespace SpaceAutomationSandbox.UI;
 public partial class NewGameScreen : Control
 {
     /// <summary>Start a game with this name and seed.</summary>
-    public event Action<string, ulong>? StartChosen;
+    /// <summary>Start a game with this name and seed; the bool is the goal list for new players (#65).</summary>
+    public event Action<string, ulong, bool>? StartChosen;
     public event Action? BackChosen;
 
     private LineEdit _name = null!, _seed = null!;
     private Label _seedInfo = null!;
+    private CheckBox _goals = null!;
     private readonly Random _random = new();
 
     public NewGameScreen()
@@ -68,6 +70,10 @@ public partial class NewGameScreen : Control
         _seedInfo = new Label { Modulate = new Color(1, 1, 1, 0.6f), AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0) };
         grid.AddChild(_seedInfo);
 
+        grid.AddChild(new Control());
+        _goals = new CheckBox { Text = "Goal list for new players", ButtonPressed = true, TooltipText = "A checklist of the core loop on the left of the screen. Turn it off or restart it from the pause menu." };
+        grid.AddChild(_goals);
+
         var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
         buttons.AddThemeConstantOverride("separation", 8);
         box.AddChild(buttons);
@@ -105,7 +111,7 @@ public partial class NewGameScreen : Control
         var seedText = _seed.Text.Trim();
         var seed = seedText.Length == 0 ? RandomSeed() : NewGame.SeedFromText(seedText);
         Visible = false;
-        StartChosen?.Invoke(name.Length > 0 ? name : "New game", seed);
+        StartChosen?.Invoke(name.Length > 0 ? name : "New game", seed, _goals.ButtonPressed);
     }
 
     private void Back()

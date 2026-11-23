@@ -120,10 +120,10 @@ public partial class JobPanel : PanelContainer
         box.AddChild(_surveyNote);
 
         var buttons = new HBoxContainer();
-        var start = new Button { Text = "Start job", FocusMode = FocusModeEnum.None };
+        var start = new Button { Text = "Start job", FocusMode = FocusModeEnum.None, TooltipText = "The craft runs this job on its own until you stop it; the panel shows what it's waiting for" };
         start.Pressed += Start;
         buttons.AddChild(start);
-        var stop = new Button { Text = "Stop job", FocusMode = FocusModeEnum.None };
+        var stop = new Button { Text = "Stop job", FocusMode = FocusModeEnum.None, TooltipText = "Stop the job; the craft stays where it is and you can fly it again" };
         stop.Pressed += () => { if (_craft() is { } c) Show(_sector().StopJob(c.Id)); };
         buttons.AddChild(stop);
         box.AddChild(buttons);
