@@ -147,6 +147,9 @@ public sealed class CraftState
     /// <summary>For a warp gate (#22): the gate it sends craft to (in another system); None until its first jump. Saved.</summary>
     public CraftId GateLinkId { get; internal set; }
 
+    /// <summary>The system whose far gate was destroyed (#36): the next jump sends a new one there. None otherwise.</summary>
+    public BodyId GateLostStarId { get; internal set; }
+
     /// <summary>For a warp gate: the tick it can send the next craft (0 = ready now). Saved.</summary>
     public long GateReadyTick { get; internal set; }
 

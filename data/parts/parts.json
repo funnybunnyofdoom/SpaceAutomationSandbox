@@ -49,6 +49,8 @@
       "materialsKg": { "metal": 4000, "electronics": 2200, "composites": 800 } },
     { "id": "warp_gate", "name": "Warp gate", "massKg": 30000, "placeholderColor": "#c86bf0", "isWarpGate": true,
       "materialsKg": { "metal": 15000, "electronics": 10000, "composites": 5000 } },
+    { "id": "gate_defense", "name": "Gate defense battery", "massKg": 4000, "placeholderColor": "#d9534f", "isGateDefense": true,
+      "materialsKg": { "metal": 2500, "electronics": 1000, "composites": 500 } },
     { "id": "research_lab", "name": "Research lab", "massKg": 4000, "placeholderColor": "#e0d27f", "researchRatePerS": 0.1, "powerUseKW": 80,
       "materialsKg": { "metal": 2000, "electronics": 1500, "composites": 500 } },
     { "id": "thruster_mk3", "name": "Thruster Mk3", "massKg": 2000, "placeholderColor": "#ffb46b", "thrustN": 450000, "powerUseKW": 200,

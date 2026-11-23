@@ -245,6 +245,7 @@ public sealed partial class SectorState
         StepRepairs(); // the fabricator repairs before it builds (#3)
         StepFabrication(endS);
         StepWarpGates(); // gates send queued craft, paid from their power (#22)
+        StepFactions(); // other civilizations' attitude and raids (#36)
         StepEjection();
         EndPowerTick();
         Tick++;

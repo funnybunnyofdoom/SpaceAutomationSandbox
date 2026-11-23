@@ -78,7 +78,8 @@ public sealed record ShipStats(
     double RobotPowerKW = 0,
     int WarpGateCount = 0,
     double ResearchRatePerS = 0,
-    double LabPowerKW = 0)
+    double LabPowerKW = 0,
+    int GateDefenseCount = 0)
 {
     /// <summary>Craft up to this many parts run without crew (#11).</summary>
     public const int UncrewedMaxParts = 15;
@@ -151,7 +152,7 @@ public sealed class ShipDesign
 
     private static bool IsStationFacility(PartDefinition p) =>
         p.FabricationRateKgPerS > 0 || p.IsDockingPort || p.CargoCapacityKg > 0 || p.RefiningRateKgPerS > 0
-        || p.CrewCapacity > 0 || p.FoodRateKgPerS > 0 || p.IsWarpGate || p.ResearchRatePerS > 0;
+        || p.CrewCapacity > 0 || p.FoodRateKgPerS > 0 || p.IsWarpGate || p.ResearchRatePerS > 0 || p.IsGateDefense;
 
     /// <summary>Human-readable problems for the given role; empty means the design is usable in that role.</summary>
     /// <param name="requireConnected">
@@ -235,6 +236,7 @@ public sealed class ShipDesign
         double reverse = 0, left = 0, right = 0, reversePower = 0, leftPower = 0, rightPower = 0;
         double food = 0, habitatPower = 0, farmPower = 0, robots = 0, robotPower = 0;
         var gates = 0;
+        var defenses = 0;
         double research = 0, labPower = 0;
         var crew = 0;
         int clamps = 0, foundations = 0;
@@ -284,6 +286,7 @@ public sealed class ShipDesign
             else if (part.RobotCount > 0) robotPower += part.PowerUseKW;
             else if (part.ResearchRatePerS > 0) labPower += part.PowerUseKW;
             if (part.IsWarpGate) gates++;
+            if (part.IsGateDefense) defenses++;
             if (part.IsAnchorClamp) clamps++;
             if (part.IsFoundation) foundations++;
             if (part.IsDockingPort) ports.Add(new DockingPortInfo(cell.Pos, cell.Rotation));
@@ -307,7 +310,7 @@ public sealed class ShipDesign
             Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations, otherThrust, ports, mining, refining,
             generation, thrustPower, drillPower, refineryPower, fabricatorPower, ejectorPower, ejection,
             reverse, left, right, reversePower, leftPower, rightPower, crew, food, habitatPower, farmPower,
-            (int)Math.Floor(robots + 1e-9), robotPower, gates, research, labPower);
+            (int)Math.Floor(robots + 1e-9), robotPower, gates, research, labPower, defenses);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

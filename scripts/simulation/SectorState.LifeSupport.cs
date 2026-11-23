@@ -79,6 +79,7 @@ public sealed partial class SectorState
             // Robots (#13): power only.
             var robots = craft.Stats.RobotCount;
             string? robotReason = null;
+            if (robots > 0 && LawActive(Laws.OrganicCrews)) { robots = 0; robotReason = "robots don't count as crew (Organic crews only)"; } // #36
             if (robots > 0 && !TryUsePower(craft, craft.Stats.RobotPowerKW * FixedStepClock.TickSeconds))
             {
                 robots = 0;

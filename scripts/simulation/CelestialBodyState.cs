@@ -88,12 +88,12 @@ public sealed class CelestialBodyState
     public bool AnySiteSurveyed => !IsMineable || _sites.Any(s => s.Surveyed);
 
     /// <summary>Kg of a material in the surveyed sites (what jobs can count on), plus the bulk if it's the bulk material.</summary>
-    public long SurveyedDeposit(string materialId) =>
-        _sites.Where(s => s.Surveyed).Sum(s => s.Deposits.GetValueOrDefault(materialId)) + (materialId == BulkMaterialId ? BulkKg : 0);
+    public long SurveyedDeposit(string materialId, bool allowBulk = true) =>
+        _sites.Where(s => s.Surveyed).Sum(s => s.Deposits.GetValueOrDefault(materialId)) + (allowBulk && materialId == BulkMaterialId ? BulkKg : 0);
 
     /// <summary>Kg of a material that can be mined at a bearing: that site's deposit, plus the bulk if it's the bulk material.</summary>
-    public long DepositAt(string materialId, double bearingRad) =>
-        (SiteAt(bearingRad)?.Deposits.GetValueOrDefault(materialId) ?? 0) + (materialId == BulkMaterialId ? BulkKg : 0);
+    public long DepositAt(string materialId, double bearingRad, bool allowBulk = true) =>
+        (SiteAt(bearingRad)?.Deposits.GetValueOrDefault(materialId) ?? 0) + (allowBulk && materialId == BulkMaterialId ? BulkKg : 0);
 
     /// <summary>Restores saved sites: their surveyed flags and deposits. The deposits must add up to the body's.</summary>
     internal void RestoreSites(IReadOnlyList<(bool Surveyed, IReadOnlyDictionary<string, long> DepositsKg)> saved)
@@ -182,9 +182,9 @@ public sealed class CelestialBodyState
     /// Removes up to <paramref name="kg"/> of a material at a bearing (#70): from that site's deposit
     /// first, then the body's bulk; the same mass leaves the body. Returns what was removed.
     /// </summary>
-    internal long Extract(string materialId, long kg, double bearingRad)
+    internal long Extract(string materialId, long kg, double bearingRad, bool allowBulk = true)
     {
-        var taken = Math.Min(kg, DepositAt(materialId, bearingRad));
+        var taken = Math.Min(kg, DepositAt(materialId, bearingRad, allowBulk));
         if (taken <= 0) return 0;
         var site = SiteAt(bearingRad);
         var had = site?.Deposits.GetValueOrDefault(materialId) ?? 0;

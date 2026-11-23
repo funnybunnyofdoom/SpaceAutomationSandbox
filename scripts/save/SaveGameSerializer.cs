@@ -80,6 +80,15 @@ public static class SaveGameSerializer
                 ResearchPoints = sector.ResearchPoints,
                 UnlockedTech = sector.UnlockedTech.Count > 0 ? sector.UnlockedTech.ToList() : null,
                 ResearchAllUnlocked = sector.ResearchAllUnlocked,
+                Factions = sector.Factions.Count > 0
+                    ? sector.Factions.Select(f => new FactionDto
+                    {
+                        Id = f.Id, Name = f.Name, Culture = f.Culture.Id, HomeStarId = f.HomeStarId.Value, Baseline = f.Baseline,
+                        Attitude = f.Attitude, Grievance = f.Grievance, NextEventTick = f.NextEventTick, Warned = sector.FactionWarned(f.Id),
+                    }).ToList()
+                    : null,
+                Laws = sector.ActiveLaws.Count > 0 ? sector.ActiveLaws.ToList() : null,
+                Events = sector.Events.Count > 0 ? sector.Events.Select(e => new EventDto { Tick = e.Tick, Text = e.Text }).ToList() : null,
                 EjectedKg = sector.EjectedKg.Count > 0
                     ? new SortedDictionary<string, long>(sector.EjectedKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal)
                     : null,
@@ -147,6 +156,7 @@ public static class SaveGameSerializer
                         : null,
                     YardProgressKg = c.YardProgressKg,
                     GateLinkId = c.GateLinkId.Value,
+                    GateLostStarId = c.GateLostStarId.Value,
                     GateReadyTick = c.GateReadyTick,
                     JumpRequestTick = c.JumpRequestTick,
                     Jumps = c.Jumps,
@@ -351,6 +361,15 @@ public static class SaveGameSerializer
             sector.RestoreDiscovered(dto.DiscoveredKg);
             if (!(dto.ResearchPoints >= 0)) throw new FormatException("Negative research points.");
             sector.RestoreResearch(dto.ResearchPoints, dto.UnlockedTech ?? new List<string>(), dto.ResearchAllUnlocked);
+            // Civilizations, laws and the event log (#36), all optional.
+            foreach (var f in dto.Factions ?? new List<FactionDto>())
+            {
+                if (sector.Bodies.All(b => b.Id.Value != f.HomeStarId)) throw new FormatException($"Civilization {f.Id} claims a missing system.");
+                if (!double.IsFinite(f.Attitude) || !(f.Grievance >= 0)) throw new FormatException($"Civilization {f.Id} has invalid attitude.");
+                sector.RestoreFaction(f.Id, f.Name ?? $"Civilization {f.Id}", f.Culture ?? "", new BodyId(f.HomeStarId), f.Baseline, f.Attitude, f.Grievance, f.NextEventTick, f.Warned);
+            }
+            sector.RestoreLaws(dto.Laws ?? new List<string>());
+            sector.RestoreEvents((dto.Events ?? new List<EventDto>()).Select(e => new SectorEvent(e.Tick, e.Text ?? "")));
             foreach (var (material, kg) in dto.EjectedKg ?? new SortedDictionary<string, long>())
             {
                 if (!catalog.Materials.Contains(material)) throw new FormatException($"Unknown ejected material '{material}'.");
@@ -389,6 +408,7 @@ public static class SaveGameSerializer
                 if (c.LabRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has a lab remainder of {c.LabRemainderKg} kg.");
                 restored.LabRemainderKg = c.LabRemainderKg;
                 sector.RestoreGate(restored.Id, new CraftId(c.GateLinkId), c.GateReadyTick, c.JumpRequestTick, c.Jumps);
+                if (c.GateLostStarId != 0) sector.RestoreGateLost(restored.Id, new BodyId(c.GateLostStarId));
                 if (c.YardOrder is { } yod)
                 {
                     ShipDesign? target = null;
@@ -565,11 +585,40 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool ResearchAllUnlocked { get; set; }
+
+        /// <summary>v19 (later addition, optional, #36): civilizations met, laws in force, and the event log.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<FactionDto>? Factions { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string>? Laws { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<EventDto>? Events { get; set; }
         public SortedDictionary<string, long>? EjectedKg { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] // omitted while every multiplier is 1
         public TuningDto? Tuning { get; set; }
         public List<BodyDto>? Bodies { get; set; }
         public List<CraftDto>? Crafts { get; set; }
+    }
+
+    private sealed class FactionDto
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+        public string? Culture { get; set; }
+        public uint HomeStarId { get; set; }
+        public double Baseline { get; set; }
+        public double Attitude { get; set; }
+        public double Grievance { get; set; }
+        public long NextEventTick { get; set; }
+        public bool Warned { get; set; }
+    }
+
+    private sealed class EventDto
+    {
+        public long Tick { get; set; }
+        public string? Text { get; set; }
     }
 
     private sealed class BodyDto
@@ -657,6 +706,10 @@ public static class SaveGameSerializer
         /// <summary>v18: for a warp gate, the gate it sends craft to (0 until its first jump).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public uint GateLinkId { get; set; }
+
+        /// <summary>v19 (later addition, optional, #36): the system whose far gate a raid destroyed.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint GateLostStarId { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public long GateReadyTick { get; set; }

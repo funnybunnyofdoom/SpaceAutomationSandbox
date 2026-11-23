@@ -15,7 +15,7 @@ public class ConstructionTests
         Assert.Equal(new[]
         {
             "anchor_clamp", "battery", "battery_mk2", "cargo", "cockpit", "docking_port", "drill", "drill_mk2", "drill_mk3", "fabricator", "fabricator_mk2",
-            "farm", "foundation", "habitat", "hull", "refinery", "refinery_mk2", "research_lab", "robot_bay", "slag_ejector", "solar_panel", "solar_panel_mk2",
+            "farm", "foundation", "gate_defense", "habitat", "hull", "refinery", "refinery_mk2", "research_lab", "robot_bay", "slag_ejector", "solar_panel", "solar_panel_mk2",
             "solar_panel_mk3", "storage_silo", "thruster", "thruster_mk2", "thruster_mk3", "warp_gate",
         }, ids);
     }

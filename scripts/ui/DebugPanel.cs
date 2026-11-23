@@ -100,6 +100,16 @@ public partial class DebugPanel : PanelContainer
         var survey = new Button { Text = "Survey all bodies", FocusMode = FocusModeEnum.None };
         survey.Pressed += () => { _sector().DebugSurveyAll(); _status.Text = "Every body is now surveyed."; };
         buttons.AddChild(survey);
+        // #36: meet a civilization in the newest system (the home one if that's all there is).
+        var civ = new Button { Text = "Meet a civilization", FocusMode = FocusModeEnum.None, TooltipText = "A civilization claims the newest star system" };
+        civ.Pressed += () =>
+        {
+            var sector = _sector();
+            var star = sector.Stars[^1];
+            var f = sector.MeetCivilization(star);
+            _status.Text = $"The {f.Name} ({f.Culture.Name}) now claim {star.Name}.";
+        };
+        buttons.AddChild(civ);
         box.AddChild(buttons);
 
         _status = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(330, 0) };

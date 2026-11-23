@@ -93,7 +93,7 @@ public sealed partial class SectorState
                 var from = craft.Position - GetPosition(unsurveyed.Id);
                 return (unsurveyed.Id, CraftId.None, Math.Atan2(from.Y, from.X), SurveyRadius(unsurveyed, craft));
             case MiningJob { Active: true, State: MiningJobState.ToSource } mining when _byId.TryGetValue(mining.SourceBodyId, out var source):
-                if (source.SurveyedDeposit(mining.MaterialId) == 0) return null; // only surveyed sites count (#70)
+                if (MineableSurveyed(source, mining.MaterialId) == 0) return null; // only surveyed sites count (#70), as the laws allow (#36)
                 SurfacePoint(source, craft, JobHoverAltitudeM, mining); // picks this trip's spot if not yet
                 return (source.Id, CraftId.None, mining.SpotBearingRad!.Value, source.RadiusM + craft.CollisionRadiusM + JobHoverAltitudeM);
             case MiningJob { Active: true, State: MiningJobState.ToDestination } m when _craftsById.TryGetValue(m.DestinationId, out var d):

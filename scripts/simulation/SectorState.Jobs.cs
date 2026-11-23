@@ -41,6 +41,7 @@ public sealed partial class SectorState
             return new(false, "The source must be a mineable body.");
         if (!source.AnySiteSurveyed)
             return new(false, $"{source.Name} hasn't been surveyed: fly a ship you pilot within {SurveyRangeM / 1000:0} km of it first.");
+        if (LawForbidsMining(source) is { } forbidden) return new(false, $"Not allowed: {forbidden}.");
         if (!_craftsById.TryGetValue(job.DestinationId, out var destination) || destination.Id == craft.Id)
             return new(false, "The destination must be another craft.");
         if (destination.Stats.DockingPorts.Count == 0) return new(false, $"{destination.Name} has no docking port.");
@@ -123,7 +124,7 @@ public sealed partial class SectorState
                 return;
 
             case MiningJobState.ToSource:
-                if (source.SurveyedDeposit(material) == 0) // only surveyed sites count (#70)
+                if (MineableSurveyed(source, material) == 0) // only surveyed sites count (#70), and only what the laws allow (#36)
                 {
                     if (held > 0) { if (craft.IsDocked) TryUndock(craft.Id); job.State = MiningJobState.ToDestination; return; }
                     if (craft.IsLanded && craft.LandedOnBodyId == source.Id) // anchored on the source: wait there
@@ -178,10 +179,10 @@ public sealed partial class SectorState
                 craft.Controls = ShipControls.Idle;
                 if (!craft.IsAnchored) { job.State = MiningJobState.Landing; return; }
                 var full = craft.FreeCargoKg == 0 || craft.Inventory.TotalKg >= job.ReturnFraction * craft.CargoCapacityKg;
-                if (full || source.DepositAt(material, LandedBearing(craft)) == 0)
+                if (full || MineableAt(source, material, LandedBearing(craft)) == 0)
                 {
                     if (held > 0) { Lift(craft, job, MiningJobState.ToDestination); return; }
-                    if (!full && source.SurveyedDeposit(material) > 0) // this site is dug out: on to another (#70)
+                    if (!full && MineableSurveyed(source, material) > 0) // this site is dug out: on to another (#70)
                     {
                         job.SpotBearingRad = null;
                         Lift(craft, job, MiningJobState.ToSource);
@@ -309,8 +310,10 @@ public sealed partial class SectorState
     public const double SpotDetourAngleRad = 0.4;
 
     /// <summary>Why a mining job has nothing to mine: none left anywhere, or none in the surveyed sites (#70).</summary>
-    private static string NothingToMine(CelestialBodyState source, string material) =>
-        source.Deposit(material) > 0 ? $"no surveyed site on {source.Name} has {material}: fly over more of it" : $"{source.Name} has no {material} left";
+    private string NothingToMine(CelestialBodyState source, string material) =>
+        LawForbidsMining(source) ?? (material == source.BulkMaterialId && !BulkMiningAllowed && source.SurveyedDeposit(material, false) == 0
+            ? $"law: no bulk {material} mining (No planet dismantling)"
+            : source.Deposit(material) > 0 ? $"no surveyed site on {source.Name} has {material}: fly over more of it" : $"{source.Name} has no {material} left");
 
     /// <summary>
     /// The surveyed site nearest a bearing where the material can be mined (#70): one holding its ore,

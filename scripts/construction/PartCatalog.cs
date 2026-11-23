@@ -45,6 +45,9 @@ public sealed record PartDefinition
     /// <summary>A warp gate (#22): the station it's on can send craft to its linked gate in another star system.</summary>
     public bool IsWarpGate { get; init; }
 
+    /// <summary>A gate defense battery (#36): with the Armed gates law, each makes a raid on its gate less likely to succeed.</summary>
+    public bool IsGateDefense { get; init; }
+
     /// <summary>Robots this part holds (robot bay, #13): they count as crew for running a craft, using power instead of food.</summary>
     public int RobotCount { get; init; }
 

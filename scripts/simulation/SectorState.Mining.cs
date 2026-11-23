@@ -24,9 +24,10 @@ public sealed partial class SectorState
         if (!craft.IsAnchored || !craft.IsLanded || craft.Stats.MiningRateKgPerS <= 0) return null;
         var body = GetBody(craft.LandedOnBodyId);
         var bearing = LandedBearing(craft);
-        if (craft.Job is MiningJob { Active: true } job) return body.DepositAt(job.MaterialId, bearing) > 0 ? job.MaterialId : null;
-        // By hand: the ore at this site first (#70), then the body's bulk (#27).
-        return body.SiteAt(bearing)?.DepositsKg.Keys.FirstOrDefault() ?? (body.BulkKg > 0 ? body.BulkMaterialId : null);
+        if (LawForbidsMining(body) is not null) return null; // the laws in force (#36)
+        if (craft.Job is MiningJob { Active: true } job) return MineableAt(body, job.MaterialId, bearing) > 0 ? job.MaterialId : null;
+        // By hand: the ore at this site first (#70), then the body's bulk (#27) if the laws allow it.
+        return body.SiteAt(bearing)?.DepositsKg.Keys.FirstOrDefault() ?? (body.BulkKg > 0 && BulkMiningAllowed ? body.BulkMaterialId : null);
     }
 
     private void StepMining()
@@ -41,8 +42,9 @@ public sealed partial class SectorState
             var whole = (long)Math.Floor(drilled);
             var body = GetBody(craft.LandedOnBodyId);
             var bearing = LandedBearing(craft);
-            var taken = body.Extract(material, Math.Min(whole, craft.FreeCargoKg), bearing); // from the site under the drill (#70)
+            var taken = body.Extract(material, Math.Min(whole, craft.FreeCargoKg), bearing, BulkMiningAllowed); // from the site under the drill (#70)
             craft.Inventory.Add(material, taken);
+            NoteMining(body, taken); // a grievance in a claimed system (#36)
             body.Dig(bearing, taken); // a crater where it digs (#28)
             // Keep the unfinished fraction only while the drill can continue; a full hold or an
             // empty deposit stops the drill, and partly-cut material stays in the rock.

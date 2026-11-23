@@ -123,7 +123,9 @@ public sealed partial class SectorState
             }
             if (gate.GateLinkId.IsNone || !_craftsById.TryGetValue(gate.GateLinkId, out var far))
             {
-                if (OpenSystem(gate) is { } reason) { next.GateStatus = $"waiting: {reason}"; continue; }
+                // A far gate destroyed by a raid (#36) is sent through again to the same system; otherwise a new system opens.
+                var problem = !gate.GateLostStarId.IsNone ? RebuildFarGate(gate) : OpenSystem(gate);
+                if (problem is { } reason) { next.GateStatus = $"waiting: {reason}"; continue; }
                 far = _craftsById[gate.GateLinkId];
             }
             TryUsePower(gate, energy);
@@ -165,6 +167,7 @@ public sealed partial class SectorState
         var before = ComputeMassLedger().DepositsKg;
         var (star, planet) = SectorGenerator.GenerateSystem(this, index);
         DiscoveredKg += ComputeMassLedger().DepositsKg - before; // new world: the ledger stays balanced
+        MaybeMeetCivilization(star, index); // a civilization may claim it (#36)
         var far = new CraftState(AllocateCraftId(), $"{star.Name} gate", gate.Design, gate.Design.ComputeStats(Parts), GetPosition(planet.Id), 0);
         AddCraft(far);
         var radius = planet.RadiusM + far.CollisionRadiusM + 700; // low, like the home yard: the planet is in view on arrival
@@ -270,6 +273,9 @@ public sealed partial class SectorState
     }
 
     /// <summary>Restores saved gate state.</summary>
+    /// <summary>Restores a gate whose far end was destroyed (#36).</summary>
+    public void RestoreGateLost(CraftId craftId, BodyId starId) => GetCraft(craftId).GateLostStarId = starId;
+
     public void RestoreGate(CraftId craftId, CraftId linkId, long gateReadyTick, long jumpRequestTick, int jumps)
     {
         var craft = GetCraft(craftId);

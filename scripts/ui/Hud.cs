@@ -203,7 +203,7 @@ public partial class Hud : Control
 
             Panels  (they open on the right; {K(InputActions.ClosePanels)} closes them)
                blueprint editor: {K(InputActions.Editor)}      shipyard: {K(InputActions.Shipyard)}      fleet: {K(InputActions.Fleet)}      cargo: {K(InputActions.Cargo)}      job: {K(InputActions.Job)}      map: {K(InputActions.Map)}
-               research: {K(InputActions.Research)}      settings: {K(InputActions.Settings)}      debug: {K(InputActions.Debug)}      diagnostics: {K(InputActions.Diagnostics)}      fullscreen: {K(InputActions.Fullscreen)}
+               research: {K(InputActions.Research)}      laws and civilizations: {K(InputActions.Laws)}      settings: {K(InputActions.Settings)}      debug: {K(InputActions.Debug)}      diagnostics: {K(InputActions.Diagnostics)}      fullscreen: {K(InputActions.Fullscreen)}
 
             Time and game
                slower: {K(InputActions.TimeSlower)}      faster: {K(InputActions.TimeFaster)}      pause: {K(InputActions.TimePause)}

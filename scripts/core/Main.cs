@@ -97,6 +97,9 @@ public partial class Main : Node2D
     private DiagnosticsPanel? _diagnosticsPanel;
     private ResearchPanel? _researchPanel;
 
+    /// <summary>Laws and civilizations (#36).</summary>
+    private LawsPanel? _lawsPanel;
+
     /// <summary>The title screen and main menu (#58). While it shows, no game is running.</summary>
     private TitleScreen? _title;
 
@@ -176,6 +179,8 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_diagnosticsPanel);
             _researchPanel = new ResearchPanel(() => _sector, _catalog) { Visible = false };
             _uiRoot.AddChild(_researchPanel);
+            _lawsPanel = new LawsPanel(() => _sector, () => _changedSinceSave = true) { Visible = false }; // #36
+            _uiRoot.AddChild(_lawsPanel);
             _debugPanel = new DebugPanel(() => _sector, () => _warp.Speed, SetGameSpeed, _catalog.Materials) { Visible = false };
             _uiRoot.AddChild(_debugPanel);
         }
@@ -237,6 +242,17 @@ public partial class Main : Node2D
             for (var i = 0; i < 300 * FixedStepClock.TicksPerSecond; i++) _sector.Step();
         }
         if (System.Array.IndexOf(args, "--demo-warp") >= 0) DemoWarp();
+        if (System.Array.IndexOf(args, "--demo-civ") >= 0) // #36 check: warp out, meet a wary civilization there, open the laws panel
+        {
+            DemoWarp();
+            for (var i = 0; i < 60 * FixedStepClock.TicksPerSecond && _sector.Stars.Count < 2; i++) _sector.Step();
+            if (_sector.Stars.Count > 1)
+            {
+                _sector.MeetCivilization(_sector.Stars[^1], cultureId: "territorial", baseline: -12);
+                _sector.SetLaw(Simulation.Laws.ArmedGates, true);
+            }
+            _lawsPanel?.Open();
+        }
         if (System.Array.IndexOf(args, "--demo-tug") >= 0 && _player != null && _sector.Crafts.FirstOrDefault(c => c.IsShipyard) is { } tugYard)
         {
             // Dev/test hook (#29): the player's ship docked at the yard as a tug, and the yard flown.
@@ -572,6 +588,7 @@ public partial class Main : Node2D
     {
         {
             _sector = loaded.Sector;
+            _lastEventShown = null; // events from before don't show as new (#36)
             _player = loaded.PlayerCraftId.IsNone ? null : _sector.GetCraft(loaded.PlayerCraftId);
             _playTimeS = loaded.Header?.PlayTimeS ?? 0;
             _gameName = loaded.Header is { GameName.Length: > 0 } h ? h.GameName : loaded.Header?.Name ?? System.IO.Path.GetFileNameWithoutExtension(path);
@@ -656,7 +673,7 @@ public partial class Main : Node2D
             if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1); // settings open above the menu
         }
         _hud.Visible = false;
-        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _mapPanel })
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _mapPanel })
             if (panel != null) panel.Visible = false;
         _title.Open(SaveSummary());
     }
@@ -696,8 +713,24 @@ public partial class Main : Node2D
 
         var game = NewGame.Create(seed, _catalog, _starterDesign, _starterShipyard);
         _sector = game.Sector;
+        _lastEventShown = null; // events from before don't show as new (#36)
         _player = _sector.GetCraft(game.PlayerCraftId);
         _savedTick = -1; // a new game is unsaved until it's saved
+    }
+
+    /// <summary>The newest sector event already shown on the status line (#36).</summary>
+    private SectorEvent? _lastEventShown;
+
+    /// <summary>A new event (contact, raid, a change of attitude) shows on the status line, with a sound.</summary>
+    private void ShowNewEvents()
+    {
+        if (InMenu || _sector is null || _sector.Events.Count == 0) return;
+        var last = _sector.Events[^1];
+        if (ReferenceEquals(last, _lastEventShown)) return;
+        var first = _lastEventShown is null;
+        _lastEventShown = last;
+        if (first && _sector.Tick > 1) return; // just loaded: old news
+        ShowStatus($"{last.Text}  ({InputActions.Key1(InputActions.Laws)}: laws and civilizations)");
     }
 
     private void ShowStatus(string message)
@@ -812,6 +845,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Diagnostics)) Toggle(_diagnosticsPanel, () => _diagnosticsPanel!.Open());
         else if (Pressed(InputActions.Settings)) Toggle(_settingsPanel, () => _settingsPanel!.Open());
         else if (Pressed(InputActions.Research)) Toggle(_researchPanel, () => _researchPanel!.Open());
+        else if (Pressed(InputActions.Laws)) Toggle(_lawsPanel, () => _lawsPanel!.Open());
         else if (Pressed(InputActions.Map)) ToggleMap();
         else if (Pressed(InputActions.Help)) _hud.ToggleHelp();
         else if (Pressed(InputActions.Fullscreen)) ToggleFullscreen();
@@ -821,7 +855,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
-            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel };
+            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel };
             var anyOpen = _mapMode || _hud.HelpOpen || panels.Any(p => p is { Visible: true });
             if (!anyOpen) OpenPause();
             if (_mapMode) ToggleMap();
@@ -880,6 +914,7 @@ public partial class Main : Node2D
         _audio.Watch(InMenu ? null : _sector, InMenu ? null : _player, delta); // ship sounds; music plays throughout (#64)
         _audioCost.Add(System.Diagnostics.Stopwatch.GetElapsedTime(audioStart).TotalMilliseconds);
         UpdatePanelNav();
+        ShowNewEvents(); // civilizations, laws (#36)
         StressFrame(delta);
         UpdateGoals(delta);
         if (InMenu)
@@ -980,7 +1015,11 @@ public partial class Main : Node2D
                        ? $"TUGS: {tugs.Count} docked{(p.TugThrustN > 0 ? $", pushing {p.TugThrustN / 1000:0} kN" : " (they push the way they face)")}, moving {_sector.MovingMassKg(p) / 1000:0} t\n"
                        : "")
                    + (p.GateStatus is { } gateNow ? $"WARP: {gateNow}{(p.JumpRequestTick > 0 ? $" - {InputActions.Key1(InputActions.Jump)} to cancel" : "")}\n"
-                       : p.IsDocked && SectorState.IsGate(_sector.GetCraft(p.DockedToCraftId)) ? $"WARP GATE {_sector.GetCraft(p.DockedToCraftId).Name} - {InputActions.Key1(InputActions.Jump)} to jump\n" : "")
+                       : p.IsDocked && _sector.GetCraft(p.DockedToCraftId) is { } atGate && SectorState.IsGate(atGate)
+                           ? (atGate.GateLostStarId.IsNone
+                               ? $"WARP GATE {atGate.Name} - {InputActions.Key1(InputActions.Jump)} to jump\n"
+                               : $"WARP GATE {atGate.Name}: its far gate in {_sector.GetBody(atGate.GateLostStarId).Name} was destroyed - {InputActions.Key1(InputActions.Jump)} sends a new one through (from its stock)\n")
+                           : "")
                    + (_sector.Stars.Count > 1 && _sector.StarAt(p.Position) is { } here ? $"system: {here.Name}\n" : "")
                    + (!p.IsLanded && !p.IsDocked && !p.IsOnRails && !p.Cruising && _sector.GravitySource(p.Position) is { } pull
                        ? $"gravity {_sector.GravityAt(p.Position, _sector.TimeS).Length:0.00} m/s² from {pull.Name} - land under {SectorState.SafeImpactSpeedMps:0} m/s\n"
@@ -1439,7 +1478,8 @@ public partial class Main : Node2D
             var craft = _sector.Crafts.Count(c => _sector.StarAt(c.Position)?.Id == star.Id);
             var type = star.StarClass switch { StarClass.Red => "red dwarf", StarClass.Blue => "blue star", _ => "yellow star" };
             var exotic = bodies.Any(b => b.DepositsKg.ContainsKey("exotic_ore")) ? ", exotic ore" : "";
-            var lines = $"{star.Name}{(star.Id == here ? "  (you are here)" : "")}\n{type}, {bodies.Count} bodies{exotic}\n{craft} of your craft";
+            var claim = _sector.FactionAtStar(star.Id) is { } owner ? $"\nclaimed by the {owner.Name} ({owner.Disposition.ToString().ToLowerInvariant()})" : ""; // #36
+            var lines = $"{star.Name}{(star.Id == here ? "  (you are here)" : "")}\n{type}, {bodies.Count} bodies{exotic}\n{craft} of your craft{claim}";
             var y = at.Y + 26 * ui;
             foreach (var line in lines.Split('\n'))
             {
