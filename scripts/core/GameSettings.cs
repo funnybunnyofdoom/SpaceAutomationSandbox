@@ -47,6 +47,12 @@ public sealed class GameSettings
     /// <summary>Buses muted (#64).</summary>
     public System.Collections.Generic.HashSet<string> Muted { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Autosave interval choices in minutes of play (#60); 0 = off.</summary>
+    public static readonly int[] AutosaveChoices = { 0, 5, 10, 15, 30 };
+
+    /// <summary>Minutes of play between autosaves (#60); 0 = off.</summary>
+    public int AutosaveMinutes { get; set; } = 10;
+
     /// <summary>Silence everything while the window isn't in front (#64).</summary>
     public bool MuteWhenUnfocused { get; set; } = true;
 
@@ -71,6 +77,8 @@ public sealed class GameSettings
             if (file.GetValue("audio", $"{bus.ToLowerInvariant()}_muted", false).AsBool()) settings.Muted.Add(bus);
         }
         settings.MuteWhenUnfocused = file.GetValue("audio", "mute_when_unfocused", true).AsBool();
+        var autosave = file.GetValue("game", "autosave_minutes", 10).AsInt32();
+        settings.AutosaveMinutes = Array.IndexOf(AutosaveChoices, autosave) >= 0 ? autosave : 10;
         return settings;
     }
 
@@ -88,6 +96,7 @@ public sealed class GameSettings
             file.SetValue("audio", $"{bus.ToLowerInvariant()}_muted", Muted.Contains(bus));
         }
         file.SetValue("audio", "mute_when_unfocused", MuteWhenUnfocused);
+        file.SetValue("game", "autosave_minutes", AutosaveMinutes);
         file.Save(FilePath);
     }
 

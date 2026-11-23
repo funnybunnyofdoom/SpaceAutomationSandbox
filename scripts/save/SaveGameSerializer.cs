@@ -10,7 +10,13 @@ using SpaceAutomationSandbox.Simulation;
 namespace SpaceAutomationSandbox.Save;
 
 /// <summary>A loaded game: the sector plus which craft the player flies.</summary>
-public sealed record LoadedGame(SectorState Sector, CraftId PlayerCraftId);
+public sealed record LoadedGame(SectorState Sector, CraftId PlayerCraftId, SaveHeader? Header = null);
+
+/// <summary>
+/// The small summary at the top of a save (#60): what the save list shows without reading the sector.
+/// Optional: saves from before slots have none.
+/// </summary>
+public sealed record SaveHeader(string Name, string SavedAtUtc, double PlayTimeS, long Tick, ulong Seed);
 
 /// <summary>
 /// Converts a whole <see cref="SectorState"/> to and from versioned JSON (format in docs/08_SAVE_FORMAT.md).
@@ -50,12 +56,13 @@ public static class SaveGameSerializer
         Converters = { new JsonStringEnumConverter() },
     };
 
-    public static string ToJson(SectorState sector, CraftId playerCraftId)
+    public static string ToJson(SectorState sector, CraftId playerCraftId, SaveHeader? header = null)
     {
         var file = new SaveFile
         {
             SchemaVersion = SchemaVersion,
             Game = GameId,
+            Header = header,
             PlayerCraftId = playerCraftId.Value,
             Sector = new SectorDto
             {
@@ -434,7 +441,7 @@ public static class SaveGameSerializer
             var player = new CraftId(file.PlayerCraftId);
             if (!player.IsNone) sector.GetCraft(player); // must exist
             sector.PilotCraftId = player;
-            return new LoadedGame(sector, player);
+            return new LoadedGame(sector, player, file.Header);
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException or KeyNotFoundException)
         {
@@ -502,6 +509,11 @@ public static class SaveGameSerializer
     {
         public int SchemaVersion { get; set; }
         public string? Game { get; set; }
+
+        /// <summary>#60 (optional, before the sector so a save list can read it alone).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public SaveHeader? Header { get; set; }
+
         public uint PlayerCraftId { get; set; }
         public SectorDto? Sector { get; set; }
     }

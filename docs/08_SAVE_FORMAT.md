@@ -1,14 +1,18 @@
-# 08 — Save format (schema 14)
+# 08 — Save format (schema 19)
 
-The code is `scripts/save/SaveGameSerializer.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs`.
+The code is `scripts/save/SaveGameSerializer.cs` and `scripts/save/SaveStore.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs` and `SaveStoreTests.cs`.
 
 ## Where and when
 
-- There's one quicksave slot: `user://savegame.json`. On Windows that's `%APPDATA%\Godot\app_userdata\SpaceAutomationSandbox\savegame.json`.
-- **F6** saves, **F9** loads and **F7** starts a new game. A new game doesn't touch the file until you save or quit.
-- Closing the game window autosaves. Stopping the game from the Godot editor kills the process without that notification, so press F6 first if you need that state.
-- At startup the game loads the save if one exists. If the save can't be read, it's renamed to `savegame.json.bad` and a new game starts, so a broken save is never silently overwritten.
-- Saves are written to `savegame.json.tmp` and then renamed over the old file, so a crash mid-write keeps the previous save.
+- Saves are files in `user://saves/` (#60). On Windows that's `%APPDATA%\Godot\app_userdata\SpaceAutomationSandbox\saves\`.
+  - **Manual saves** (`save_<date>_<time>.json`), made and named from the save screen (pause menu → Save).
+  - **The quicksave** (`quicksave.json`): **F6** saves, **F9** loads (asking first if there's unsaved progress).
+  - **Autosaves** (`autosave_1..3.json`), rotating (the oldest is replaced): every N minutes of play (Settings: off, 5, 10, 15 or 30; default 10) and when the window is closed. Stopping the game from the Godot editor kills the process without the close notification.
+- Each file starts with a small **header** (name, time saved, play time, tick, seed), written before the sector, so the save list reads just the first bytes of each file. Saves without one (from before slots) are listed by file name and file time, and get one when renamed.
+- **Continue** (title screen) loads the newest save that isn't broken. **Load** (title screen and pause menu) lists every save newest first, with load, rename and delete; the save screen adds "save as new" and overwrite. Overwriting, deleting, loading over unsaved progress and quitting with unsaved progress ask first.
+- A save that can't be read is listed as **broken**, with the reason; nothing is moved or deleted behind your back. A load that fails leaves the current game as it was.
+- Saves are written to `<file>.tmp` and then moved into place, so a crash mid-write keeps the previous save.
+- The single save from before slots (`user://savegame.json`) moves into the folder as `save_from_before_slots.json` the first time the game starts.
 
 ## Principles
 
@@ -104,8 +108,9 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | --- | --- | --- |
 | 1 | First format | — |
 | 2 | Added `landedOnBodyId` and `landedOffset` per craft (solid bodies) | A v1 file loads with every craft flying. The next save writes v2. |
-| 3 | Added `railOrbit`, `inventoryKg` and `buildQueue` per craft, and `nextOrderId` (shipyards) | v1/v2 files load with empty inventories and no queues. They contain no shipyard; F7 starts a new game that has one. |
+| 3 | Added `railOrbit`, `inventoryKg` and `buildQueue` per craft, and `nextOrderId` (shipyards) | v1/v2 files load with empty inventories and no queues. They contain no shipyard; a new game has one. |
 | 4 | Added `anchored` per craft (anchor clamps and foundations) | Older files load with nothing anchored, except a landed foundation, which is always anchored. |
+| 19 (later addition, optional) | `header` (`name`, `savedAtUtc`, `playTimeS`, `tick`, `seed`) before `sector` (#60) | Saves without one are listed by file name and time. |
 | 19 (later addition, optional) | `craters` per body: `[{ "bearingRad": 1.2, "massKg": 30000 }]` (#28) | No craters in older files. |
 | 19 | Research (`researchPoints`, `unlockedTech`, `researchAllUnlocked`; `labRemainderKg` per craft) and star types (`starClass` per body, omitted for yellow) | The migration sets `researchAllUnlocked`: everything stays open in a game started before research. |
 | 18 | Warp gates and further star systems: `gateLinkId`, `gateReadyTick`, `jumpRequestTick`, `jumps` per craft; `sector.discoveredKg` | An older save has one system and no gates; nothing changes. |
@@ -121,5 +126,5 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 9 | Storage is limited to storage parts. Adds `legacyUnlimitedStorage` per craft (only written when true) | The migration sets it on stations that held stock without any storage parts (e.g. the old starter shipyard), so those games keep working. |
 | 8 | Added `sector.tuning` (debug multipliers) and `job.retryAtTick` (blocked ships retry after a delay) | Older files load with default tuning and immediate retries. |
 | 7 | Added `surveyed` per body, `refiningBatch` per craft, and freight jobs (`job.kind` = "freight" with `pickupId`, `minPickupKg`, `keepStockedKg`, `haulState`, `haulResumeState`) | Older files load with every body surveyed, no refinery batches, and mining jobs only. |
-| 6 | Added `depositsKg` per body, and `miningRemainderKg` and `job` per craft (mining) | Older files load with no deposits (nothing to mine) and no jobs. F7 starts a new game with Rock-1's deposit. |
+| 6 | Added `depositsKg` per body, and `miningRemainderKg` and `job` per craft (mining) | Older files load with no deposits (nothing to mine) and no jobs. A new game has Rock-1's deposit. |
 | 5 | Added `rot` per design cell (omitted when 0), `targetCraftId`, `dockedToCraftId` and `dockPort` per craft, and `landingSiteBodyId` per build order | Older files load with no rotation, no craft targets, nothing docked, and no landing sites. |

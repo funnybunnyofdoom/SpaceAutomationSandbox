@@ -19,6 +19,7 @@ public partial class SettingsPanel : PanelContainer
     private Label _info = null!;
     private readonly Dictionary<string, (HSlider Slider, CheckBox Mute, Label Value)> _audio = new();
     private CheckBox _muteUnfocused = null!;
+    private OptionButton _autosave = null!;
     private List<Vector2I> _sizes = new();
     private bool _updating;
 
@@ -70,6 +71,12 @@ public partial class SettingsPanel : PanelContainer
         foreach (var s in GameSettings.UiScales) _scale.AddItem(s == 0 ? "Automatic" : $"{s * 100:0}%");
         _scale.ItemSelected += i => Change(() => _settings.UiScale = GameSettings.UiScales[i]);
         grid.AddChild(_scale);
+
+        grid.AddChild(new Label { Text = "Autosave" });
+        _autosave = new OptionButton { FocusMode = FocusModeEnum.None };
+        foreach (var minutes in GameSettings.AutosaveChoices) _autosave.AddItem(minutes == 0 ? "Off" : $"Every {minutes} minutes of play");
+        _autosave.ItemSelected += i => Change(() => _settings.AutosaveMinutes = GameSettings.AutosaveChoices[i]);
+        grid.AddChild(_autosave);
 
         _info = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(420, 0), Modulate = new Color(1, 1, 1, 0.65f) };
         box.AddChild(_info);
@@ -141,6 +148,7 @@ public partial class SettingsPanel : PanelContainer
             mute.ButtonPressed = _settings.Muted.Contains(bus);
         }
         _muteUnfocused.ButtonPressed = _settings.MuteWhenUnfocused;
+        _autosave.Select(Math.Max(0, Array.IndexOf(GameSettings.AutosaveChoices, _settings.AutosaveMinutes)));
         var window = DisplayServer.WindowGetSize();
         _info.Text = $"Interface at {_settings.EffectiveUiScale(window) * 100:0}% for this {window.X} × {window.Y} window. "
                      + "It's capped so every panel still fits. A bigger window shows more of space. F11 toggles fullscreen. "

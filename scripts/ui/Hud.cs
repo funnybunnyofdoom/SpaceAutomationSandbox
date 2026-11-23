@@ -187,7 +187,7 @@ public partial class Hud : Control
 
         Time and game
            slower: [      faster: ]      pause: P
-           save: F6      load: F9      new game: F7      (closing the window saves)
+           quicksave: F6      quickload: F9      pause menu (save, load, quit): Esc      (closing the window autosaves)
 
         HUD: click Ship, Stations or Target to fold them away.
         """;

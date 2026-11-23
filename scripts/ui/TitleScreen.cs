@@ -7,18 +7,20 @@ namespace SpaceAutomationSandbox.UI;
 /// Title screen and main menu (#58): the game's (working) name over the starfield, then Continue
 /// (the save, if there is one), New Game, Load, Settings, Credits and Quit. Keyboard and controller
 /// drive it with the usual UI keys (arrows/D-pad to move, Enter/A to choose); the first available
-/// button has focus. Load waits for save slots (#60) and Credits for the credits screen (#66).
+/// button has focus. Load opens the save list (#60); Credits waits for the credits screen (#66).
 /// </summary>
 public partial class TitleScreen : Control
 {
     public event Action? ContinueChosen;
     public event Action? NewGameChosen;
+    public event Action? LoadChosen;
     public event Action? SettingsChosen;
     public event Action? QuitChosen;
 
     private Button _continue = null!;
     private Button _newGame = null!;
     private Label _saveInfo = null!;
+    private Label _message = null!;
 
     public TitleScreen()
     {
@@ -59,16 +61,19 @@ public partial class TitleScreen : Control
         box.AddChild(_saveInfo);
         _newGame = MenuButton("New Game", () => NewGameChosen?.Invoke());
         box.AddChild(_newGame);
-        var load = MenuButton("Load", () => { });
-        load.Disabled = true;
-        load.TooltipText = "Comes with save slots (#60). Continue loads your save for now.";
-        box.AddChild(load);
+        box.AddChild(MenuButton("Load", () => LoadChosen?.Invoke()));
         box.AddChild(MenuButton("Settings", () => SettingsChosen?.Invoke()));
         var credits = MenuButton("Credits", () => { });
         credits.Disabled = true;
         credits.TooltipText = "Comes with the credits screen (#66).";
         box.AddChild(credits);
         box.AddChild(MenuButton("Quit", () => QuitChosen?.Invoke()));
+        _message = new Label
+        {
+            HorizontalAlignment = HorizontalAlignment.Center, Modulate = new Color(1f, 0.6f, 0.55f),
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(420, 0),
+        };
+        box.AddChild(_message);
     }
 
     private static Button MenuButton(string text, Action pressed)
@@ -80,8 +85,10 @@ public partial class TitleScreen : Control
     }
 
     /// <summary>Shows the menu. <paramref name="saveSummary"/> describes the save Continue loads, or null if there's none.</summary>
-    public void Open(string? saveSummary)
+    public void Open(string? saveSummary, string? message = null)
     {
+        _message.Text = message ?? "";
+        _message.Visible = !string.IsNullOrEmpty(message);
         _continue.Disabled = saveSummary is null;
         _saveInfo.Text = saveSummary ?? "";
         _saveInfo.Visible = saveSummary is not null;

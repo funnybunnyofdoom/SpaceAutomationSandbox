@@ -41,7 +41,6 @@ public static class InputActions
     public const string ClosePanels = "close_panels";
     public const string QuickSave = "game_quicksave";
     public const string QuickLoad = "game_quickload";
-    public const string NewGame = "game_new";
     public const string Help = "open_help";
     public const string Jump = "ship_warp_jump";
     public const string Research = "open_research";
@@ -76,10 +75,9 @@ public static class InputActions
         Add(Cargo, 0.5f, Keys(Key.C));
         Add(Job, 0.5f, Keys(Key.J));
         Add(Debug, 0.5f, Keys(Key.F3));
-        Add(ClosePanels, 0.5f, Keys(Key.Escape));
+        Add(ClosePanels, 0.5f, Keys(Key.Escape), Pad(JoyButton.Start)); // closes panels, else opens the pause menu (#59)
         Add(QuickSave, 0.5f, Keys(Key.F6));
         Add(QuickLoad, 0.5f, Keys(Key.F9));
-        Add(NewGame, 0.5f, Keys(Key.F7));
         Add(Help, 0.5f, Keys(Key.H, Key.F1));
         Add(Jump, 0.5f, Keys(Key.N));
         Add(Research, 0.5f, Keys(Key.R));
