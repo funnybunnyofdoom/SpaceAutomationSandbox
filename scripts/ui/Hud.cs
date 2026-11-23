@@ -30,6 +30,8 @@ public partial class Hud : Control
     private readonly Action _saveSettings;
     private Section _status = null!, _ship = null!, _stations = null!, _target = null!;
     private PanelContainer _help = null!;
+    private Label _helpLabel = null!;
+    private Label _hintLabel = null!;
 
     public Hud(GameSettings settings, Action saveSettings)
     {
@@ -43,9 +45,17 @@ public partial class Hud : Control
     /// <summary>True while the key help is open.</summary>
     public bool HelpOpen => _help.Visible;
 
-    public void ToggleHelp() => _help.Visible = !_help.Visible;
+    public void ToggleHelp()
+    {
+        _helpLabel.Text = HelpText();
+        _help.Visible = !_help.Visible;
+    }
 
     public void CloseHelp() => _help.Visible = false;
+
+    /// <summary>The bottom-left hint names the current Help and Close keys (call after rebinding, #63).</summary>
+    public void RefreshHint() =>
+        _hintLabel.Text = $"{InputActions.Key1(InputActions.Help)}  keys and help      {InputActions.Key1(InputActions.ClosePanels)}  close panels";
 
     private void Build()
     {
@@ -72,10 +82,13 @@ public partial class Hud : Control
         AddChild(bottom);
         _target = new Section("Target", this);
         bottom.AddChild(_target.Panel);
-        var hint = Panel(new Label { Text = "H  keys and help      Esc  close panels", Modulate = new Color(1, 1, 1, 0.75f) });
+        _hintLabel = new Label { Modulate = new Color(1, 1, 1, 0.75f) };
+        RefreshHint();
+        var hint = Panel(_hintLabel);
         bottom.AddChild(hint);
 
-        _help = Panel(new Label { Text = HelpText });
+        _helpLabel = new Label();
+        _help = Panel(_helpLabel);
         ((StyleBoxFlat)_help.GetThemeStylebox("panel")).BgColor = new Color(0.02f, 0.03f, 0.07f, 0.9f); // solid enough to read over anything
         _help.SetAnchorsPreset(LayoutPreset.Center);
         _help.GrowHorizontal = GrowDirection.Both;
@@ -171,24 +184,29 @@ public partial class Hud : Control
         }
     }
 
-    private const string HelpText = """
-        KEYS  (H or F1 to close)
+    /// <summary>The key list on H, from the current bindings (#63), so a rebound key shows as it is.</summary>
+    private static string HelpText()
+    {
+        static string K(string action) => InputActions.KeyText(action);
+        return $"""
+            KEYS  ({K(InputActions.Help)} to close)      change them in Settings → Controls
 
-        Flying
-           thrust: W or Up      reverse: X      turn: A / D      strafe: Q / E
-           brake (matches the target's motion): S, Down or Space
-           cruise drive: V      anchor / release: G      dock / undock: K      deploy a kit: U
-           warp jump (docked at a gate): N
-           cycle target: Tab      target nearest body: T      zoom: mouse wheel
+            Flying
+               thrust: {K(InputActions.Thrust)}      reverse: {K(InputActions.Reverse)}      turn: {K(InputActions.TurnLeft)} / {K(InputActions.TurnRight)}      strafe: {K(InputActions.StrafeLeft)} / {K(InputActions.StrafeRight)}
+               brake (matches the target's motion): {K(InputActions.Brake)}
+               cruise drive: {K(InputActions.Cruise)}      anchor / release: {K(InputActions.Anchor)}      dock / undock: {K(InputActions.Dock)}      deploy a kit: {K(InputActions.Deploy)}
+               warp jump (docked at a gate): {K(InputActions.Jump)}
+               cycle target: {K(InputActions.TargetCycle)}      target nearest body: {K(InputActions.TargetNearest)}      zoom: {K(InputActions.ZoomIn)} / {K(InputActions.ZoomOut)}
 
-        Panels  (they open on the right; Esc closes them)
-           blueprint editor: B      shipyard: Y      fleet: F      cargo: C      job: J      map: M
-           research: R      settings: F2      debug: F3      diagnostics: F4      fullscreen: F11
+            Panels  (they open on the right; {K(InputActions.ClosePanels)} closes them)
+               blueprint editor: {K(InputActions.Editor)}      shipyard: {K(InputActions.Shipyard)}      fleet: {K(InputActions.Fleet)}      cargo: {K(InputActions.Cargo)}      job: {K(InputActions.Job)}      map: {K(InputActions.Map)}
+               research: {K(InputActions.Research)}      settings: {K(InputActions.Settings)}      debug: {K(InputActions.Debug)}      diagnostics: {K(InputActions.Diagnostics)}      fullscreen: {K(InputActions.Fullscreen)}
 
-        Time and game
-           slower: [      faster: ]      pause: P
-           quicksave: F6      quickload: F9      pause menu (save, load, quit): Esc      (closing the window autosaves)
+            Time and game
+               slower: {K(InputActions.TimeSlower)}      faster: {K(InputActions.TimeFaster)}      pause: {K(InputActions.TimePause)}
+               quicksave: {K(InputActions.QuickSave)}      quickload: {K(InputActions.QuickLoad)}      pause menu (save, load, quit): {K(InputActions.ClosePanels)}      (closing the window autosaves)
 
-        HUD: click Ship, Stations or Target to fold them away.
-        """;
+            HUD: click Ship, Stations or Target to fold them away.
+            """;
+    }
 }

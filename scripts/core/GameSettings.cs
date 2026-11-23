@@ -59,6 +59,10 @@ public sealed class GameSettings
     /// <summary>HUD areas folded away (#51), by title.</summary>
     public System.Collections.Generic.HashSet<string> HudCollapsed { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Controls the player changed (#63): action → bindings as text (see <see cref="InputActions.Serialize(string)"/>).
+    /// Only changed actions are kept; the rest use the defaults.</summary>
+    public System.Collections.Generic.Dictionary<string, string> Bindings { get; } = new(StringComparer.Ordinal);
+
     public static GameSettings Load()
     {
         var settings = new GameSettings();
@@ -79,6 +83,9 @@ public sealed class GameSettings
         settings.MuteWhenUnfocused = file.GetValue("audio", "mute_when_unfocused", true).AsBool();
         var autosave = file.GetValue("game", "autosave_minutes", 10).AsInt32();
         settings.AutosaveMinutes = Array.IndexOf(AutosaveChoices, autosave) >= 0 ? autosave : 10;
+        if (file.HasSection("controls"))
+            foreach (var action in file.GetSectionKeys("controls"))
+                settings.Bindings[action] = file.GetValue("controls", action, "").AsString();
         return settings;
     }
 
@@ -97,6 +104,7 @@ public sealed class GameSettings
         }
         file.SetValue("audio", "mute_when_unfocused", MuteWhenUnfocused);
         file.SetValue("game", "autosave_minutes", AutosaveMinutes);
+        foreach (var (action, text) in Bindings) file.SetValue("controls", action, text);
         file.Save(FilePath);
     }
 

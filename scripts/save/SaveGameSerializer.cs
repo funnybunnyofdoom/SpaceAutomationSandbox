@@ -16,7 +16,7 @@ public sealed record LoadedGame(SectorState Sector, CraftId PlayerCraftId, SaveH
 /// The small summary at the top of a save (#60): what the save list shows without reading the sector.
 /// Optional: saves from before slots have none.
 /// </summary>
-public sealed record SaveHeader(string Name, string SavedAtUtc, double PlayTimeS, long Tick, ulong Seed);
+public sealed record SaveHeader(string Name, string SavedAtUtc, double PlayTimeS, long Tick, ulong Seed, string GameName = "");
 
 /// <summary>
 /// Converts a whole <see cref="SectorState"/> to and from versioned JSON (format in docs/08_SAVE_FORMAT.md).

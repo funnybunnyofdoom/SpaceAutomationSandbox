@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Simulation;
 
@@ -49,7 +50,8 @@ public partial class DebugPanel : PanelContainer
         var box = new VBoxContainer();
         box.AddThemeConstantOverride("separation", 6);
         AddChild(box);
-        var title = new Label { Text = "DEBUG  (F3 to close)" };
+        var title = new Label();
+        InputActions.TitleWithKey(title, "DEBUG", InputActions.Debug);
         title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(title);
 

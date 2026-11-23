@@ -17,6 +17,24 @@ public static class NewGame
 {
     public const ulong DefaultSeed = 20261120;
 
+    /// <summary>
+    /// The seed for what the player typed (#62): a whole number is used as it is; any other text (a
+    /// word or phrase, to share a world easily) becomes a number by a fixed hash (FNV-1a, 64-bit), so
+    /// the same text always gives the same world. Leading and trailing spaces are ignored.
+    /// </summary>
+    public static ulong SeedFromText(string text)
+    {
+        text = text.Trim();
+        if (ulong.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var number)) return number;
+        var hash = 14695981039346656037UL;
+        foreach (var b in System.Text.Encoding.UTF8.GetBytes(text))
+        {
+            hash ^= b;
+            hash *= 1099511628211UL;
+        }
+        return hash;
+    }
+
     /// <summary>Fuel in the player's hold at the start: about 10 minutes of cruise for the starter ship.</summary>
     public const long PlayerStartingFuelKg = 150;
 

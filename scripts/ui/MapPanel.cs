@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Simulation;
 
 namespace SpaceAutomationSandbox.UI;
@@ -48,12 +49,12 @@ public partial class MapPanel : PanelContainer
 
         var box = new VBoxContainer();
         AddChild(box);
-        _title = new Label { Text = "SYSTEM MAP  (M to close)" };
+        _title = new Label { Text = $"SYSTEM MAP  ({InputActions.Key1(InputActions.Map)} to close)" };
         _title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(_title);
         box.AddChild(new Label
         {
-            Text = "Distances and rough travel times from the craft you fly (cruise V for long trips). Wheel zooms. G: galaxy view.",
+            Text = $"Distances and rough travel times from the craft you fly (cruise {InputActions.Key1(InputActions.Cruise)} for long trips). {InputActions.Key1(InputActions.ZoomIn)} / {InputActions.Key1(InputActions.ZoomOut)} zoom. {InputActions.Key1(InputActions.Anchor)}: galaxy view.",
             AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(360, 0), Modulate = new Color(1, 1, 1, 0.6f),
         });
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
@@ -96,7 +97,7 @@ public partial class MapPanel : PanelContainer
         var key = $"{sector.Bodies.Count}|{string.Join(",", stations)}";
         if (key != _layoutKey) Rebuild(sector, stations, key);
         foreach (var (label, text) in _labels) label.Text = text();
-        _title.Text = pilot is null ? "SYSTEM MAP  (M to close)" : $"SYSTEM MAP from {pilot.Name}  (M to close)";
+        _title.Text = pilot is null ? $"SYSTEM MAP  ({InputActions.Key1(InputActions.Map)} to close)" : $"SYSTEM MAP from {pilot.Name}  ({InputActions.Key1(InputActions.Map)} to close)";
     }
 
     private void Rebuild(SectorState sector, List<CraftId> stations, string key)

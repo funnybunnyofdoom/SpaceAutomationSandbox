@@ -118,7 +118,7 @@ public static class SaveStore
     private static SaveHeader ReadHeader(ref Utf8JsonReader reader)
     {
         if (reader.TokenType != JsonTokenType.StartObject) throw new FormatException("bad header");
-        string name = "", saved = "";
+        string name = "", saved = "", game = "";
         double play = 0;
         long tick = 0;
         ulong seed = 0;
@@ -133,10 +133,11 @@ public static class SaveStore
                 case "playtimes": play = reader.GetDouble(); break;
                 case "tick": tick = reader.GetInt64(); break;
                 case "seed": seed = reader.GetUInt64(); break;
+                case "gamename": game = reader.GetString() ?? ""; break;
                 default: reader.Skip(); break;
             }
         }
-        return new SaveHeader(name, saved, play, tick, seed);
+        return new SaveHeader(name, saved, play, tick, seed, game);
     }
 
     /// <summary>Writes a save safely: to a temporary file, then into place.</summary>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Simulation;
 
@@ -71,7 +72,8 @@ public partial class ShipyardPanel : PanelContainer
         box.AddThemeConstantOverride("separation", 8);
         outer.AddChild(box);
 
-        var title = new Label { Text = "SHIPYARD  (Y to close)" };
+        var title = new Label();
+        InputActions.TitleWithKey(title, "SHIPYARD", InputActions.Shipyard);
         title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(title);
 

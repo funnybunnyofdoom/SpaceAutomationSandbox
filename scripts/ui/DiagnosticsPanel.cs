@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Simulation;
 
 namespace SpaceAutomationSandbox.UI;
@@ -54,7 +55,8 @@ public partial class DiagnosticsPanel : PanelContainer
         AddChild(scroll);
         var box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         scroll.AddChild(box);
-        var title = new Label { Text = "DIAGNOSTICS  (F4 to close)" };
+        var title = new Label();
+        InputActions.TitleWithKey(title, "DIAGNOSTICS", InputActions.Diagnostics);
         title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(title);
         _text = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(430, 0) };

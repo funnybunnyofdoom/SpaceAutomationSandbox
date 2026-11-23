@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Simulation;
 
@@ -66,7 +67,8 @@ public partial class CargoPanel : PanelContainer
         AddChild(scroll);
         var box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         scroll.AddChild(box);
-        var title = new Label { Text = "CARGO  (C to close)" };
+        var title = new Label();
+        InputActions.TitleWithKey(title, "CARGO", InputActions.Cargo);
         title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(title);
         _hint = new Label { Modulate = Dim, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(400, 0) };

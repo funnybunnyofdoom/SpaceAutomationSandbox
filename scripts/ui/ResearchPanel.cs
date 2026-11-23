@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Simulation;
 
@@ -48,7 +49,8 @@ public partial class ResearchPanel : PanelContainer
         var box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         box.AddThemeConstantOverride("separation", 6);
         scroll.AddChild(box);
-        var title = new Label { Text = "RESEARCH  (R to close)" };
+        var title = new Label();
+        InputActions.TitleWithKey(title, "RESEARCH", InputActions.Research);
         title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(title);
         box.AddChild(new Label

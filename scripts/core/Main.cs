@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Save;
 using SpaceAutomationSandbox.Simulation;
@@ -84,6 +85,9 @@ public partial class Main : Node2D
     /// <summary>Holds the HUD and every panel; scaled by the interface scale and sized to the window (#52).</summary>
     private Control _uiRoot = null!;
     private SettingsPanel? _settingsPanel;
+
+    /// <summary>Rebinding (#63), opened from Settings.</summary>
+    private ControlsPanel? _controls;
     private BlueprintEditorView? _editor;
     private ShipyardPanel? _shipyardPanel;
     private FleetPanel? _fleetPanel;
@@ -108,6 +112,7 @@ public partial class Main : Node2D
     public override void _Ready()
     {
         InputActions.EnsureDefaults(); // before any input is read
+        InputActions.Apply(_settings.Bindings); // the player's own controls (#63)
         RenderingServer.SetDefaultClearColor(SpaceColor);
         _camera = GetNode<Camera2D>("Camera2D");
         _settings.ApplyWindow();
@@ -123,6 +128,15 @@ public partial class Main : Node2D
         AddChild(_audio);
         _settingsPanel = new SettingsPanel(_settings, () => { _settings.ApplyWindow(); _settings.Save(); LayoutUi(); _audio.ApplySettings(); }) { Visible = false };
         _uiRoot.AddChild(_settingsPanel);
+        _controls = new ControlsPanel(_settings, () => { _settings.Save(); _hud.RefreshHint(); });
+        _uiRoot.AddChild(_controls);
+        _settingsPanel.ControlsChosen += () =>
+        {
+            _settingsPanel.Visible = false;
+            _uiRoot.MoveChild(_controls, _uiRoot.GetChildCount() - 1);
+            _controls.Open();
+        };
+        _controls.Closed += () => _settingsPanel.Open(); // back to Settings
 
         LoadDefinitions();
         if (_catalog != null)
@@ -172,6 +186,7 @@ public partial class Main : Node2D
             ShowTitle();
             // Dev/test: choose from the menu without clicking.
             if (System.Array.IndexOf(startArgs, "--title-pick=new") >= 0) LeaveTitle(StartNewGame);
+            if (System.Array.IndexOf(startArgs, "--title-pick=setup") >= 0) { _uiRoot.MoveChild(_newGame, _uiRoot.GetChildCount() - 1); _newGame.Open(); } // #62 check
             if (System.Array.IndexOf(startArgs, "--title-pick=continue") >= 0) LeaveTitle(() => { if (!LoadNewest()) StartNewGame(); });
             return;
         }
@@ -243,6 +258,7 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-fleet") >= 0) _fleetPanel?.Open();
         if (System.Array.IndexOf(args, "--open-diagnostics") >= 0) _diagnosticsPanel?.Open();
         if (System.Array.IndexOf(args, "--open-settings") >= 0) _settingsPanel?.Open();
+        if (System.Array.IndexOf(args, "--open-controls") >= 0) { _uiRoot.MoveChild(_controls!, _uiRoot.GetChildCount() - 1); _controls!.Open(); }
         if (System.Array.IndexOf(args, "--open-map") >= 0) ToggleMap();
         if (System.Array.IndexOf(args, "--open-research") >= 0) _researchPanel?.Open();
         if (System.Array.IndexOf(args, "--open-pause") >= 0) OpenPause();
@@ -348,14 +364,20 @@ public partial class Main : Node2D
     private bool HasUnsavedChanges => _player != null && !InMenu && (_sector.Tick != _savedTick || _changedSinceSave);
 
     /// <summary>The pause menu, the save screen or a question is showing: the game waits.</summary>
-    private bool ModalOpen => _pause is { Visible: true } || _saveScreen is { Visible: true } || _confirm is { Visible: true };
+    private bool ModalOpen => _pause is { Visible: true } || _saveScreen is { Visible: true } || _confirm is { Visible: true } || _controls is { Visible: true };
 
     private bool _pausedBeforeMenu;
+
+    /// <summary>The game's name (#62): names its saves; kept in the save header.</summary>
+    private string _gameName = "New game";
+
+    private NewGameScreen _newGame = null!;
 
     private void BuildMenus()
     {
         _confirm = new ConfirmDialog();
         _saveScreen = new SaveLoadScreen(() => SavesFolder, (question, choices) => _confirm.Ask(question, choices));
+        _saveScreen.DefaultName = () => _gameName;
         _saveScreen.SaveChosen += (path, name) =>
         {
             if (SaveTo(path, name)) _saveScreen.ShowMessage($"Saved \"{name}\".");
@@ -368,7 +390,10 @@ public partial class Main : Node2D
             if (InMenu) LeaveTitle(() => { });
             else ResumeFromPause();
         });
-        _saveScreen.Closed += () => { if (InMenu) ShowTitle(); else _pause.Open(); };
+        _saveScreen.Closed += () => { if (InMenu) ShowTitle(); else OpenPauseAgain(); };
+        _newGame = new NewGameScreen();
+        _newGame.StartChosen += (name, seed) => LeaveTitle(() => StartNewGame(seed, name));
+        _newGame.BackChosen += ShowTitle;
         _pause = new PauseMenu();
         _pause.ResumeChosen += ResumeFromPause;
         _pause.SaveChosen += () => { _pause.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Save); };
@@ -380,6 +405,7 @@ public partial class Main : Node2D
         // Above everything else: pause menu, then the save screen, then questions on top.
         _uiRoot.AddChild(_pause);
         _uiRoot.AddChild(_saveScreen);
+        _uiRoot.AddChild(_newGame);
         if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1);
         _uiRoot.AddChild(_confirm);
         // Any button pressed in the game's own panels counts as a change to save (not in the menus themselves).
@@ -392,7 +418,7 @@ public partial class Main : Node2D
     private static bool IsMenuControl(Node node)
     {
         for (var n = node; n != null; n = n.GetParent())
-            if (n is PauseMenu or SaveLoadScreen or ConfirmDialog or TitleScreen or SettingsPanel) return true;
+            if (n is PauseMenu or SaveLoadScreen or ConfirmDialog or TitleScreen or SettingsPanel or NewGameScreen or ControlsPanel) return true;
         return false;
     }
 
@@ -400,7 +426,15 @@ public partial class Main : Node2D
     {
         _pausedBeforeMenu = _warp.Paused;
         _warp.Paused = true;
-        _pause.Open();
+        _pause.Open(_sector is null ? "" : $"{_gameName}   ·   seed {_sector.Seed}   ·   played {(int)(_playTimeS / 3600)} h {(int)(_playTimeS / 60) % 60} min");
+    }
+
+    /// <summary>Back to the pause menu from a screen opened from it (the game stays paused as it was).</summary>
+    private void OpenPauseAgain()
+    {
+        var before = _pausedBeforeMenu;
+        OpenPause();
+        _pausedBeforeMenu = before;
     }
 
     private void ResumeFromPause()
@@ -446,7 +480,7 @@ public partial class Main : Node2D
         if (_player == null) return false;
         try
         {
-            var header = new SaveHeader(name, System.DateTime.UtcNow.ToString("O"), _playTimeS, _sector.Tick, _sector.Seed);
+            var header = new SaveHeader(name, System.DateTime.UtcNow.ToString("O"), _playTimeS, _sector.Tick, _sector.Seed, _gameName);
             SaveStore.Write(path, SaveGameSerializer.ToJson(_sector, _player.Id, header));
             _savedTick = _sector.Tick;
             _changedSinceSave = false;
@@ -471,6 +505,7 @@ public partial class Main : Node2D
             _sector = loaded.Sector;
             _player = loaded.PlayerCraftId.IsNone ? null : _sector.GetCraft(loaded.PlayerCraftId);
             _playTimeS = loaded.Header?.PlayTimeS ?? 0;
+            _gameName = loaded.Header is { GameName.Length: > 0 } h ? h.GameName : loaded.Header?.Name ?? System.IO.Path.GetFileNameWithoutExtension(path);
             _savedTick = _sector.Tick;
             _changedSinceSave = false;
             _sinceAutosaveS = 0;
@@ -539,7 +574,7 @@ public partial class Main : Node2D
                 else _title.Open(SaveSummary(), _status); // stays on the menu and says why
             };
             _title.LoadChosen += () => { _title.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Load); _title.Visible = true; _uiRoot.MoveChild(_saveScreen, _uiRoot.GetChildCount() - 1); _uiRoot.MoveChild(_confirm, _uiRoot.GetChildCount() - 1); };
-            _title.NewGameChosen += () => LeaveTitle(StartNewGame);
+            _title.NewGameChosen += () => { _uiRoot.MoveChild(_newGame, _uiRoot.GetChildCount() - 1); _newGame.Open(); }; // name and seed first (#62)
             _title.SettingsChosen += () => _settingsPanel?.Open();
             if (_settingsPanel != null) _settingsPanel.Closed += () => { if (InMenu) ShowTitle(); }; // focus back on the menu
             _title.QuitChosen += () => GetTree().Quit();
@@ -568,8 +603,12 @@ public partial class Main : Node2D
         GD.Print($"[Sector] seed={_sector.Seed} tick={_sector.Tick} bodies={_sector.Bodies.Count} (from the main menu)");
     }
 
-    private void StartNewGame()
+    /// <summary>A new game from a seed (#62); the default seed for command-line starts.</summary>
+    private void StartNewGame() => StartNewGame(NewGame.DefaultSeed, "New game");
+
+    private void StartNewGame(ulong seed, string name)
     {
+        _gameName = name;
         _player = null;
         _playTimeS = 0;
         _sinceAutosaveS = 0;
@@ -580,7 +619,7 @@ public partial class Main : Node2D
             return;
         }
 
-        var game = NewGame.Create(NewGame.DefaultSeed, _catalog, _starterDesign, _starterShipyard);
+        var game = NewGame.Create(seed, _catalog, _starterDesign, _starterShipyard);
         _sector = game.Sector;
         _player = _sector.GetCraft(game.PlayerCraftId);
         _savedTick = -1; // a new game is unsaved until it's saved
@@ -600,7 +639,7 @@ public partial class Main : Node2D
         if (what == NotificationApplicationFocusOut) { _audio?.SetFocused(false); return; }
         if (what == NotificationApplicationFocusIn) { _audio?.SetFocused(true); return; }
         if (what != NotificationWMCloseRequest) return;
-        if (!InMenu) Autosave("Autosave (closed the game)"); // nothing to save from the title screen
+        if (!InMenu) Autosave($"{_gameName} (autosave on closing)"); // nothing to save from the title screen
         _settings.CaptureWindow(); // reopen at the same size and place
         _settings.Save();
     }
@@ -677,11 +716,11 @@ public partial class Main : Node2D
             _pixelsPerMetre = Mathf.Clamp(Pressed(InputActions.ZoomIn) ? _pixelsPerMetre * ZoomStep : _pixelsPerMetre / ZoomStep,
                 MinPixelsPerMetre, MaxPixelsPerMetre);
         }
-        else if (Pressed(InputActions.QuickSave)) SaveTo(SaveStore.QuickPath(SavesFolder), "Quicksave");
+        else if (Pressed(InputActions.QuickSave)) SaveTo(SaveStore.QuickPath(SavesFolder), $"{_gameName} (quicksave)");
         else if (Pressed(InputActions.QuickLoad))
         {
             var quick = SaveStore.QuickPath(SavesFolder);
-            if (!System.IO.File.Exists(quick)) ShowStatus("No quicksave yet (F6 makes one).");
+            if (!System.IO.File.Exists(quick)) ShowStatus($"No quicksave yet ({InputActions.Key1(InputActions.QuickSave)} makes one).");
             else AskIfUnsaved("Load the quicksave? Progress since your last save will be lost.", () => LoadFrom(quick));
         }
         else if (Pressed(InputActions.Editor)) OpenEditor();
@@ -698,7 +737,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Fullscreen)) ToggleFullscreen();
         else if (Pressed(InputActions.TimeFaster)) { _warp.Paused = false; _warp.Faster(); ShowStatus($"Time {_warp}."); }
         else if (Pressed(InputActions.TimeSlower)) { _warp.Paused = false; _warp.Slower(); ShowStatus($"Time {_warp}."); }
-        else if (Pressed(InputActions.TimePause)) { _warp.Paused = !_warp.Paused; ShowStatus(_warp.Paused ? "Paused (P to resume)." : $"Time {_warp}."); }
+        else if (Pressed(InputActions.TimePause)) { _warp.Paused = !_warp.Paused; ShowStatus(_warp.Paused ? $"Paused ({InputActions.Key1(InputActions.TimePause)} to resume)." : $"Time {_warp}."); }
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
@@ -769,13 +808,13 @@ public partial class Main : Node2D
         // A ship running a job is flown by it; the keyboard only flies ships without one.
         // Typing into a text/number box (e.g. the debug menu) mustn't fly the ship either.
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit;
-        if (_player is { IsAutomated: false }) _player.Controls = EditorOpen || typing ? ShipControls.Idle : ReadControls();
+        if (_player is { IsAutomated: false }) _player.Controls = EditorOpen || typing || _controls is { Visible: true } ? ShipControls.Idle : ReadControls();
 
         if (!ModalOpen && !_warp.Paused)
         {
             _playTimeS += delta;
             _sinceAutosaveS += delta;
-            if (_settings.AutosaveMinutes > 0 && _sinceAutosaveS >= _settings.AutosaveMinutes * 60) Autosave("Autosave"); // #60
+            if (_settings.AutosaveMinutes > 0 && _sinceAutosaveS >= _settings.AutosaveMinutes * 60) Autosave($"{_gameName} (autosave)"); // #60
         }
 
         // Run the ticks due, within a frame budget: at high warp a heavy sector runs slower rather than freezing.
@@ -839,7 +878,7 @@ public partial class Main : Node2D
                    + $"{p.Stats.TotalMassKg / 1000:0.0} t, {p.Stats.TotalThrustN / 1000:0} kN, {p.Stats.TotalThrustN / p.MassKg:0.0} m/s²\n"
                    + (p.Kits.Count > 0
                        ? $"KIT on board: {p.Kits[0].Name} ({p.Kits[0].MassKg / 1000.0:0.0} t){(p.Kits.Count > 1 ? $" +{p.Kits.Count - 1} more" : "")} - "
-                         + (_sector.DeployBlocker(p.Id) is { } blocked ? blocked : "U to deploy here") + "\n"
+                         + (_sector.DeployBlocker(p.Id) is { } blocked ? blocked : $"{InputActions.Key1(InputActions.Deploy)} to deploy here") + "\n"
                        : "")
                    + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
                    + (SectorState.CrewStatus(p) is { Length: > 0 } crew ? crew + "\n" : "")
@@ -853,8 +892,8 @@ public partial class Main : Node2D
                    + (_sector.TugsOf(p.Id) is { Count: > 0 } tugs
                        ? $"TUGS: {tugs.Count} docked{(p.TugThrustN > 0 ? $", pushing {p.TugThrustN / 1000:0} kN" : " (they push the way they face)")}, moving {_sector.MovingMassKg(p) / 1000:0} t\n"
                        : "")
-                   + (p.GateStatus is { } gateNow ? $"WARP: {gateNow}{(p.JumpRequestTick > 0 ? " - N to cancel" : "")}\n"
-                       : p.IsDocked && SectorState.IsGate(_sector.GetCraft(p.DockedToCraftId)) ? $"WARP GATE {_sector.GetCraft(p.DockedToCraftId).Name} - N to jump\n" : "")
+                   + (p.GateStatus is { } gateNow ? $"WARP: {gateNow}{(p.JumpRequestTick > 0 ? $" - {InputActions.Key1(InputActions.Jump)} to cancel" : "")}\n"
+                       : p.IsDocked && SectorState.IsGate(_sector.GetCraft(p.DockedToCraftId)) ? $"WARP GATE {_sector.GetCraft(p.DockedToCraftId).Name} - {InputActions.Key1(InputActions.Jump)} to jump\n" : "")
                    + (_sector.Stars.Count > 1 && _sector.StarAt(p.Position) is { } here ? $"system: {here.Name}\n" : "")
                    + (!p.IsLanded && !p.IsDocked && !p.IsOnRails && !p.Cruising && _sector.GravitySource(p.Position) is { } pull
                        ? $"gravity {_sector.GravityAt(p.Position, _sector.TimeS).Length:0.00} m/s² from {pull.Name} - land under {SectorState.SafeImpactSpeedMps:0} m/s\n"
@@ -862,16 +901,16 @@ public partial class Main : Node2D
                    + (p.Cruising
                        ? $"CRUISE {SectorState.CruiseSpeedMps:0} m/s - fuel {p.Inventory[SectorState.FuelMaterial] / 1000.0:0.00} t "
                          + $"({p.Inventory[SectorState.FuelMaterial] / System.Math.Max(SectorState.CruiseFuelKgPerS(p), 1e-9) / 60:0} min left), V or brake to drop out\n"
-                       : p.CruiseStopReason is { } why && p.Stats.TotalThrustN > 0 ? $"cruise ended: {why} - V to cruise again\n" : "")
+                       : p.CruiseStopReason is { } why && p.Stats.TotalThrustN > 0 ? $"cruise ended: {why} - {InputActions.Key1(InputActions.Cruise)} to cruise again\n" : "")
                    + (p.Job is { Active: true } job
-                       ? $"AUTOPILOT ({job.Kind} job): {job.Status}   cycles {job.CompletedCycles}, delivered {job.DeliveredKg / 1000.0:0.0} t - J to view/stop\n"
+                       ? $"AUTOPILOT ({job.Kind} job): {job.Status}   cycles {job.CompletedCycles}, delivered {job.DeliveredKg / 1000.0:0.0} t - {InputActions.Key1(InputActions.Job)} to view/stop\n"
                        : "")
                    + (_sector.MiningMaterial(p) is { } mining && p.FreeCargoKg > 0
                        ? $"MINING {mining}: {p.Stats.MiningRateKgPerS:0} kg/s, {_sector.GetBody(p.LandedOnBodyId).Deposit(mining) / 1000.0:0.0} t left in {_sector.GetBody(p.LandedOnBodyId).Name}\n"
                        : "")
                    + (p.IsLanded ? LandedLine(p) : "")
                    + (p.IsDocked
-                       ? $"DOCKED at {_sector.GetCraft(p.DockedToCraftId).Name}, port {p.DockPortIndex + 1} - C cargo, K or thrust to undock\n"
+                       ? $"DOCKED at {_sector.GetCraft(p.DockedToCraftId).Name}, port {p.DockPortIndex + 1} - {InputActions.Key1(InputActions.Cargo)} cargo, {InputActions.Key1(InputActions.Dock)} or thrust to undock\n"
                        : "")
                    + (p.RailOrbit is { } rail
                        ? (p.Stats.TotalThrustN > 0
@@ -890,7 +929,7 @@ public partial class Main : Node2D
             target = $"{craft.Name} ({craft.Id}{(ports > 0 ? $", {_sector.FreePorts(craft).Count}/{ports} ports free" : "")})\n"
                      + $"gap {FormatDistance(rel.SurfaceDistanceM)}   rel speed {rel.RelativeSpeedMps:0.0} m/s   "
                      + $"{(rel.ClosingSpeedMps >= 0 ? "closing" : "opening")} {System.Math.Abs(rel.ClosingSpeedMps):0.0} m/s"
-                     + (rel.RelativeSpeedMps < SectorState.DockMaxRelativeSpeedMps && ports > 0 && !p.IsDocked ? "   [K to dock if within 100 m]" : "")
+                     + (rel.RelativeSpeedMps < SectorState.DockMaxRelativeSpeedMps && ports > 0 && !p.IsDocked ? $"   [{InputActions.Key1(InputActions.Dock)} to dock if within 100 m]" : "")
                      + "\n";
         }
         else if (p.TargetBodyId.IsNone)
@@ -918,9 +957,9 @@ public partial class Main : Node2D
         if (p.IsAnchored)
             return p.Stats.IsFixedStructure
                 ? $"ANCHORED to {body} permanently (foundation)\n"
-                : $"ANCHORED to {body} - G to release\n";
+                : $"ANCHORED to {body} - {InputActions.Key1(InputActions.Anchor)} to release\n";
         return $"LANDED on {body} - thrust away from the surface to lift off"
-               + (p.Stats.CanAnchor ? ", G to anchor\n" : " (no anchor clamp)\n");
+               + (p.Stats.CanAnchor ? $", {InputActions.Key1(InputActions.Anchor)} to anchor\n" : " (no anchor clamp)\n");
     }
 
     private string ShipyardSummary()
@@ -934,7 +973,7 @@ public partial class Main : Node2D
         var labs = _sector.Crafts.Where(c => c.Stats.ResearchRatePerS > 0).ToList();
         var research = labs.Count > 0 || _sector.ResearchPoints > 0
             ? $"Research: {_sector.ResearchPoints:0} points, +{_sector.ResearchRateNow * 60:0.#}/min from {labs.Count} lab(s)"
-              + string.Concat(labs.Where(l => l.LabStatus is not null && !l.LabStatus.StartsWith("lab:")).Select(l => $"   {l.Name}: {l.LabStatus}")) + " - R to research\n"
+              + string.Concat(labs.Where(l => l.LabStatus is not null && !l.LabStatus.StartsWith("lab:")).Select(l => $"   {l.Name}: {l.LabStatus}")) + $" - {InputActions.Key1(InputActions.Research)} to research\n"
             : "";
         return research + string.Concat(gates) + string.Concat(yards.Select(y => (y.BuildQueue.Count == 0
             ? $"{y.Name}: idle"

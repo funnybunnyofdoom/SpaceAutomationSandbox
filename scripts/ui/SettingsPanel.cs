@@ -43,7 +43,8 @@ public partial class SettingsPanel : PanelContainer
         var box = new VBoxContainer();
         box.AddThemeConstantOverride("separation", 8);
         AddChild(box);
-        var title = new Label { Text = "SETTINGS  (F2 to close)" };
+        var title = new Label();
+        InputActions.TitleWithKey(title, "SETTINGS", InputActions.Settings);
         title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(title);
 
@@ -104,10 +105,20 @@ public partial class SettingsPanel : PanelContainer
         box.AddChild(_muteUnfocused);
 
         // A way out that works everywhere, including the title screen (#58), where F2 isn't read.
-        var close = new Button { Text = "Close", SizeFlagsHorizontal = SizeFlags.ShrinkEnd };
+        var bottom = new HBoxContainer();
+        bottom.AddThemeConstantOverride("separation", 8);
+        box.AddChild(bottom);
+        var controls = new Button { Text = "Controls…" }; // rebinding (#63)
+        controls.Pressed += () => ControlsChosen?.Invoke();
+        bottom.AddChild(controls);
+        bottom.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
+        var close = new Button { Text = "Close" };
         close.Pressed += () => { Visible = false; Closed?.Invoke(); };
-        box.AddChild(close);
+        bottom.AddChild(close);
     }
+
+    /// <summary>Raised by the Controls… button (#63).</summary>
+    public event Action? ControlsChosen;
 
     /// <summary>Raised when the Close button hides the panel.</summary>
     public event Action? Closed;

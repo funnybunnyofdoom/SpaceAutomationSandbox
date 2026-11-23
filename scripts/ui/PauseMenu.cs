@@ -19,6 +19,7 @@ public partial class PauseMenu : Control
     public event Action? QuitToDesktopChosen;
 
     private Button _resume = null!;
+    private Label _about = null!;
 
     public PauseMenu()
     {
@@ -38,6 +39,8 @@ public partial class PauseMenu : Control
         var title = new Label { Text = "PAUSED", HorizontalAlignment = HorizontalAlignment.Center };
         title.AddThemeFontSizeOverride("font_size", 32);
         box.AddChild(title);
+        _about = new Label { HorizontalAlignment = HorizontalAlignment.Center, Modulate = new Color(1, 1, 1, 0.65f) };
+        box.AddChild(_about);
         box.AddChild(new Control { CustomMinimumSize = new Vector2(0, 12) });
         _resume = Item(box, "Resume", () => ResumeChosen?.Invoke());
         Item(box, "Save", () => SaveChosen?.Invoke());
@@ -57,8 +60,10 @@ public partial class PauseMenu : Control
         return button;
     }
 
-    public void Open()
+    /// <summary>Shows the menu; <paramref name="about"/> is the game's name, seed and play time.</summary>
+    public void Open(string about = "")
     {
+        _about.Text = about;
         Visible = true;
         _resume.GrabFocus();
     }

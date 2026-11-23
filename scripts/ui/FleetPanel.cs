@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Simulation;
 
 namespace SpaceAutomationSandbox.UI;
@@ -128,7 +129,7 @@ public partial class FleetPanel : PanelContainer
         var crafts = sector.Crafts;
         var pilot = _piloted() is { } id && crafts.Any(c => c.Id == id) ? sector.GetCraft(id) : null;
 
-        _title.Text = $"FLEET ({crafts.Count})  (F to close)";
+        _title.Text = $"FLEET ({crafts.Count})  ({InputActions.Key1(InputActions.Fleet)} to close)";
         _summary.Text = $"{crafts.Count(IsShip)} ships, {crafts.Count(c => !IsShip(c))} stations   "
                         + $"{crafts.Count(c => c.IsAutomated)} automated, {crafts.Count(IsWaiting)} waiting";
 

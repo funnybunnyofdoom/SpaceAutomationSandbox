@@ -33,6 +33,9 @@ public partial class SaveLoadScreen : Control
     public event Action<string>? LoadChosen;
     public event Action? Closed;
 
+    /// <summary>The name a new save gets when none is typed (the game's name, #62).</summary>
+    public Func<string> DefaultName { get; set; } = () => "";
+
     public SaveLoadScreen(Func<string> folder, Action<string, (string, Action)[]> confirm)
     {
         _folder = folder;
@@ -134,7 +137,8 @@ public partial class SaveLoadScreen : Control
     private void SaveNew()
     {
         var name = _name.Text.Trim();
-        SaveChosen?.Invoke(SaveStore.NewManualPath(_folder(), DateTime.UtcNow), name.Length > 0 ? name : $"Save {DateTime.Now:yyyy-MM-dd HH:mm}");
+        var fallback = DefaultName() is { Length: > 0 } game ? $"{game} {DateTime.Now:yyyy-MM-dd HH:mm}" : $"Save {DateTime.Now:yyyy-MM-dd HH:mm}";
+        SaveChosen?.Invoke(SaveStore.NewManualPath(_folder(), DateTime.UtcNow), name.Length > 0 ? name : fallback);
     }
 
     /// <summary>Rebuilds the list from the folder.</summary>

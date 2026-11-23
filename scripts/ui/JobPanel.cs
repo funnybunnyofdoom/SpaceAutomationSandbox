@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Simulation;
 
@@ -260,7 +261,7 @@ public partial class JobPanel : PanelContainer
     {
         _sinceRefresh = 0;
         var craft = _craft();
-        _title.Text = craft is null ? "JOB" : $"JOB: {craft.Name}  (J to close)";
+        _title.Text = craft is null ? "JOB" : $"JOB: {craft.Name}  ({InputActions.Key1(InputActions.Job)} to close)";
         if (craft?.Job is not { } job)
         {
             _state.Text = "No job.";
