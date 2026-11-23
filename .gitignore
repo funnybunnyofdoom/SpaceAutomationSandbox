@@ -23,3 +23,5 @@ desktop.ini
 _temp/
 # Exported game builds (export_presets.cfg -> builds/)
 builds/
+# Downloaded asset packs: only the files picked from them go in assets/ (see assets/ASSET_MANIFEST.md)
+art_source/audio_downloads/

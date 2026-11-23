@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "_comment": "Audio (#64): which file each game event plays, and the music playlist. Paths are res:// files (OGG Vorbis). A missing file is skipped silently, so the game runs with any subset. Sources and licences: assets/ASSET_MANIFEST.md.",
+  "effects": {
+    "thrust_loop": "res://assets/audio/sfx/thrust_loop.ogg",
+    "drill_loop": "res://assets/audio/sfx/drill_loop.ogg",
+    "cruise_loop": "res://assets/audio/sfx/cruise_loop.ogg",
+    "dock": "res://assets/audio/sfx/dock.ogg",
+    "undock": "res://assets/audio/sfx/undock.ogg",
+    "land": "res://assets/audio/sfx/land.ogg",
+    "anchor": "res://assets/audio/sfx/anchor.ogg",
+    "impact": "res://assets/audio/sfx/impact.ogg",
+    "cruise_start": "res://assets/audio/sfx/cruise_start.ogg",
+    "cruise_stop": "res://assets/audio/sfx/cruise_stop.ogg",
+    "warp": "res://assets/audio/sfx/warp.ogg",
+    "alarm": "res://assets/audio/sfx/alarm.ogg",
+    "part_lost": "res://assets/audio/sfx/part_lost.ogg"
+  },
+  "interface": {
+    "click": "res://assets/audio/ui/click.ogg",
+    "confirm": "res://assets/audio/ui/confirm.ogg",
+    "error": "res://assets/audio/ui/error.ogg"
+  },
+  "music": [
+    "res://assets/audio/music/space_echo.ogg",
+    "res://assets/audio/music/observing_the_star.ogg"
+  ]
+}

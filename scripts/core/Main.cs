@@ -96,6 +96,9 @@ public partial class Main : Node2D
 
     private bool InMenu => _title is { Visible: true };
 
+    /// <summary>Sound and music (#64).</summary>
+    private AudioDirector _audio = null!;
+
     // Debug game speed: how many seconds of game time pass per real second. View-only (results don't change).
 
     private bool EditorOpen => _editor is { Visible: true };
@@ -114,7 +117,9 @@ public partial class Main : Node2D
         GetViewport().SizeChanged += LayoutUi;
         _hud = new Hud(_settings, () => _settings.Save()); // areas on the left, key help on H (#51)
         _uiRoot.AddChild(_hud);
-        _settingsPanel = new SettingsPanel(_settings, () => { _settings.ApplyWindow(); _settings.Save(); LayoutUi(); }) { Visible = false };
+        _audio = new AudioDirector(_settings);
+        AddChild(_audio);
+        _settingsPanel = new SettingsPanel(_settings, () => { _settings.ApplyWindow(); _settings.Save(); LayoutUi(); _audio.ApplySettings(); }) { Visible = false };
         _uiRoot.AddChild(_settingsPanel);
 
         LoadDefinitions();
@@ -456,6 +461,9 @@ public partial class Main : Node2D
     // process without this notification; use F6 first if you need that state.)
     public override void _Notification(int what)
     {
+        // Sound follows the window to the background and back (#64).
+        if (what == NotificationApplicationFocusOut) { _audio?.SetFocused(false); return; }
+        if (what == NotificationApplicationFocusIn) { _audio?.SetFocused(true); return; }
         if (what != NotificationWMCloseRequest) return;
         if (!InMenu) SaveGame(); // nothing to save from the title screen
         _settings.CaptureWindow(); // reopen at the same size and place
@@ -594,6 +602,7 @@ public partial class Main : Node2D
 
     public override void _Process(double delta)
     {
+        _audio.Watch(InMenu ? null : _sector, InMenu ? null : _player, delta); // ship sounds; music plays throughout (#64)
         if (InMenu)
         {
             QueueRedraw(); // just the starfield

@@ -35,6 +35,21 @@ public sealed class GameSettings
     public Vector2I? WindowSize { get; set; }
     public Vector2I? WindowPosition { get; set; }
 
+    /// <summary>Audio buses (#64), in the order Settings shows them.</summary>
+    public static readonly string[] AudioBuses = { "Master", "Music", "Effects", "Interface" };
+
+    /// <summary>Volume per bus, 0..1 (#64).</summary>
+    public System.Collections.Generic.Dictionary<string, float> Volume { get; } = new(StringComparer.Ordinal)
+    {
+        ["Master"] = 0.8f, ["Music"] = 0.5f, ["Effects"] = 0.8f, ["Interface"] = 0.6f,
+    };
+
+    /// <summary>Buses muted (#64).</summary>
+    public System.Collections.Generic.HashSet<string> Muted { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Silence everything while the window isn't in front (#64).</summary>
+    public bool MuteWhenUnfocused { get; set; } = true;
+
     /// <summary>HUD areas folded away (#51), by title.</summary>
     public System.Collections.Generic.HashSet<string> HudCollapsed { get; } = new(StringComparer.Ordinal);
 
@@ -50,6 +65,12 @@ public sealed class GameSettings
         if (file.HasSectionKey("display", "window_position")) settings.WindowPosition = file.GetValue("display", "window_position").AsVector2I();
         foreach (var title in file.GetValue("hud", "collapsed", "").AsString().Split(',', StringSplitOptions.RemoveEmptyEntries))
             settings.HudCollapsed.Add(title);
+        foreach (var bus in AudioBuses)
+        {
+            settings.Volume[bus] = Math.Clamp((float)file.GetValue("audio", $"{bus.ToLowerInvariant()}_volume", settings.Volume[bus]).AsDouble(), 0f, 1f);
+            if (file.GetValue("audio", $"{bus.ToLowerInvariant()}_muted", false).AsBool()) settings.Muted.Add(bus);
+        }
+        settings.MuteWhenUnfocused = file.GetValue("audio", "mute_when_unfocused", true).AsBool();
         return settings;
     }
 
@@ -61,6 +82,12 @@ public sealed class GameSettings
         if (WindowSize is { } size) file.SetValue("display", "window_size", size);
         if (WindowPosition is { } position) file.SetValue("display", "window_position", position);
         file.SetValue("hud", "collapsed", string.Join(",", HudCollapsed));
+        foreach (var bus in AudioBuses)
+        {
+            file.SetValue("audio", $"{bus.ToLowerInvariant()}_volume", Volume[bus]);
+            file.SetValue("audio", $"{bus.ToLowerInvariant()}_muted", Muted.Contains(bus));
+        }
+        file.SetValue("audio", "mute_when_unfocused", MuteWhenUnfocused);
         file.Save(FilePath);
     }
 

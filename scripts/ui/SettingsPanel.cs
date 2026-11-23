@@ -7,8 +7,9 @@ using SpaceAutomationSandbox.Core;
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>
-/// Display settings (F2, #52): window mode, windowed size and interface scale. Changes apply at
-/// once and are saved to <see cref="GameSettings.FilePath"/> (not the game save).
+/// Settings (F2): window mode, windowed size and interface scale (#52), and sound (#64): a volume and
+/// mute for each bus, and muting while the window is in the background. Changes apply at once and are
+/// saved to <see cref="GameSettings.FilePath"/> (not the game save).
 /// </summary>
 public partial class SettingsPanel : PanelContainer
 {
@@ -16,6 +17,8 @@ public partial class SettingsPanel : PanelContainer
     private readonly Action _changed;
     private OptionButton _mode = null!, _size = null!, _scale = null!;
     private Label _info = null!;
+    private readonly Dictionary<string, (HSlider Slider, CheckBox Mute, Label Value)> _audio = new();
+    private CheckBox _muteUnfocused = null!;
     private List<Vector2I> _sizes = new();
     private bool _updating;
 
@@ -33,8 +36,8 @@ public partial class SettingsPanel : PanelContainer
         SetAnchorsPreset(LayoutPreset.Center);
         OffsetLeft = -230;
         OffsetRight = 230;
-        OffsetTop = -150;
-        OffsetBottom = 150;
+        OffsetTop = -280;
+        OffsetBottom = 280;
 
         var box = new VBoxContainer();
         box.AddThemeConstantOverride("separation", 8);
@@ -70,6 +73,28 @@ public partial class SettingsPanel : PanelContainer
 
         _info = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(420, 0), Modulate = new Color(1, 1, 1, 0.65f) };
         box.AddChild(_info);
+
+        // Sound (#64).
+        box.AddChild(new Label { Text = "Sound" });
+        var audio = new GridContainer { Columns = 4 };
+        box.AddChild(audio);
+        foreach (var bus in GameSettings.AudioBuses)
+        {
+            audio.AddChild(new Label { Text = bus, CustomMinimumSize = new Vector2(90, 0) });
+            var slider = new HSlider { MinValue = 0, MaxValue = 100, Step = 5, CustomMinimumSize = new Vector2(200, 0), SizeFlagsVertical = SizeFlags.ShrinkCenter };
+            var name = bus;
+            slider.ValueChanged += v => Change(() => _settings.Volume[name] = (float)(v / 100));
+            audio.AddChild(slider);
+            var value = new Label { CustomMinimumSize = new Vector2(48, 0) };
+            audio.AddChild(value);
+            var mute = new CheckBox { Text = "Mute" };
+            mute.Toggled += on => Change(() => { if (on) _settings.Muted.Add(name); else _settings.Muted.Remove(name); });
+            audio.AddChild(mute);
+            _audio[bus] = (slider, mute, value);
+        }
+        _muteUnfocused = new CheckBox { Text = "Mute while the game is in the background" };
+        _muteUnfocused.Toggled += on => Change(() => _settings.MuteWhenUnfocused = on);
+        box.AddChild(_muteUnfocused);
 
         // A way out that works everywhere, including the title screen (#58), where F2 isn't read.
         var close = new Button { Text = "Close", SizeFlagsHorizontal = SizeFlags.ShrinkEnd };
@@ -109,6 +134,13 @@ public partial class SettingsPanel : PanelContainer
         _size.Disabled = _settings.WindowMode != GameSettings.Mode.Windowed;
 
         _scale.Select(Math.Max(0, Array.IndexOf(GameSettings.UiScales, _settings.UiScale)));
+        foreach (var (bus, (slider, mute, value)) in _audio)
+        {
+            slider.Value = Math.Round(_settings.Volume[bus] * 100);
+            value.Text = $"{slider.Value:0}%";
+            mute.ButtonPressed = _settings.Muted.Contains(bus);
+        }
+        _muteUnfocused.ButtonPressed = _settings.MuteWhenUnfocused;
         var window = DisplayServer.WindowGetSize();
         _info.Text = $"Interface at {_settings.EffectiveUiScale(window) * 100:0}% for this {window.X} × {window.Y} window. "
                      + "It's capped so every panel still fits. A bigger window shows more of space. F11 toggles fullscreen. "
