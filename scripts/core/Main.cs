@@ -91,6 +91,11 @@ public partial class Main : Node2D
     private DiagnosticsPanel? _diagnosticsPanel;
     private ResearchPanel? _researchPanel;
 
+    /// <summary>The title screen and main menu (#58). While it shows, no game is running.</summary>
+    private TitleScreen? _title;
+
+    private bool InMenu => _title is { Visible: true };
+
     // Debug game speed: how many seconds of game time pass per real second. View-only (results don't change).
 
     private bool EditorOpen => _editor is { Visible: true };
@@ -149,6 +154,17 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_debugPanel);
         }
         LayoutUi();
+        // The title screen comes first (#58). Command-line runs (dev hooks, screenshots) skip it and start
+        // as before, unless --title asks for it.
+        var startArgs = OS.GetCmdlineUserArgs();
+        if (_catalog != null && (startArgs.Length == 0 || System.Array.IndexOf(startArgs, "--title") >= 0))
+        {
+            ShowTitle();
+            // Dev/test: choose from the menu without clicking.
+            if (System.Array.IndexOf(startArgs, "--title-pick=new") >= 0) LeaveTitle(StartNewGame);
+            if (System.Array.IndexOf(startArgs, "--title-pick=continue") >= 0) LeaveTitle(() => LoadGame(isStartup: true));
+            return;
+        }
         // Continue where the player left off; a new game only if there's no usable save.
         if (_catalog != null && System.IO.File.Exists(SaveFilePath)) LoadGame(isStartup: true);
         else StartNewGame();
@@ -334,6 +350,44 @@ public partial class Main : Node2D
         }
     }
 
+    /// <summary>Shows the title screen: no game runs behind it (the HUD and panels are hidden).</summary>
+    private void ShowTitle()
+    {
+        if (_title == null)
+        {
+            _title = new TitleScreen();
+            _title.ContinueChosen += () => LeaveTitle(() => LoadGame(isStartup: true));
+            _title.NewGameChosen += () => LeaveTitle(StartNewGame);
+            _title.SettingsChosen += () => _settingsPanel?.Open();
+            if (_settingsPanel != null) _settingsPanel.Closed += () => { if (InMenu) ShowTitle(); }; // focus back on the menu
+            _title.QuitChosen += () => GetTree().Quit();
+            _uiRoot.AddChild(_title);
+            _uiRoot.MoveChild(_title, _uiRoot.GetChildCount() - 1);
+            if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1); // settings open above the menu
+        }
+        _hud.Visible = false;
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _mapPanel })
+            if (panel != null) panel.Visible = false;
+        string? summary = null;
+        if (System.IO.File.Exists(SaveFilePath))
+        {
+            var info = new System.IO.FileInfo(SaveFilePath);
+            summary = $"last saved {info.LastWriteTime:yyyy-MM-dd HH:mm}";
+        }
+        _title.Open(summary);
+    }
+
+    /// <summary>Starts (or loads) a game from the menu and hides it.</summary>
+    private void LeaveTitle(System.Action start)
+    {
+        start();
+        if (_title != null) _title.Visible = false;
+        if (_settingsPanel != null) _settingsPanel.Visible = false;
+        _hud.Visible = true;
+        _mapMode = false;
+        GD.Print($"[Sector] seed={_sector.Seed} tick={_sector.Tick} bodies={_sector.Bodies.Count} (from the main menu)");
+    }
+
     private void StartNewGame()
     {
         _player = null;
@@ -403,7 +457,7 @@ public partial class Main : Node2D
     public override void _Notification(int what)
     {
         if (what != NotificationWMCloseRequest) return;
-        SaveGame();
+        if (!InMenu) SaveGame(); // nothing to save from the title screen
         _settings.CaptureWindow(); // reopen at the same size and place
         _settings.Save();
     }
@@ -437,6 +491,17 @@ public partial class Main : Node2D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (InMenu)
+        {
+            // The menu takes the keys (its buttons have focus); Esc closes Settings opened from it.
+            if (Pressed(InputActions.ClosePanels) && _settingsPanel is { Visible: true })
+            {
+                _settingsPanel.Visible = false;
+                ShowTitle();
+                GetViewport().SetInputAsHandled();
+            }
+            return;
+        }
         // Named actions (InputActions), so bindings can change; Echo is ignored for one-shot actions.
         bool Pressed(string action) => @event.IsActionPressed(action, allowEcho: false);
 
@@ -529,6 +594,12 @@ public partial class Main : Node2D
 
     public override void _Process(double delta)
     {
+        if (InMenu)
+        {
+            QueueRedraw(); // just the starfield
+            DevScreenshot();
+            return;
+        }
         // Input is sampled once per frame and held for every tick run this frame.
         // No flying while the editor is open (typing a name must not fire thrusters).
         // A ship running a job is flown by it; the keyboard only flies ships without one.
@@ -720,6 +791,7 @@ public partial class Main : Node2D
     public override void _Draw()
     {
         DrawStarfield();
+        if (InMenu) return; // the title screen: no game to draw
         if (_mapMode && _galaxyView) { DrawGalaxy(); return; }
 
         // Interpolated time: smooth motion between 20 Hz ticks without touching the state.
@@ -886,21 +958,45 @@ public partial class Main : Node2D
             var dir = new Vector2(Mathf.Cos((float)crater.BearingRad), Mathf.Sin((float)crater.BearingRad));
             var rim = centre + dir * radiusPx;
             if (rim.Length() - r > 2 * GetViewportRect().Size.Length()) continue; // off-screen
-            DrawColoredPolygon(ClippedToDisk(rim, r, centre, radiusPx), pit);
-            DrawColoredPolygon(ClippedToDisk(rim - dir * r * 0.15f, r * 0.55f, centre, radiusPx), floor);
+            if (CircleInDisk(rim, r, centre, radiusPx) is { } pitShape) DrawColoredPolygon(pitShape, pit);
+            if (CircleInDisk(rim - dir * r * 0.15f, r * 0.55f, centre, radiusPx) is { } floorShape) DrawColoredPolygon(floorShape, floor);
         }
     }
 
-    /// <summary>A circle's outline with every point outside the disk pulled back onto its edge.</summary>
-    private static Vector2[] ClippedToDisk(Vector2 c, float r, Vector2 disk, float diskR)
+    /// <summary>
+    /// The part of a circle (centre <paramref name="c"/>, radius <paramref name="r"/>) inside the body's
+    /// disk, as a convex outline: the arc of the body's edge inside the circle, then the arc of the circle
+    /// inside the body. Exact, so it always triangulates. Null when they don't overlap.
+    /// </summary>
+    private static Vector2[]? CircleInDisk(Vector2 c, float r, Vector2 disk, float diskR)
     {
-        var points = new Vector2[32];
-        for (var i = 0; i < points.Length; i++)
+        const int arcPoints = 16;
+        var offset = c - disk;
+        var d = offset.Length();
+        if (d >= diskR + r) return null; // apart
+        if (d + r <= diskR) return CirclePoints(c, r, 32); // wholly inside the body
+        if (d + diskR <= r) return CirclePoints(disk, diskR, 32); // the body is wholly inside the circle
+        var toward = Mathf.Atan2(offset.Y, offset.X);
+        // Half-angles of the two arcs, from the triangle (body centre, circle centre, crossing point).
+        var alpha = Mathf.Acos(Mathf.Clamp((d * d + diskR * diskR - r * r) / (2 * d * diskR), -1, 1)); // at the body centre
+        var gamma = Mathf.Acos(Mathf.Clamp((d * d + r * r - diskR * diskR) / (2 * d * r), -1, 1));     // at the circle centre
+        // Points spaced a few pixels apart (tiny arcs get few: points closer than float precision can
+        // coincide, and a repeated vertex won't triangulate). The arcs meet at the crossings, listed once.
+        var bodyPoints = Mathf.Clamp((int)(2 * alpha * diskR / 4) + 2, 2, arcPoints);
+        var circlePoints = Mathf.Clamp((int)(2 * gamma * r / 4) + 2, 2, arcPoints);
+        if (r < 1f || bodyPoints + circlePoints - 2 < 3) return null; // too small to draw
+        var points = new Vector2[bodyPoints + circlePoints - 2];
+        for (var i = 0; i < bodyPoints; i++)
         {
-            var a = Mathf.Tau * i / points.Length;
-            var p = c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
-            var d = p - disk;
-            points[i] = d.Length() > diskR ? disk + d.Normalized() * diskR : p;
+            // The body's edge, from one crossing to the other (through the direction of the circle)...
+            var a = toward - alpha + 2 * alpha * i / (bodyPoints - 1);
+            points[i] = disk + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * diskR;
+        }
+        for (var i = 1; i < circlePoints - 1; i++)
+        {
+            // ...then back along the circle between them, through the direction of the body's centre.
+            var b = toward + Mathf.Pi - gamma + 2 * gamma * i / (circlePoints - 1);
+            points[bodyPoints + i - 1] = c + new Vector2(Mathf.Cos(b), Mathf.Sin(b)) * r;
         }
         return points;
     }

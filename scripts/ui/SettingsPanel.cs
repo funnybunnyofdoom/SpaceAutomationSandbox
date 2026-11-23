@@ -33,8 +33,8 @@ public partial class SettingsPanel : PanelContainer
         SetAnchorsPreset(LayoutPreset.Center);
         OffsetLeft = -230;
         OffsetRight = 230;
-        OffsetTop = -130;
-        OffsetBottom = 130;
+        OffsetTop = -150;
+        OffsetBottom = 150;
 
         var box = new VBoxContainer();
         box.AddThemeConstantOverride("separation", 8);
@@ -70,7 +70,15 @@ public partial class SettingsPanel : PanelContainer
 
         _info = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(420, 0), Modulate = new Color(1, 1, 1, 0.65f) };
         box.AddChild(_info);
+
+        // A way out that works everywhere, including the title screen (#58), where F2 isn't read.
+        var close = new Button { Text = "Close", SizeFlagsHorizontal = SizeFlags.ShrinkEnd };
+        close.Pressed += () => { Visible = false; Closed?.Invoke(); };
+        box.AddChild(close);
     }
+
+    /// <summary>Raised when the Close button hides the panel.</summary>
+    public event Action? Closed;
 
     public void Open()
     {
