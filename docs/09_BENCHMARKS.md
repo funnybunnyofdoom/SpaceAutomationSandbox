@@ -11,6 +11,33 @@ dotnet run -c Release --project tools/Benchmarks -- 500   # any counts
 
 **Budget:** the simulation runs 20 ticks per second, so 50 ms per tick is everything. Rendering, UI and the rest of the frame need most of that.
 
+## 2026-11-23 — in the game, rendering included (#39)
+
+**Target (creator):** 1,000 active automated ships at 60 fps (16.7 ms per frame) on the dev PC.
+
+```powershell
+# Export first (Release C#), then from the export folder:
+SpaceAutomationSandbox.exe -- --new-game --stress=1000 --fps-report=30            # normal zoom
+SpaceAutomationSandbox.exe -- --new-game --stress=1000 --fps-report=30 --zoom=0.05 # whole neighbourhood on screen
+```
+
+`--stress=N` adds N automated miners around the starter yard (the benchmark's scenario). `--fps-report=S` turns vsync off, waits 5 s, measures real time between frames for S seconds (not Godot's smoothed delta), prints mean and worst-1% frame times plus the tick, draw, HUD and audio costs, and quits. Use the exported Release build: the editor's Debug build is about 9× slower in the simulation.
+
+| Ships | Zoom | Mean frame | Worst 1% frame | Sim tick (mean) | Draw per frame |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 0 | normal | 1.31 ms (765 fps) | 2.09 ms (479 fps) | 0.02 ms | 1.09 ms |
+| 1,000 | normal | 3.37 ms (297 fps) | 9.01 ms (111 fps) | 5.18 ms | 2.94 ms |
+| 1,000 | 0.3 | 2.19 ms (458 fps) | 7.46 ms (134 fps) | 4.98 ms | 1.70 ms |
+| 1,000 | 0.05 (all on screen) | 1.57 ms (637 fps) | 6.79 ms (147 fps) | 4.94 ms | 1.13 ms |
+| 2,000 | normal | 6.73 ms (149 fps) | 20.53 ms (49 fps) | 12.81 ms | 5.56 ms |
+
+**Before the fixes** (same build, 1,000 ships, normal zoom): 21.7 ms mean (46 fps). Drawing every craft, including those off screen, and a name tag for each cost about 17 ms.
+
+**Reading it:**
+- **1,000 ships meet the target with room to spare.** The worst frames are the ones where a simulation tick runs (20 per second); the rest are a few ms.
+- **2,000 ships miss 60 fps in the worst frames**, mostly because of the simulation: 13 ms per tick, with traffic around one crowded yard. That's where swarm aggregation (#30) or cheaper crowds would have to come in.
+- The simulation can't run faster than one tick per frame without more frames: at high time warp, frames take longer, as before (the frame budget in TimeWarp caps it).
+
 ## 2026-11-21 — dev PC (16 logical CPUs, .NET 8.0.20, Release, single-threaded)
 
 | Automated ships | Setup | Ticks timed | ms per tick (mean) | ms per tick (worst 1%) | % of 50 ms budget |

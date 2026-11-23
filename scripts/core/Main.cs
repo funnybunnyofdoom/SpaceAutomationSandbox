@@ -280,6 +280,7 @@ public partial class Main : Node2D
             ApplyTheme();
         }
         if (System.Array.IndexOf(args, "--colorblind") >= 0) { _settings.ColorblindSafe = true; ApplyTheme(); }
+        SetUpStress(args); // #39 performance check
         if (System.Array.IndexOf(args, "--goals") >= 0) { _goalsOn = true; _goalsDone.Add("survey"); } // #65 check: one goal done
         if (System.Array.IndexOf(args, "--demo-crash") >= 0 && _player != null)
         {
@@ -875,8 +876,11 @@ public partial class Main : Node2D
 
     public override void _Process(double delta)
     {
+        var audioStart = System.Diagnostics.Stopwatch.GetTimestamp();
         _audio.Watch(InMenu ? null : _sector, InMenu ? null : _player, delta); // ship sounds; music plays throughout (#64)
+        _audioCost.Add(System.Diagnostics.Stopwatch.GetElapsedTime(audioStart).TotalMilliseconds);
         UpdatePanelNav();
+        StressFrame(delta);
         UpdateGoals(delta);
         if (InMenu)
         {
@@ -915,7 +919,9 @@ public partial class Main : Node2D
         _camera.Position = Vector2.Zero; // the world is drawn around _viewCentre instead (precision far from the star)
         if (_mapMode && MapStar() is { } root) _viewCentre = _sector.GetPosition(root.Id);
         else if (_player != null) _viewCentre = InterpolatedPosition(_player);
+        var hudStart = System.Diagnostics.Stopwatch.GetTimestamp();
         _hud.Show(BuildHud());
+        _hudCost.Add(System.Diagnostics.Stopwatch.GetElapsedTime(hudStart).TotalMilliseconds);
         QueueRedraw();
         DevScreenshot();
     }
@@ -1079,7 +1085,19 @@ public partial class Main : Node2D
     private static string FormatDistance(double metres) =>
         System.Math.Abs(metres) >= 1000 ? $"{metres / 1000:0.00} km" : $"{metres:0} m";
 
+    /// <summary>More ships than this on screen: only stations and the target are named (#39).</summary>
+    private const int MaxNameTags = 40;
+
+    private readonly List<(CraftState Craft, Vector2 At, float RadiusPx)> _visibleCrafts = new();
+
     public override void _Draw()
+    {
+        var drawStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        DrawWorld();
+        _drawCost.Add(System.Diagnostics.Stopwatch.GetElapsedTime(drawStart).TotalMilliseconds);
+    }
+
+    private void DrawWorld()
     {
         DrawStarfield();
         if (InMenu) return; // the title screen: no game to draw
@@ -1095,11 +1113,25 @@ public partial class Main : Node2D
             DrawArc(ToPixels(_sector.GetPositionAt(orbit.Parent, renderTimeS)), (float)orbit.RadiusM * _pixelsPerMetre,
                 0, Mathf.Tau, 512, RailColor);
         }
-        foreach (var craft in _sector.Crafts) DrawCraft(craft);
-        foreach (var craft in _sector.Crafts.Where(c => c != _player && _pixelsPerMetre > 0.02f)) // name tags (not when zoomed far out)
+        // Only what's on screen is drawn (#39: a thousand ships off-screen cost nothing to draw).
+        var screen = GetViewportRect().Size;
+        var view = new Rect2(-screen / 2, screen).Grow(64);
+        _visibleCrafts.Clear();
+        foreach (var craft in _sector.Crafts)
         {
-            var radiusPx = Mathf.Max(8f, (float)craft.CollisionRadiusM * _pixelsPerMetre);
-            DrawString(ThemeDB.FallbackFont, ToPixels(InterpolatedPosition(craft)) + new Vector2(radiusPx + 4, 4), craft.Name,
+            var at = ToPixels(InterpolatedPosition(craft));
+            var radiusPx = (float)craft.CollisionRadiusM * _pixelsPerMetre;
+            if (view.Grow(radiusPx).HasPoint(at)) _visibleCrafts.Add((craft, at, radiusPx));
+        }
+        foreach (var (craft, _, _) in _visibleCrafts) DrawCraft(craft);
+        FlushBatch();
+        // Name tags, not when zoomed far out; in a crowd only stations and the target get one, so the text stays readable and cheap.
+        var crowd = _visibleCrafts.Count > MaxNameTags;
+        foreach (var (craft, at, radius) in _visibleCrafts)
+        {
+            if (craft == _player || _pixelsPerMetre <= 0.02f) continue;
+            if (crowd && craft.Stats.TotalThrustN > 0 && _player?.TargetCraftId != craft.Id) continue;
+            DrawString(ThemeDB.FallbackFont, at + new Vector2(Mathf.Max(8f, radius) + 4, 4), craft.Name,
                 HorizontalAlignment.Left, -1, 11, CraftLabelColor);
         }
     }
@@ -1169,18 +1201,20 @@ public partial class Main : Node2D
         var heading = (float)Mathf.LerpAngle(craft.PreviousHeadingRad, craft.HeadingRad, _warp.Alpha);
         var cellPx = (float)ShipDesign.CellSizeM * _pixelsPerMetre;
 
-        // Too small to see the grid: draw a heading marker instead.
+        // Too small to see the grid: a heading marker instead, batched into one draw call for all craft (#39).
         if (cellPx < 1.5f)
         {
-            DrawSetTransform(centre, heading, Vector2.One);
-            DrawColoredPolygon(new[] { new Vector2(0, -8), new Vector2(5, 6), new Vector2(-5, 6) }, MarkerColor);
-            DrawSetTransform(Vector2.Zero, 0, Vector2.One);
+            var (sin, cos) = Mathf.SinCos(heading);
+            Vector2 Rotate(float x, float y) => centre + new Vector2(x * cos - y * sin, x * sin + y * cos);
+            BatchTriangle(Rotate(0, -8), Rotate(5, 6), Rotate(-5, 6), MarkerColor);
             return;
         }
 
         var gap = cellPx >= 6f ? 1f : 0f;
         var stats = craft.Stats;
-        DrawSetTransform(centre, heading, Vector2.One);
+        // Cells go into the frame's triangle batch, already rotated and placed (#39).
+        var (hs, hc) = Mathf.SinCos(heading);
+        Vector2 World(Vector2 v) => centre + new Vector2(v.X * hc - v.Y * hs, v.X * hs + v.Y * hc);
         foreach (var cell in craft.Design.Cells)
         {
             var local = new Vector2((float)(cell.Pos.X - stats.CenterOfMassX), (float)(cell.Pos.Y - stats.CenterOfMassY)) * cellPx;
@@ -1189,22 +1223,18 @@ public partial class Main : Node2D
             var colour = _partColors.GetValueOrDefault(cell.PartId, Colors.Magenta);
             // Damaged parts (#34) darken towards black-red as they lose health.
             if (craft.PartHealth.TryGetValue(cell.Pos, out var health)) colour = colour.Lerp(new Color(0.25f, 0.05f, 0.05f), (float)(1 - health) * 0.8f);
-            DrawRect(rect, colour);
+            BatchQuad(World(rect.Position), World(rect.Position + new Vector2(rect.Size.X, 0)), World(rect.End), World(rect.Position + new Vector2(0, rect.Size.Y)), colour);
             if (craft.PartHealth.TryGetValue(cell.Pos, out var cracked) && cracked < 0.75 && cellPx >= 4f) // a crack marks damage beyond the darker colour (#68)
-                DrawLine(rect.Position + rect.Size * new Vector2(0.2f, 0.15f), rect.Position + rect.Size * new Vector2(0.75f, 0.85f), new Color(0, 0, 0, 0.7f), Mathf.Max(1f, cellPx / 8));
+                _crackLines.Add((World(rect.Position + rect.Size * new Vector2(0.2f, 0.15f)), World(rect.Position + rect.Size * new Vector2(0.75f, 0.85f)), Mathf.Max(1f, cellPx / 8)));
 
             // Only rear-facing thrusters fire on throttle (docs/06); others stay dark for now.
             if (cell.PartId == "thruster" && cell.Rotation == 0 && craft.Controls.Throttle > 0 && !craft.Controls.Brake)
             {
                 var flameTop = local + new Vector2(0, cellPx / 2);
-                DrawColoredPolygon(new[]
-                {
-                    flameTop + new Vector2(-cellPx * 0.3f, 0), flameTop + new Vector2(cellPx * 0.3f, 0),
-                    flameTop + new Vector2(0, cellPx * 0.9f),
-                }, FlameColor);
+                BatchTriangle(World(flameTop + new Vector2(-cellPx * 0.3f, 0)), World(flameTop + new Vector2(cellPx * 0.3f, 0)),
+                    World(flameTop + new Vector2(0, cellPx * 0.9f)), FlameColor);
             }
         }
-        DrawSetTransform(Vector2.Zero, 0, Vector2.One);
     }
 
     private Vector2D InterpolatedPosition(CraftState craft) =>
@@ -1380,20 +1410,4 @@ public partial class Main : Node2D
     }
 
     // Screen-fixed backdrop: drawn around the camera so it never scrolls away. No parallax yet.
-    private void DrawStarfield()
-    {
-        // Fills the window at any size, at the same star density as the 1280×720 design.
-        var origin = _camera.Position;
-        var half = GetViewportRect().Size / 2;
-        var count = (int)(StarCount * (half.X * half.Y) / (640f * 360f));
-        var rng = new RandomNumberGenerator { Seed = StarfieldSeed };
-        for (var i = 0; i < count; i++)
-        {
-            var position = origin + new Vector2(rng.RandfRange(-half.X, half.X), rng.RandfRange(-half.Y, half.Y));
-            var brightness = rng.RandfRange(0.35f, 1.0f);
-            var size = rng.Randf() < 0.1f ? 2f : 1f;
-            DrawRect(new Rect2(position.Floor(), new Vector2(size, size)),
-                new Color(brightness, brightness, brightness));
-        }
-    }
 }
