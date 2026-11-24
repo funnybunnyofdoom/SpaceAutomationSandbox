@@ -57,6 +57,7 @@ public static class InputActions
     public const string Power = "open_power";
     public const string Life = "open_life";
     public const string Milestones = "open_milestones";
+    public const string MenuBar = "toggle_menu_bar";
     public const string PanelFocus = "panel_focus";
 
     /// <summary>Every action the player can rebind, in the order the Controls screen lists them, with its name and group.</summary>
@@ -71,6 +72,7 @@ public static class InputActions
         (Editor, "Blueprint editor", "Panels"), (Shipyard, "Shipyard", "Panels"), (Fleet, "Fleet", "Panels"), (Cargo, "Cargo", "Panels"),
         (Job, "Job", "Panels"), (Research, "Research", "Panels"), (Laws, "Laws and civilizations", "Panels"), (Power, "Power", "Panels"), (Life, "Native life", "Panels"), (Milestones, "Milestones", "Panels"), (Settings, "Settings", "Panels"), (Debug, "Debug menu", "Panels"),
         (Diagnostics, "Diagnostics", "Panels"), (Help, "Keys and help", "Panels"),
+        (MenuBar, "Show / hide the menu bar", "Panels"),
         (PanelFocus, "Use the open panel with keys / controller", "Panels"),
         (ClosePanels, "Close panels / pause menu", "Game"), (TimeFaster, "Time faster", "Game"), (TimeSlower, "Time slower", "Game"),
         (TimePause, "Pause time", "Game"), (QuickSave, "Quicksave", "Game"), (QuickLoad, "Quickload", "Game"), (Fullscreen, "Fullscreen", "Game"),
@@ -120,6 +122,7 @@ public static class InputActions
         Add(Power, 0.5f, Keys(Key.O)); // #75
         Add(Life, 0.5f, Keys(Key.I)); // #94
         Add(Milestones, 0.5f, Keys(Key.Period)); // #38
+        Add(MenuBar, 0.5f, Keys(Key.F10)); // #106
         Add(PanelFocus, 0.5f, Keys(Key.Quoteleft), Pad(JoyButton.Back)); // #68
         // Menus with a controller (#68): A chooses, B goes back (Godot's own UI actions, not rebindable).
         AddEvent("ui_accept", Pad(JoyButton.A));
@@ -253,6 +256,7 @@ public static class InputActions
     /// <summary>A panel title such as "CARGO  (C to close)" that names the current key, refreshed whenever the panel shows.</summary>
     public static void TitleWithKey(Label label, string title, string action)
     {
+        label.AddThemeColorOverride("font_color", UI.UiTheme.Accent);
         void Set() => label.Text = $"{title}  ({Key1(action)} to close)";
         Set();
         label.VisibilityChanged += Set;

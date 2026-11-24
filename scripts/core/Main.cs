@@ -498,6 +498,7 @@ public partial class Main : Node2D
         _uiRoot.AddChild(_confirm);
         _loadingScreen = new LoadingScreen(); // over everything (#67)
         _uiRoot.AddChild(_loadingScreen);
+        BuildTopBar(); // #106
         // Any button pressed in the game's own panels counts as a change to save (not in the menus themselves).
         GetTree().NodeAdded += node =>
         {
@@ -508,7 +509,7 @@ public partial class Main : Node2D
     private static bool IsMenuControl(Node node)
     {
         for (var n = node; n != null; n = n.GetParent())
-            if (n is PauseMenu or SaveLoadScreen or ConfirmDialog or TitleScreen or SettingsPanel or NewGameScreen or ControlsPanel) return true;
+            if (n is PauseMenu or SaveLoadScreen or ConfirmDialog or TitleScreen or SettingsPanel or NewGameScreen or ControlsPanel or TopBar) return true;
         return false;
     }
 
@@ -896,6 +897,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Life)) Toggle(_lifePanel, () => _lifePanel!.Open());
         else if (Pressed(InputActions.Power)) Toggle(_powerPanel, () => _powerPanel!.Open());
         else if (Pressed(InputActions.Map)) ToggleMap();
+        else if (Pressed(InputActions.MenuBar)) ToggleTopBar(); // #106
         else if (Pressed(InputActions.Help)) _hud.ToggleHelp();
         else if (Pressed(InputActions.Fullscreen)) ToggleFullscreen();
         else if (Pressed(InputActions.TimeFaster)) { _warp.Paused = false; _warp.Faster(); ShowStatus($"Time {_warp}."); }
@@ -1044,16 +1046,12 @@ public partial class Main : Node2D
     private HudSections BuildHud()
     {
         var status = "";
-        if (Time.GetTicksMsec() < _statusUntilMs) status += $">> {_status}\n";
+        if (Time.GetTicksMsec() < _statusUntilMs) status += $"{_status}\n";
         if (_warp.Speed != 1 || _warp.Paused) status += $"TIME {_warp}   ({InputActions.Key1(InputActions.TimeSlower)} slower, {InputActions.Key1(InputActions.TimeFaster)} faster, {InputActions.Key1(InputActions.TimePause)} pause)\n";
         if (!_sector.Tuning.IsDefault) status += $"DEBUG: {_sector.Tuning}  (F3)\n";
-        if (_player is not { } p) return new HudSections(status + _setupError, "", ShipyardSummary(), "", GoalsText());
+        if (_player is not { } p) return new HudSections(StatusCard(status + _setupError), HudCardData.None, StationsCard(ShipyardSummary()), HudCardData.None, GoalsCard());
 
-        var headingDeg = Mathf.PosMod(Mathf.RadToDeg((float)p.HeadingRad), 360f);
-        var ship = $"{p.Name} - {p.Design.Name}: {p.SpeedMps:0.0} m/s, heading {headingDeg:000}°, "
-                   + (p.HasCargoLimit ? $"cargo {p.CargoKg / 1000.0:0.0} / {p.CargoCapacityKg / 1000.0:0} t\n" : $"stores {p.CargoKg / 1000.0:0.0} t\n")
-                   + $"{p.Stats.TotalMassKg / 1000:0.0} t, {p.Stats.TotalThrustN / 1000:0} kN, {p.Stats.TotalThrustN / p.MassKg:0.0} m/s²\n"
-                   + (p.Kits.Count > 0
+        var ship = (p.Kits.Count > 0
                        ? $"KIT on board: {p.Kits[0].Name} ({p.Kits[0].MassKg / 1000.0:0.0} t){(p.Kits.Count > 1 ? $" +{p.Kits.Count - 1} more" : "")} - "
                          + (_sector.DeployBlocker(p.Id) is { } blocked ? blocked : $"{InputActions.Key1(InputActions.Deploy)} to deploy here") + "\n"
                        : "")
@@ -1136,7 +1134,7 @@ public partial class Main : Node2D
         // The site below you when you're close to a body's surface (#70).
         if (nearestSurface < SectorState.SurveyRangeM && SiteLine(p, nearest) is { Length: > 0 } siteLine) target += $"\n{siteLine}";
 
-        return new HudSections(status, ship, ShipyardSummary(), target, GoalsText());
+        return new HudSections(StatusCard(status), ShipCard(p, ship), StationsCard(ShipyardSummary()), TargetCard(p, target), GoalsCard());
     }
 
     private string LandedLine(CraftState p)
@@ -1246,6 +1244,7 @@ public partial class Main : Node2D
         DrawSwarms(renderTimeS); // #30
         FlushBatch();
         DrawCombat(); // #84
+        DrawEdgeArrows(renderTimeS); // #101
         // Name tags, not when zoomed far out; in a crowd only stations and the target get one, so the text stays readable and cheap.
         var crowd = _visibleCrafts.Count > MaxNameTags;
         foreach (var (craft, at, radius) in _visibleCrafts)

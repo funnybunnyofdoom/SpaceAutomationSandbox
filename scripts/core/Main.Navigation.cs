@@ -102,7 +102,8 @@ public partial class Main
         {
             if (InMenu || ModalOpen || EditorOpen || !Pressed(InputActions.PanelFocus)) return false;
             var open = SidePanels.Where(p => p is { Visible: true }).OrderByDescending(p => p!.GetIndex()).FirstOrDefault();
-            if (open == null) ShowStatus("Open a panel first, then press it again to use the panel with keys or a controller.");
+            if (open == null && _topBar.Visible) EnterPanelNav(_topBar, fromMenu: false); // #106
+            else if (open == null) ShowStatus("Open a panel first, then press it again to use the panel with keys or a controller.");
             else EnterPanelNav(open, fromMenu: false);
             return true;
         }
@@ -121,16 +122,6 @@ public partial class Main
     private void ApplyTheme()
     {
         Palette.ColorblindSafe = _settings.ColorblindSafe;
-        var theme = new Theme { DefaultFontSize = Mathf.RoundToInt(16 * _settings.TextScale) };
-        var focus = new StyleBoxFlat
-        {
-            DrawCenter = false, BorderColor = Palette.Focus,
-            BorderWidthLeft = 2, BorderWidthRight = 2, BorderWidthTop = 2, BorderWidthBottom = 2,
-            CornerRadiusTopLeft = 3, CornerRadiusTopRight = 3, CornerRadiusBottomLeft = 3, CornerRadiusBottomRight = 3,
-            ExpandMarginLeft = 2, ExpandMarginRight = 2, ExpandMarginTop = 2, ExpandMarginBottom = 2,
-        };
-        foreach (var type in new[] { "Button", "OptionButton", "CheckBox", "CheckButton", "LineEdit", "HSlider", "ItemList", "MenuButton" })
-            theme.SetStylebox("focus", type, focus);
-        _uiRoot.Theme = theme;
+        _uiRoot.Theme = UiTheme.Build(_settings.TextScale); // #99
     }
 }

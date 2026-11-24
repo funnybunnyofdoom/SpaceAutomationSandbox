@@ -59,6 +59,9 @@ public sealed class GameSettings
     /// <summary>HUD areas folded away (#51), by title.</summary>
     public System.Collections.Generic.HashSet<string> HudCollapsed { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>The menu bar is shown (#106).</summary>
+    public bool MenuBar { get; set; } = true;
+
     /// <summary>Text size choices (#68), on top of the interface scale.</summary>
     public static readonly float[] TextScales = { 1f, 1.15f, 1.3f, 1.5f };
 
@@ -84,6 +87,7 @@ public sealed class GameSettings
         if (file.HasSectionKey("display", "window_position")) settings.WindowPosition = file.GetValue("display", "window_position").AsVector2I();
         foreach (var title in file.GetValue("hud", "collapsed", "").AsString().Split(',', StringSplitOptions.RemoveEmptyEntries))
             settings.HudCollapsed.Add(title);
+        settings.MenuBar = file.GetValue("hud", "menu_bar", true).AsBool();
         foreach (var bus in AudioBuses)
         {
             settings.Volume[bus] = Math.Clamp((float)file.GetValue("audio", $"{bus.ToLowerInvariant()}_volume", settings.Volume[bus]).AsDouble(), 0f, 1f);
@@ -109,6 +113,7 @@ public sealed class GameSettings
         if (WindowSize is { } size) file.SetValue("display", "window_size", size);
         if (WindowPosition is { } position) file.SetValue("display", "window_position", position);
         file.SetValue("hud", "collapsed", string.Join(",", HudCollapsed));
+        file.SetValue("hud", "menu_bar", MenuBar);
         foreach (var bus in AudioBuses)
         {
             file.SetValue("audio", $"{bus.ToLowerInvariant()}_volume", Volume[bus]);

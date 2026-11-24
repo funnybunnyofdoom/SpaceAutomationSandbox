@@ -14,7 +14,7 @@ namespace SpaceAutomationSandbox.UI;
 /// </summary>
 public partial class BlueprintEditorView : Control
 {
-    private static readonly Color PanelColor = new(0.02f, 0.02f, 0.05f, 0.92f);
+    private static readonly Color PanelColor = new(0.02f, 0.02f, 0.05f, 0.75f);
     private static readonly Color ErrorColor = new(1f, 0.45f, 0.4f);
     private static readonly Color WarningColor = new(1f, 0.85f, 0.4f);
     private static readonly Color OkColor = new(0.5f, 1f, 0.6f);

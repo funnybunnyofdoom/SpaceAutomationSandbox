@@ -51,18 +51,6 @@ public partial class FleetPanel : PanelContainer
 
     public FleetPanel() : this(() => new SectorState(0), () => null) { }
 
-    /// <summary>A more solid background than the theme's default, so the list stays readable over the map.</summary>
-    public override void _Ready()
-    {
-        if (GetThemeStylebox("panel") is StyleBoxFlat themed)
-        {
-            var solid = (StyleBoxFlat)themed.Duplicate();
-            // It opens over the HUD's lower-left area: solid enough that the text beneath doesn't show through.
-            solid.BgColor = new Color(solid.BgColor.R, solid.BgColor.G, solid.BgColor.B, Mathf.Max(solid.BgColor.A, 0.93f));
-            AddThemeStyleboxOverride("panel", solid);
-        }
-    }
-
     private void Build()
     {
         SetAnchorsPreset(LayoutPreset.BottomLeft);

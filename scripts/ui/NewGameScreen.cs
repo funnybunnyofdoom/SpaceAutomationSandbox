@@ -35,13 +35,6 @@ public partial class NewGameScreen : Control
         centre.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(centre);
         var panel = new PanelContainer();
-        panel.AddThemeStyleboxOverride("panel", new StyleBoxFlat // solid: the title menu is right behind it
-        {
-            BgColor = new Color(0.05f, 0.06f, 0.1f, 0.98f),
-            ContentMarginLeft = 20, ContentMarginRight = 20, ContentMarginTop = 16, ContentMarginBottom = 16,
-            CornerRadiusTopLeft = 6, CornerRadiusTopRight = 6, CornerRadiusBottomLeft = 6, CornerRadiusBottomRight = 6,
-            BorderColor = new Color(0.3f, 0.4f, 0.6f, 0.6f), BorderWidthLeft = 1, BorderWidthRight = 1, BorderWidthTop = 1, BorderWidthBottom = 1,
-        });
         centre.AddChild(panel);
         var box = new VBoxContainer();
         box.AddThemeConstantOverride("separation", 10);
