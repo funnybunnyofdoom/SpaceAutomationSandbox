@@ -107,7 +107,7 @@ Work:
 - Complete body dismantling, changing body appearance/gravitation, industrial-scale excavation.
 - Movable enormous factories/structures and construction/transport challenges.
 - Swarm grouping/aggregation, macro-scale build orders and massive resource flows.
-- Late-game energy and stability constraints, balance and simulation benchmarks.
+- ~~Late-game energy and stability constraints~~ (decided 2026-11-23, #31: none; growth is limited only by the infrastructure the player builds and manages). Simulation benchmarks at scale continue with #30 and #39.
 
 **Gate:** two distinctive viable strategies can be demonstrated: a massive mobile facility and an aggregated swarm achieving similar industrial objectives by different means.
 
