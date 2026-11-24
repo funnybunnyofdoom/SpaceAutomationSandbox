@@ -60,7 +60,7 @@ public static class UiTheme
             theme.SetStylebox("focus", type, focus);
 
         theme.SetStylebox("panel", "PanelContainer", Box(Glass, Edge, 10, 8));
-        theme.SetStylebox("panel", "TooltipPanel", Box(new Color(0.02f, 0.04f, 0.08f, 0.96f), Edge, 8, 5));
+        theme.SetStylebox("panel", "TooltipPanel", Box(new Color(0.03f, 0.05f, 0.09f, 1f), Edge, 8, 5));
         theme.SetStylebox("panel", "PopupMenu", Box(new Color(0.03f, 0.06f, 0.11f, 0.97f), Edge, 6, 6));
         theme.SetStylebox("hover", "PopupMenu", Box(new Color(0.12f, 0.32f, 0.45f), Colors.Transparent, 4, 2, 0));
         theme.SetStylebox("panel", "ItemList", Box(new Color(0, 0, 0, 0.3f), new Color(Edge, 0.2f), 6, 4));

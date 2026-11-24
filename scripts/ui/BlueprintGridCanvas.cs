@@ -33,6 +33,9 @@ public partial class BlueprintGridCanvas : Control
     private GridPos? _hover;
     private MouseButton _dragButton = MouseButton.None;
 
+    /// <summary>The placed part under the mouse and its cell, or null (also while drawing).</summary>
+    public event Action<string?, Rect2>? PartPointed;
+
     /// <summary>Raised after any edit so the panel can refresh stats and errors.</summary>
     public event Action? Edited;
 
@@ -44,7 +47,7 @@ public partial class BlueprintGridCanvas : Control
         _rotation = rotation;
         CustomMinimumSize = new Vector2(Side, Side);
         MouseFilter = MouseFilterEnum.Stop;
-        MouseExited += () => { _hover = null; QueueRedraw(); };
+        MouseExited += () => { _hover = null; PartPointed?.Invoke(null, default); QueueRedraw(); };
     }
 
     // Parameterless constructor required by Godot for script instances; not used.
@@ -64,6 +67,7 @@ public partial class BlueprintGridCanvas : Control
                 if (button.Pressed && _dragButton == MouseButton.None)
                 {
                     _dragButton = button.ButtonIndex;
+                    PartPointed?.Invoke(null, default);
                     _model.BeginStroke();
                     Apply(ToCell(button.Position));
                 }
@@ -80,6 +84,7 @@ public partial class BlueprintGridCanvas : Control
                 var cell = ToCell(motion.Position);
                 _hover = BlueprintEditor.InBounds(cell) ? cell : null;
                 if (_dragButton != MouseButton.None) Apply(cell);
+                else PartPointed?.Invoke(_model.Cells.TryGetValue(cell, out var under) ? under.PartId : null, new Rect2(CellOrigin(cell), new Vector2(CellPx, CellPx)));
                 QueueRedraw();
                 break;
         }

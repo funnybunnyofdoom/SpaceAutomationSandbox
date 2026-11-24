@@ -302,6 +302,7 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-job") >= 0) _jobPanel?.Open();
         if (System.Array.IndexOf(args, "--open-debug") >= 0) _debugPanel?.Open();
         if (System.Array.IndexOf(args, "--open-editor") >= 0) OpenEditor();
+        if (args.FirstOrDefault(a => a.StartsWith("--part-tip=")) is { } tipArg) _editor?.DevPoint(tipArg["--part-tip=".Length..]);
         if (System.Array.IndexOf(args, "--open-cargo") >= 0) _cargoPanel?.Open();
         if (System.Array.IndexOf(args, "--open-shipyard") >= 0) _shipyardPanel?.Open();
         if (args.FirstOrDefault(a => a.StartsWith("--shipyard-design=")) is { } designArg && int.TryParse(designArg["--shipyard-design=".Length..], out var designIndex))

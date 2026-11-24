@@ -8,6 +8,20 @@ namespace SpaceAutomationSandbox.Simulation.Tests;
 public class ConstructionTests
 {
     [Fact]
+    public void Every_part_says_what_it_does_and_only_the_hull_just_joins()
+    {
+        var catalog = TestData.Catalog();
+        foreach (var part in catalog.Parts)
+        {
+            var facts = PartFacts.Of(part, catalog.Materials);
+            Assert.NotEmpty(facts);
+            Assert.All(facts, f => Assert.False(string.IsNullOrWhiteSpace(f.Text) || string.IsNullOrWhiteSpace(f.Icon) || f.Icon == "mat_", part.Id));
+            if (part.Id != "hull") Assert.DoesNotContain(facts, f => f.Text.StartsWith("Joins"));
+        }
+        Assert.Contains(PartFacts.Of(catalog.Get("autocannon"), catalog.Materials), f => f.Text.Contains("2 kg of shells"));
+    }
+
+    [Fact]
     public void PartCatalog_LoadsTheStarterParts()
     {
         var ids = TestData.Catalog().Parts.Select(p => p.Id).OrderBy(id => id);

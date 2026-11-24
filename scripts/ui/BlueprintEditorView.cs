@@ -73,7 +73,7 @@ public partial class BlueprintEditorView : Control
         {
             var part = _palette[i];
             var tech = LockedBy(part.Id);
-            _paletteButtons[i].Text = $"{KeyLabel(i)}  {part.Name}  {part.MassKg / 1000:0.#} t{PartSummary(part)}" + (tech is null ? "" : $"  [needs {tech}]");
+            _paletteButtons[i].Text = $"{KeyLabel(i)}  {part.Name}  {part.MassKg / 1000:0.#} t{PartSummary(part)}" + (tech is null ? "" : "  [locked]");
             _paletteButtons[i].Modulate = tech is null ? Colors.White : new Color(1, 1, 1, 0.55f);
         }
         Visible = true;
@@ -101,6 +101,7 @@ public partial class BlueprintEditorView : Control
         // --- left: palette ---
         var left = new VBoxContainer { CustomMinimumSize = new Vector2(230, 0) };
         columns.AddChild(left);
+        _left = left;
         left.AddChild(Heading("BLUEPRINT EDITOR"));
         left.AddChild(new Label { Text = "Parts (1-9, 0; Shift for 11+)" });
         var paletteScroll = new ScrollContainer
@@ -128,13 +129,16 @@ public partial class BlueprintEditorView : Control
                 ButtonGroup = group,
                 ButtonPressed = part.Id == _selectedPart,
                 Alignment = HorizontalAlignment.Left,
+                ClipText = true, // a narrow window shortens it; the tooltip has it all
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 FocusMode = FocusModeEnum.None,
-                TooltipText = PartTooltip(part), // #65
                 Icon = PartSprites.Icon(part.Id), // its pixel art (#46)
             };
             var id = part.Id;
             button.Pressed += () => _selectedPart = id;
+            button.MouseEntered += () => Point(id, button, 0.15);
+            button.MouseExited += () => { if (_pointed == id) StopPointing(); };
             _paletteButtons.Add(button);
             row.AddChild(button);
             paletteList.AddChild(row);
@@ -152,6 +156,13 @@ public partial class BlueprintEditorView : Control
         _grid = new BlueprintGridCanvas(_model, _colors, () => _selectedPart, () => _rotation);
         _grid.Edited += () => { _pendingConfirm = null; Refresh(); };
         centre.AddChild(_grid);
+        _grid.PartPointed += (id, cell) =>
+        {
+            if (id is null) StopPointing();
+            else Point(id, _grid, 0.5, cell);
+        };
+
+        AddChild(_card); // over the columns
 
         // --- right: name, stats, problems, file actions ---
         var right = new VBoxContainer { CustomMinimumSize = new Vector2(330, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -218,31 +229,47 @@ public partial class BlueprintEditorView : Control
         : p.FoodRateKgPerS > 0 ? $", {p.FoodRateKgPerS * 3600:0} kg food/h"
         : p.IsControlSource ? ", control" : "";
 
-    /// <summary>Everything a part does, for its palette tooltip (#65).</summary>
-    private static string PartTooltip(PartDefinition p)
+    // --- Part tooltips: a card of its own, opaque, on the palette and on placed parts ---
+
+    private readonly PartCard _card = new();
+    private string? _pointed;
+    private Control? _pointedIn;
+    private VBoxContainer? _left;
+    private Rect2? _pointedArea;
+    private double _pointedForS, _pointDelayS;
+
+    private void Point(string partId, Control where, double delayS, Rect2? area = null)
     {
-        var lines = new System.Collections.Generic.List<string> { $"{p.Name}: {p.MassKg / 1000:0.##} t" };
-        if (p.IsControlSource) lines.Add("Control: a craft needs one to be flown or automated.");
-        if (p.ThrustN > 0) lines.Add($"Thrust {p.ThrustN / 1000:0} kN, pushing the way it faces (place it facing back to go forward).");
-        if (p.CargoCapacityKg > 0) lines.Add($"Cargo {p.CargoCapacityKg / 1000:0.#} t.");
-        if (p.EnergyCapacityKJ > 0) lines.Add($"Stores {p.EnergyCapacityKJ / 1000:0.#} MJ of power.");
-        if (p.PowerGenerationKW > 0) lines.Add($"Makes {p.PowerGenerationKW:0} kW of power.");
-        if (p.PowerUseKW > 0) lines.Add($"Uses {p.PowerUseKW:0} kW while working.");
-        if (p.MiningRateKgPerS > 0) lines.Add($"Drill: mines {p.MiningRateKgPerS:0.#} kg/s while landed.");
-        if (p.RefiningRateKgPerS > 0) lines.Add($"Refinery: {p.RefiningRateKgPerS:0.#} kg/s of ore into materials.");
-        if (p.FabricationRateKgPerS > 0) lines.Add($"Fabricator: builds ships at {p.FabricationRateKgPerS:0.#} kg/s.");
-        if (p.EjectionRateKgPerS > 0) lines.Add($"Throws out slag at {p.EjectionRateKgPerS:0.#} kg/s.");
-        if (p.CrewCapacity > 0) lines.Add($"Houses {p.CrewCapacity} crew (they need food and water).");
-        if (p.RobotCount > 0) lines.Add($"{p.RobotCount} robots: work like crew, need only power.");
-        if (p.FoodRateKgPerS > 0) lines.Add($"Farm: {p.FoodRateKgPerS * 3600:0} kg of food per hour.");
-        if (p.ResearchRatePerS > 0) lines.Add($"Lab: {p.ResearchRatePerS * 60:0.#} research points per minute.");
-        if (p.IsDockingPort) lines.Add("Docking port: other craft dock here.");
-        if (p.IsAnchorClamp) lines.Add("Anchor clamp: holds the craft to a surface.");
-        if (p.IsFoundation) lines.Add("Foundation: the craft stays fixed where it's deployed.");
-        if (p.IsWarpGate) lines.Add("Warp gate: jumps to another star system.");
-        if (p.MaterialsKg is { Count: > 0 } materials)
-            lines.Add("Made of: " + string.Join(", ", materials.Select(m => $"{m.Value / 1000:0.##} t {m.Key}")));
-        return string.Join("\n", lines);
+        if (_pointed == partId && _pointedIn == where && _pointedArea == area) return;
+        _card.Visible = false;
+        (_pointed, _pointedIn, _pointedArea, _pointDelayS, _pointedForS) = (partId, where, area, delayS, 0);
+    }
+
+    private void StopPointing()
+    {
+        _pointed = null;
+        _card.Visible = false;
+    }
+
+    /// <summary>Dev/test hook: <c>--part-tip=id</c>.</summary>
+    public void DevPoint(string partId)
+    {
+        var i = _palette.FindIndex(p => p.Id == partId);
+        if (i >= 0) Point(partId, _paletteButtons[i], 0);
+    }
+
+    public override void _Process(double delta)
+    {
+        // The palette takes what the grid and the numbers leave.
+        var width = Mathf.Clamp(Size.X - 985, 290, 460);
+        if (_left is { } left && !Mathf.IsEqualApprox(left.CustomMinimumSize.X, width)) left.CustomMinimumSize = new Vector2(width, 0);
+        if (_pointed is not { } id || _pointedIn is not { } where) return;
+        if (!IsVisibleInTree()) { StopPointing(); return; }
+        _pointedForS += delta;
+        if (_pointedForS < _pointDelayS || !_catalog.TryGet(id, out var part) || part is null) return;
+        var area = _pointedArea is { } a ? new Rect2(where.GlobalPosition + a.Position * GetGlobalTransform().Scale, a.Size * GetGlobalTransform().Scale) : where.GetGlobalRect();
+        var back = GetGlobalTransform().AffineInverse();
+        _card.Show(part, _catalog.Materials, LockedBy(id), new Rect2(back * area.Position, area.Size / GetGlobalTransform().Scale));
     }
 
     private static Label Heading(string text)
