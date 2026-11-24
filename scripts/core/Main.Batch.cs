@@ -75,7 +75,7 @@ public partial class Main
     }
 
     /// <summary>The background stars: fixed on screen, rebuilt only when the window size changes.</summary>
-    private void DrawStarfield()
+    private void DrawStarfield(Node2D on)
     {
         var size = GetViewportRect().Size;
         if (_starPoints is null || size != _starfieldSize)
@@ -102,8 +102,8 @@ public partial class Main
             for (var i = 0; i < _starIndices.Length; i++) _starIndices[i] = i;
         }
         if (_starPoints.Length == 0) return;
-        DrawSetTransform(_camera.Position, 0, Vector2.One);
-        RenderingServer.CanvasItemAddTriangleArray(GetCanvasItem(), _starIndices!, _starPoints, _starColors!);
-        DrawSetTransform(Vector2.Zero, 0, Vector2.One);
+        on.DrawSetTransform(_camera.Position, 0, Vector2.One);
+        RenderingServer.CanvasItemAddTriangleArray(on.GetCanvasItem(), _starIndices!, _starPoints, _starColors!);
+        on.DrawSetTransform(Vector2.Zero, 0, Vector2.One);
     }
 }

@@ -122,6 +122,7 @@ public partial class Main : Node2D
         InputActions.Apply(_settings.Bindings); // the player's own controls (#63)
         RenderingServer.SetDefaultClearColor(SpaceColor);
         _camera = GetNode<Camera2D>("Camera2D");
+        SetUpBodyArt(); // #71-#74: the layers under this node
         _settings.ApplyWindow();
 
         var hudLayer = new CanvasLayer();
@@ -303,6 +304,7 @@ public partial class Main : Node2D
             ApplyTheme();
         }
         if (System.Array.IndexOf(args, "--colorblind") >= 0) { _settings.ColorblindSafe = true; ApplyTheme(); }
+        SetUpBodyView(args); // #71-#74 check
         SetUpStress(args); // #39 performance check
         if (System.Array.IndexOf(args, "--goals") >= 0) { _goalsOn = true; _goalsDone.Add("survey"); } // #65 check: one goal done
         if (System.Array.IndexOf(args, "--demo-crash") >= 0 && _player != null)
@@ -641,6 +643,8 @@ public partial class Main : Node2D
 
             foreach (var part in catalog.Parts)
                 _partColors[part.Id] = part.PlaceholderColor is { } hex ? Color.FromHtml(hex) : Colors.Magenta;
+            foreach (var material in materials.Materials)
+                if (material.PlaceholderColor is { } hex) _materialColors[material.Id] = Color.FromHtml(hex);
             PartSprites.Load(catalog.Parts.Select(p => p.Id)); // pixel-art parts (#46)
             _catalog = catalog;
             _starterDesign = design;
@@ -928,7 +932,8 @@ public partial class Main : Node2D
         UpdateGoals(delta);
         if (InMenu)
         {
-            QueueRedraw(); // just the starfield
+            QueueRedraw();
+            _backdrop.QueueRedraw(); // just the starfield
             DevScreenshot();
             return;
         }
@@ -963,10 +968,12 @@ public partial class Main : Node2D
         _camera.Position = Vector2.Zero; // the world is drawn around _viewCentre instead (precision far from the star)
         if (_mapMode && MapStar() is { } root) _viewCentre = _sector.GetPosition(root.Id);
         else if (_player != null) _viewCentre = InterpolatedPosition(_player);
+        ApplyDevView();
         var hudStart = System.Diagnostics.Stopwatch.GetTimestamp();
         _hud.Show(BuildHud());
         _hudCost.Add(System.Diagnostics.Stopwatch.GetElapsedTime(hudStart).TotalMilliseconds);
         QueueRedraw();
+        _backdrop.QueueRedraw();
         DevScreenshot();
     }
 
@@ -1167,13 +1174,12 @@ public partial class Main : Node2D
 
     private void DrawWorld()
     {
-        DrawStarfield();
+        if (InMenu || (_mapMode && _galaxyView)) HideBodies();
         if (InMenu) return; // the title screen: no game to draw
         if (_mapMode && _galaxyView) { DrawGalaxy(); return; }
 
-        // Interpolated time: smooth motion between 20 Hz ticks without touching the state.
-        var renderTimeS = (_sector.Tick + _warp.Alpha) * FixedStepClock.TickSeconds;
-        foreach (var body in _sector.Bodies) DrawBody(body, renderTimeS);
+        var renderTimeS = RenderTimeS;
+        DrawBodies(renderTimeS);
         if (_player is { TargetBodyId.IsNone: false } || _player is { TargetCraftId.IsNone: false }) DrawTargetMarker(_player, renderTimeS);
         foreach (var craft in _sector.Crafts.Where(c => c.IsShipyard && c.RailOrbit != null))
         {
@@ -1228,77 +1234,6 @@ public partial class Main : Node2D
             var start = Mathf.Tau * i / 4 + Mathf.Pi / 8;
             DrawArc(centre, radiusPx, start, start + Mathf.Pi / 4, 16, MarkerColor, 2f);
         }
-    }
-
-    private static readonly Color SiteTickColor = new(1f, 1f, 1f, 0.45f);
-    private static readonly Color SiteLabelColor = new(0.85f, 0.9f, 1f, 0.85f);
-    private static readonly Color SiteUnknownColor = new(0.7f, 0.7f, 0.75f, 0.55f);
-
-    /// <summary>
-    /// Surface sites (#70): a tick across the rim where each site starts, and the site's letter with its
-    /// ore (or "?" until surveyed) just outside the rim, once a site is wide enough on screen to label.
-    /// </summary>
-    /// <summary>Sites get labels once each is wide enough on screen.</summary>
-    private static bool SitesLabelled(CelestialBodyState body, float radiusPx) =>
-        body.Sites.Count > 0 && radiusPx >= 40f && radiusPx * (float)body.Sites[0].WidthRad > 70f;
-
-    private void DrawSites(CelestialBodyState body, Vector2 centre, float radiusPx)
-    {
-        if (body.Sites.Count == 0 || radiusPx < 40f) return;
-        var view = new Rect2(-GetViewportRect().Size / 2, GetViewportRect().Size).Grow(40);
-        var labelled = SitesLabelled(body, radiusPx);
-        foreach (var site in body.Sites)
-        {
-            var (sin, cos) = Mathf.SinCos((float)site.StartRad);
-            var edge = new Vector2(cos, sin);
-            var tickAt = centre + edge * radiusPx;
-            if (view.HasPoint(tickAt)) DrawLine(centre + edge * (radiusPx - 8), centre + edge * (radiusPx + 12), SiteTickColor, 2);
-            if (!labelled) continue;
-            var (cs, cc) = Mathf.SinCos((float)site.CentreRad);
-            var at = centre + new Vector2(cc, cs) * (radiusPx + 22);
-            if (!view.HasPoint(at)) continue;
-            var ore = !site.Surveyed ? "?" : (site.DepositsKg.Count == 0 ? "no ore" : string.Join(", ", site.DepositsKg.Keys.Select(k => k.Replace("_ore", ""))))
-                                              + (site.IsHot ? ", HOT" : ""); // geothermal hot spot (#77)
-            DrawString(ThemeDB.FallbackFont, at - new Vector2(20, 0), $"{SurfaceSite.Letter(site.Index)}: {ore}",
-                HorizontalAlignment.Left, -1, 12, site.Surveyed ? SiteLabelColor : SiteUnknownColor);
-        }
-    }
-
-    private void DrawBody(CelestialBodyState body, double renderTimeS)
-    {
-        // Orbits: skip ones too small to see, and huge ones (from close up they're a straight line off-screen).
-        var orbitPx = body.Orbit is { } o && body.Kind != BodyKind.Star ? (float)o.RadiusM * _pixelsPerMetre : 0f; // a star's place among the stars isn't an orbit to draw
-        if (body.Orbit is { } orbit && orbitPx is > 3f and < 200_000f)
-        {
-            var parentPx = ToPixels(_sector.GetPositionAt(orbit.Parent, renderTimeS));
-            DrawArc(parentPx, orbitPx, 0, Mathf.Tau, 512, OrbitColor);
-        }
-
-        var centre = ToPixels(_sector.GetPositionAt(body.Id, renderTimeS));
-        var radiusPx = Mathf.Max(2f, (float)body.RadiusM * _pixelsPerMetre);
-        if (centre.Length() - radiusPx > 4 * GetViewportRect().Size.Length()) return; // far off-screen
-        var color = body.Kind switch
-        {
-            BodyKind.Star => body.StarClass switch { StarClass.Red => new Color(1f, 0.55f, 0.4f), StarClass.Blue => new Color(0.6f, 0.75f, 1f), _ => StarColor },
-            BodyKind.Planet => PlanetColor,
-            BodyKind.Moon => MoonColor,
-            BodyKind.GasGiant => GasGiantColor,
-            _ => body.DepositsKg.ContainsKey("ice") ? IceColor : AsteroidColor,
-        };
-        if (radiusPx < 200f) DrawCircle(centre, radiusPx, color);
-        else DrawColoredPolygon(CirclePoints(centre, radiusPx, 512), color); // smoother edge up close
-        DrawCraters(body, centre, radiusPx, color);
-        DrawSites(body, centre, radiusPx);
-
-        // Zoomed out, a moon's or rock's name would sit on top of its planet's: only label bodies whose
-        // orbit is big enough on screen to tell apart (and always the target).
-        var isTarget = _player is { } p && p.TargetBodyId == body.Id;
-        if (body.Orbit is not null && orbitPx < 28f && !isTarget) return;
-        var name = body.AnySiteSurveyed ? body.Name : $"{body.Name} (unsurveyed)";
-        if (SitesLabelled(body, radiusPx)) // the rim carries site labels (#70): the name goes in the middle instead
-            DrawString(ThemeDB.FallbackFont, centre - new Vector2(ThemeDB.FallbackFont.GetStringSize(name, HorizontalAlignment.Left, -1, 14).X / 2, -5), name,
-                HorizontalAlignment.Left, -1, 14, NameColor);
-        else DrawString(ThemeDB.FallbackFont, centre + new Vector2(radiusPx + 4, 4), name, HorizontalAlignment.Left, -1, 12, NameColor);
     }
 
     private void DrawCraft(CraftState craft)
@@ -1380,65 +1315,6 @@ public partial class Main : Node2D
         }
     }
 
-    /// <summary>
-    /// Craters (#28): each a darker pit at the surface where mining dug, with a darker floor, kept inside
-    /// the body's disk (the body stays round for landing, so craft sit on the drawn surface).
-    /// </summary>
-    private void DrawCraters(CelestialBodyState body, Vector2 centre, float radiusPx, Color color)
-    {
-        if (body.Craters.Count == 0) return;
-        var pit = color.Darkened(0.35f);
-        var floor = color.Darkened(0.55f);
-        foreach (var crater in body.Craters)
-        {
-            var r = (float)body.CraterRadiusM(crater.MassKg) * _pixelsPerMetre;
-            if (r < 1.5f) continue; // too small to see at this zoom
-            var dir = new Vector2(Mathf.Cos((float)crater.BearingRad), Mathf.Sin((float)crater.BearingRad));
-            var rim = centre + dir * radiusPx;
-            if (rim.Length() - r > 2 * GetViewportRect().Size.Length()) continue; // off-screen
-            if (CircleInDisk(rim, r, centre, radiusPx) is { } pitShape) DrawColoredPolygon(pitShape, pit);
-            if (CircleInDisk(rim - dir * r * 0.15f, r * 0.55f, centre, radiusPx) is { } floorShape) DrawColoredPolygon(floorShape, floor);
-        }
-    }
-
-    /// <summary>
-    /// The part of a circle (centre <paramref name="c"/>, radius <paramref name="r"/>) inside the body's
-    /// disk, as a convex outline: the arc of the body's edge inside the circle, then the arc of the circle
-    /// inside the body. Exact, so it always triangulates. Null when they don't overlap.
-    /// </summary>
-    private static Vector2[]? CircleInDisk(Vector2 c, float r, Vector2 disk, float diskR)
-    {
-        const int arcPoints = 16;
-        var offset = c - disk;
-        var d = offset.Length();
-        if (d >= diskR + r) return null; // apart
-        if (d + r <= diskR) return CirclePoints(c, r, 32); // wholly inside the body
-        if (d + diskR <= r) return CirclePoints(disk, diskR, 32); // the body is wholly inside the circle
-        var toward = Mathf.Atan2(offset.Y, offset.X);
-        // Half-angles of the two arcs, from the triangle (body centre, circle centre, crossing point).
-        var alpha = Mathf.Acos(Mathf.Clamp((d * d + diskR * diskR - r * r) / (2 * d * diskR), -1, 1)); // at the body centre
-        var gamma = Mathf.Acos(Mathf.Clamp((d * d + r * r - diskR * diskR) / (2 * d * r), -1, 1));     // at the circle centre
-        // Points spaced a few pixels apart (tiny arcs get few: points closer than float precision can
-        // coincide, and a repeated vertex won't triangulate). The arcs meet at the crossings, listed once.
-        var bodyPoints = Mathf.Clamp((int)(2 * alpha * diskR / 4) + 2, 2, arcPoints);
-        var circlePoints = Mathf.Clamp((int)(2 * gamma * r / 4) + 2, 2, arcPoints);
-        if (r < 1f || bodyPoints + circlePoints - 2 < 3) return null; // too small to draw
-        var points = new Vector2[bodyPoints + circlePoints - 2];
-        for (var i = 0; i < bodyPoints; i++)
-        {
-            // The body's edge, from one crossing to the other (through the direction of the circle)...
-            var a = toward - alpha + 2 * alpha * i / (bodyPoints - 1);
-            points[i] = disk + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * diskR;
-        }
-        for (var i = 1; i < circlePoints - 1; i++)
-        {
-            // ...then back along the circle between them, through the direction of the body's centre.
-            var b = toward + Mathf.Pi - gamma + 2 * gamma * i / (circlePoints - 1);
-            points[bodyPoints + i - 1] = c + new Vector2(Mathf.Cos(b), Mathf.Sin(b)) * r;
-        }
-        return points;
-    }
-
     /// <summary>The star of the system shown on the map: the one you're in (#54).</summary>
     private CelestialBodyState? MapStar() =>
         _sector.Bodies.FirstOrDefault(b => b.Id == _mapSystem)
@@ -1492,8 +1368,7 @@ public partial class Main : Node2D
         foreach (var star in stars)
         {
             var at = At(star);
-            var colour = star.StarClass switch { StarClass.Red => new Color(1f, 0.55f, 0.4f), StarClass.Blue => new Color(0.6f, 0.75f, 1f), _ => StarColor };
-            DrawCircle(at, (star.Id == here ? 12 : 9) * ui, colour);
+            DrawGalaxyStar(star, at, (star.Id == here ? 12 : 9) * ui);
             if (star.Id == here) DrawArc(at, 18 * ui, 0, Mathf.Tau, 48, Colors.White, 1.5f * ui);
             var bodies = _sector.Bodies.Where(b => b.Id != star.Id && _sector.StarOf(b.Id)?.Id == star.Id).ToList();
             var craft = _sector.Crafts.Count(c => _sector.StarAt(c.Position)?.Id == star.Id);
@@ -1512,17 +1387,6 @@ public partial class Main : Node2D
         DrawString(ThemeDB.FallbackFont, new Vector2(-size.X / 2 + 560 * ui, -size.Y / 2 + 30 * ui),
             "GALAXY  (G: back to the system)   Purple: warp gate links.  Pick a system in the panel to see its map.",
             HorizontalAlignment.Left, -1, font, NameColor);
-    }
-
-    private static Vector2[] CirclePoints(Vector2 centre, float radius, int count)
-    {
-        var points = new Vector2[count];
-        for (var i = 0; i < count; i++)
-        {
-            var angle = Mathf.Tau * i / count;
-            points[i] = centre + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
-        }
-        return points;
     }
 
     // Screen-fixed backdrop: drawn around the camera so it never scrolls away. No parallax yet.

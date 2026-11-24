@@ -69,6 +69,8 @@ Draw in Pixelorama, save the `.pxo` under `art_source/pixelorama/<group>/`, expo
 
 Ship parts are 16×16 pixel art per 2 m cell (rotation 0 faces up). `python tools/art/make_part_art.py` regenerates their sources; `python tools/art/export_art.py` exports changed sources with Pixelorama's command line (`--all` for everything) and checks each PNG against its source. Godot imports the PNGs the next time the editor or `--import` runs.
 
+Celestial bodies (#71–#74): `python tools/art/make_body_art.py` draws their tiles and markers, drawn in the game by `assets/shaders/body.gdshader`. To look at one: `-- --new-game --view-body=Cinder --view-bearing=45 --zoom=0.5 --survey-all --dig` (test craters, nothing saved).
+
 ## Rules for agents
 
 See `AGENTS.md` and `docs/06_DECISION_LOG_AND_OPEN_QUESTIONS.md`. Proposals in the docs aren't requirements until they're logged as decisions.
