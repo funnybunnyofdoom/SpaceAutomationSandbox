@@ -179,6 +179,7 @@ public partial class Main
 
     private void DrawBody(CelestialBodyState body, double renderTimeS)
     {
+        if (!MapShows(body)) return; // filtered out of the map (#104)
         var centre = ToPixels(_sector.GetPositionAt(body.Id, renderTimeS));
         var isStar = body.Kind == BodyKind.Star;
         var radiusPx = Mathf.Max(isStar ? 3f : 2f, (float)body.RadiusM * _pixelsPerMetre);

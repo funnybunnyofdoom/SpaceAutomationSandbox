@@ -130,6 +130,7 @@ public partial class Main
         var view = new Rect2(-half, half * 2);
         foreach (var body in _sector.Bodies)
         {
+            if (!MapShows(body)) continue;
             var at = ToPixels(_sector.GetPositionAt(body.Id, renderTimeS));
             var radius = (float)body.RadiusM * _pixelsPerMetre;
             if (view.Grow(radius).HasPoint(at)) yield return (TargetRef.Of(body), at, radius);
@@ -214,8 +215,9 @@ public partial class Main
         var box = font.GetStringSize(text, HorizontalAlignment.Left, -1, size) + new Vector2(12, 6);
         var half = GetViewportRect().Size / 2;
         var corner = MouseFromCentre + new Vector2(18, 18);
+        var left = -half.X + (_hud.Shown ? _hud.LeftWidth + 8 : 0) * _uiRoot.Scale.X;
         var right = half.X - _panelsWidth * _uiRoot.Scale.X; // not under a panel
-        corner = new Vector2(Mathf.Clamp(corner.X, -half.X, Mathf.Max(-half.X, right - box.X)), Mathf.Min(corner.Y, half.Y - box.Y));
+        corner = new Vector2(Mathf.Clamp(corner.X, left, Mathf.Max(left, right - box.X)), Mathf.Min(corner.Y, half.Y - box.Y));
         DrawRect(new Rect2(corner, box), new Color(0.02f, 0.04f, 0.08f, 0.85f));
         DrawRect(new Rect2(corner, box), UiTheme.Edge, filled: false);
         DrawString(font, corner + new Vector2(6, 3 + font.GetAscent(size)), text, HorizontalAlignment.Left, -1, size, Colors.White);

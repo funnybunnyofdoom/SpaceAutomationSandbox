@@ -193,7 +193,7 @@ public partial class Main : Node2D
             _mapPanel = new MapPanel(() => _sector, () => _player,
                 body => { if (_player != null) { _sector.SetTarget(_player.Id, body); ShowStatus($"Target: {_sector.GetBody(body).Name}."); } },
                 craft => { if (_player != null && craft != _player.Id) { _sector.SetTargetCraft(_player.Id, craft); ShowStatus($"Target: {_sector.GetCraft(craft).Name}."); } },
-                ViewSystem)
+                ViewSystem, () => MapStar()?.Id, _catalog.Materials)
             { Visible = false };
             _uiRoot.AddChild(_mapPanel);
             _diagnosticsPanel = new DiagnosticsPanel(() => _sector, _warp, _tickCost) { Visible = false };
@@ -869,13 +869,16 @@ public partial class Main : Node2D
             }
             return;
         }
+        if (DragMap(@event)) { GetViewport().SetInputAsHandled(); return; } // #104
         if (@event is InputEventMouseButton click && WorldClick(click)) { GetViewport().SetInputAsHandled(); return; } // #108
         // The side panels don't take keyboard focus, so flying continues while they're open.
 
         if (Pressed(InputActions.ZoomIn) || Pressed(InputActions.ZoomOut))
         {
+            var before = _pixelsPerMetre;
             _pixelsPerMetre = Mathf.Clamp(Pressed(InputActions.ZoomIn) ? _pixelsPerMetre * ZoomStep : _pixelsPerMetre / ZoomStep,
                 MinPixelsPerMetre, MaxPixelsPerMetre);
+            if (_mapMode) ZoomMapTo(@event is InputEventMouseButton wheel ? wheel.Position - GetViewportRect().Size / 2 : Vector2.Zero, before); // #104
         }
         else if (Pressed(InputActions.QuickSave)) SaveTo(SaveStore.QuickPath(SavesFolder), $"{_gameName} (quicksave)");
         else if (Pressed(InputActions.QuickLoad))
@@ -994,7 +997,7 @@ public partial class Main : Node2D
         _warp.RecordFrame(delta, ran, due);
 
         _camera.Position = Vector2.Zero; // the world is drawn around _viewCentre instead (precision far from the star)
-        if (_mapMode && MapStar() is { } root) _viewCentre = _sector.GetPosition(root.Id);
+        if (_mapMode && MapStar() is { } root) _viewCentre = _sector.GetPosition(root.Id) + _mapOffset;
         else if (_player != null) _viewCentre = InterpolatedPosition(_player);
         ApplyDevView();
         var hudStart = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -1019,10 +1022,11 @@ public partial class Main : Node2D
         {
             var parts = arg0.Split('=');
             if (parts.Length == 2 && parts[0] == "--press" && _framesShown == 10) Input.ParseInputEvent(new InputEventAction { Action = parts[1], Pressed = true });
-            if (parts.Length != 2 || parts[0] is not ("--click" or "--right-click" or "--point") || parts[1].Split(',') is not [var px, var py]) continue;
+            if (parts.Length != 2 || parts[0] is not ("--click" or "--right-click" or "--point" or "--wheel") || parts[1].Split(',') is not [var px, var py]) continue;
             var at = new Vector2(float.Parse(px), float.Parse(py));
             if (parts[0] == "--point") _devPointer = at;
-            if (_framesShown is 11 or 12 && parts[0] != "--point")
+            if (parts[0] == "--wheel" && _framesShown is >= 10 and < 40) Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, Pressed = true, ButtonIndex = MouseButton.WheelUp });
+            if (_framesShown is 11 or 12 && parts[0] is ("--click" or "--right-click"))
                 Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, Pressed = _framesShown == 11, ButtonIndex = parts[0] == "--click" ? MouseButton.Left : MouseButton.Right });
         }
         var shotAt = OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot-frame=")) is { } frameArg ? int.Parse(frameArg["--screenshot-frame=".Length..]) : 20;
@@ -1242,12 +1246,13 @@ public partial class Main : Node2D
         {
             var at = ToPixels(InterpolatedPosition(craft));
             var radiusPx = (float)craft.CollisionRadiusM * _pixelsPerMetre;
-            if (view.Grow(radiusPx).HasPoint(at)) _visibleCrafts.Add((craft, at, radiusPx));
+            if (view.Grow(radiusPx).HasPoint(at) && MapShows(craft)) _visibleCrafts.Add((craft, at, radiusPx));
         }
         foreach (var (craft, _, _) in _visibleCrafts) DrawCraft(craft);
         DrawSwarms(renderTimeS); // #30
         FlushBatch();
         DrawCombat(); // #84
+        DrawSystemMap(renderTimeS); // #104
         DrawEdgeArrows(renderTimeS); // #101
         DrawHover(renderTimeS); // #108
         // Name tags, not when zoomed far out; in a crowd only stations and the target get one, so the text stays readable and cheap.
@@ -1385,60 +1390,8 @@ public partial class Main : Node2D
         var extent = _sector.Bodies.Where(b => b.Kind != BodyKind.Star && b.Orbit is { } o && star is not null && o.Parent == star.Id)
             .Select(b => b.Orbit!.RadiusM + b.RadiusM).DefaultIfEmpty(100_000).Max() * 1.1;
         var screen = _uiRoot.GetViewportRect().Size;
+        _mapOffset = Vector2D.Zero;
         _pixelsPerMetre = Mathf.Clamp((float)(Mathf.Min(screen.X - 420, screen.Y) / 2 / extent), MinPixelsPerMetre, MaxPixelsPerMetre);
-    }
-
-    /// <summary>
-    /// The galaxy view (#21): every known star system around the screen centre at its real direction
-    /// and (scaled) distance, coloured by star type, with its warp gate links, what it holds, and how
-    /// many of your craft are there.
-    /// </summary>
-    private void DrawGalaxy()
-    {
-        DrawRect(new Rect2(-GetViewportRect().Size, GetViewportRect().Size * 2), new Color(0.01f, 0.01f, 0.03f, 0.92f));
-        var stars = _sector.Stars;
-        if (stars.Count == 0) return;
-        var centre = new Vector2D(stars.Average(s => _sector.GetPosition(s.Id).X), stars.Average(s => _sector.GetPosition(s.Id).Y));
-        var far = stars.Max(s => _sector.GetPosition(s.Id).DistanceTo(centre));
-        var size = GetViewportRect().Size;
-        var ui = _uiRoot.Scale.X; // text follows the interface scale
-        var font = (int)Mathf.Round(15 * ui);
-        var scale = far > 0 ? 0.35 * Mathf.Min(size.X - 420 * ui, size.Y) / far : 0;
-        Vector2 At(CelestialBodyState s)
-        {
-            var d = _sector.GetPosition(s.Id) - centre;
-            return new Vector2((float)(d.X * scale), (float)(d.Y * scale)) - new Vector2(210 * ui, 0);
-        }
-        foreach (var gate in _sector.Crafts.Where(SectorState.IsGate))
-        {
-            if (_sector.Crafts.FirstOrDefault(c => c.Id == gate.GateLinkId) is not { } other) continue;
-            if (_sector.StarAt(gate.Position) is { } a && _sector.StarAt(other.Position) is { } b && a.Id.Value < b.Id.Value)
-                DrawLine(At(a), At(b), new Color(0.75f, 0.5f, 1f, 0.8f), 2);
-        }
-        var here = _player is { } me ? _sector.StarAt(me.Position)?.Id : null;
-        foreach (var star in stars)
-        {
-            var at = At(star);
-            _starHits.Add((star.Id, at));
-            DrawGalaxyStar(star, at, (star.Id == here ? 12 : 9) * ui);
-            if (star.Id == here) DrawArc(at, 18 * ui, 0, Mathf.Tau, 48, Colors.White, 1.5f * ui);
-            var bodies = _sector.Bodies.Where(b => b.Id != star.Id && _sector.StarOf(b.Id)?.Id == star.Id).ToList();
-            var craft = _sector.Crafts.Count(c => _sector.StarAt(c.Position)?.Id == star.Id);
-            var type = star.StarClass switch { StarClass.Red => "red dwarf", StarClass.Blue => "blue star", _ => "yellow star" };
-            var exotic = bodies.Any(b => b.DepositsKg.ContainsKey("exotic_ore")) ? ", exotic ore" : "";
-            var claim = _sector.FactionAtStar(star.Id) is { } owner ? $"\nclaimed by the {owner.Name} ({owner.Disposition.ToString().ToLowerInvariant()})" : ""; // #36
-            var lines = $"{star.Name}{(star.Id == here ? "  (you are here)" : "")}\n{type}, {bodies.Count} bodies{exotic}\n{craft} of your craft{claim}";
-            var y = at.Y + 26 * ui;
-            foreach (var line in lines.Split('\n'))
-            {
-                DrawString(ThemeDB.FallbackFont, new Vector2(at.X - 70 * ui, y), line, HorizontalAlignment.Left, -1, font, NameColor);
-                y += font + 4 * ui;
-            }
-        }
-        // The legend along the top, between the HUD on the left and the panel on the right.
-        DrawString(ThemeDB.FallbackFont, new Vector2(-size.X / 2 + 560 * ui, -size.Y / 2 + 30 * ui),
-            "GALAXY  (G: back to the system)   Purple: warp gate links.  Click a system to see its map.",
-            HorizontalAlignment.Left, -1, font, NameColor);
     }
 
     // Screen-fixed backdrop: drawn around the camera so it never scrolls away. No parallax yet.
