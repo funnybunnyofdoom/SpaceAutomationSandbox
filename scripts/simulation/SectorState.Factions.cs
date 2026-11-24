@@ -29,7 +29,7 @@ public sealed partial class SectorState
     /// <summary>Grievance per tonne mined in a civilization's system, and how fast it fades (points per minute).</summary>
     public const double GrievancePerTonne = 0.1, GrievanceFadePerMinute = 0.1;
 
-    public const int MaxEvents = 100;
+    public const int MaxEvents = 300;
 
     private readonly List<Faction> _factions = new();
     private readonly SortedSet<string> _laws = new(StringComparer.Ordinal);
@@ -47,9 +47,10 @@ public sealed partial class SectorState
     /// <summary>What happened, oldest first (at most <see cref="MaxEvents"/>).</summary>
     public IReadOnlyList<SectorEvent> Events => _events;
 
-    public void AddEvent(string text)
+    /// <summary>Notes what happened, what kind of thing it is, and the craft or body it's about, if any.</summary>
+    public void AddEvent(string text, EventKind kind = EventKind.Other, TargetRef target = default)
     {
-        _events.Add(new SectorEvent(Tick, text));
+        _events.Add(new SectorEvent(Tick, text, kind, target));
         if (_events.Count > MaxEvents) _events.RemoveAt(0);
     }
 
@@ -59,7 +60,7 @@ public sealed partial class SectorState
         if (on == _laws.Contains(lawId)) return new(false, $"{Laws.Get(lawId).Name} is already {(on ? "in force" : "off")}.");
         if (on) _laws.Add(lawId); else _laws.Remove(lawId);
         var text = $"{Laws.Get(lawId).Name} {(on ? "enacted" : "repealed")}.";
-        AddEvent(text);
+        AddEvent(text, EventKind.Civilization);
         return new(true, text);
     }
 
@@ -123,7 +124,7 @@ public sealed partial class SectorState
         var likes = culture.Stances.Where(s => s.Value > 0).Select(s => Laws.Get(s.Key).Name).ToList();
         var dislikes = culture.Stances.Where(s => s.Value < 0).Select(s => Laws.Get(s.Key).Name).ToList();
         AddEvent($"Contact: the {faction.Name}, a {culture.Name} civilization, claim the {star.Name} system. "
-                 + $"They favour {string.Join(" and ", likes)}" + (dislikes.Count > 0 ? $" and oppose {string.Join(" and ", dislikes)}." : "."));
+                 + $"They favour {string.Join(" and ", likes)}" + (dislikes.Count > 0 ? $" and oppose {string.Join(" and ", dislikes)}." : "."), EventKind.Civilization, new TargetRef(CraftId.None, faction.HomeStarId));
         return faction;
     }
 
@@ -158,7 +159,7 @@ public sealed partial class SectorState
             if (Tick < faction.TruceUntilTick) faction.Attitude = Math.Max(faction.Attitude, TruceAttitude); // peace holds for a while (#89)
             var now = faction.Disposition;
             if (_lastDisposition.TryGetValue(faction.Id, out var before) && before != now)
-                AddEvent($"The {faction.Name} are now {now.ToString().ToLowerInvariant()} towards you.");
+                AddEvent($"The {faction.Name} are now {now.ToString().ToLowerInvariant()} towards you.", EventKind.Civilization, new TargetRef(CraftId.None, faction.HomeStarId));
             _lastDisposition[faction.Id] = now;
 
             if (Tick < faction.NextEventTick) continue;
@@ -180,7 +181,7 @@ public sealed partial class SectorState
         else if (faction.Disposition == Disposition.Wary && faction.Grievance >= 5 && !_warned.GetValueOrDefault(faction.Id))
         {
             _warned[faction.Id] = true;
-            AddEvent($"The {faction.Name} warn you: stop mining in their system.");
+            AddEvent($"The {faction.Name} warn you: stop mining in their system.", EventKind.Civilization, new TargetRef(CraftId.None, faction.HomeStarId));
         }
     }
 
@@ -216,7 +217,7 @@ public sealed partial class SectorState
         far.GateLinkId = gate.Id;
         gate.GateLinkId = far.Id;
         gate.GateLostStarId = BodyId.None;
-        AddEvent($"{gate.Name} sent a new gate through to {star.Name}.");
+        AddEvent($"{gate.Name} sent a new gate through to {star.Name}.", EventKind.Fleet, TargetRef.Of(gate));
         return null;
     }
 

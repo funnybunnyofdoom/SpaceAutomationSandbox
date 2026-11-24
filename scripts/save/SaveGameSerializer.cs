@@ -50,11 +50,11 @@ public static class SaveGameSerializer
     /// v25 added trade stations, trade routes and diplomacy (#89); v26 added native life (#91, #92); v27 added
     /// native animals (#93); v28 added antimatter and quantum drives (#81, #82); v29 added milestones (#38)
     /// and closable gates (#95); v30 added
-    /// flying to a target (#108).
+    /// flying to a target (#108); v31 added what events are about (#100).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 30;
+    public const int SchemaVersion = 31;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -96,7 +96,7 @@ public static class SaveGameSerializer
                     }).ToList()
                     : null,
                 Laws = sector.ActiveLaws.Count > 0 ? sector.ActiveLaws.ToList() : null,
-                Events = sector.Events.Count > 0 ? sector.Events.Select(e => new EventDto { Tick = e.Tick, Text = e.Text }).ToList() : null,
+                Events = sector.Events.Count > 0 ? sector.Events.Select(e => new EventDto { Tick = e.Tick, Text = e.Text, Kind = (int)e.Kind, CraftId = e.Target.Craft.Value, BodyId = e.Target.Body.Value }).ToList() : null,
                 Milestones = sector.MilestonesReached.Count > 0 ? new SortedDictionary<string, long>(sector.MilestonesReached.ToDictionary(m => m.Key, m => m.Value), StringComparer.Ordinal) : null,
                 MilestonesStarted = sector.MilestonesStarted,
                 Shots = sector.Shots.Count > 0
@@ -490,7 +490,8 @@ public static class SaveGameSerializer
                     f.NextPatrolTick, f.PatrolShipsBuilt, f.Goodwill, f.TruceUntilTick, f.NextStationTick, f.Invading);
             }
             sector.RestoreLaws(dto.Laws ?? new List<string>());
-            sector.RestoreEvents((dto.Events ?? new List<EventDto>()).Select(e => new SectorEvent(e.Tick, e.Text ?? "")));
+            sector.RestoreEvents((dto.Events ?? new List<EventDto>()).Select(e => new SectorEvent(e.Tick, e.Text ?? "",
+                e.Kind >= 0 && e.Kind <= (int)EventKind.Message ? (EventKind)e.Kind : EventKind.Other, new TargetRef(new CraftId(e.CraftId), new BodyId(e.BodyId)))));
             foreach (var (material, kg) in dto.EjectedKg ?? new SortedDictionary<string, long>())
             {
                 if (!catalog.Materials.Contains(material)) throw new FormatException($"Unknown ejected material '{material}'.");
@@ -875,6 +876,16 @@ public static class SaveGameSerializer
     {
         public long Tick { get; set; }
         public string? Text { get; set; }
+
+        /// <summary>v31: what it's about (#100).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int Kind { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint CraftId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint BodyId { get; set; }
     }
 
     private sealed class BodyDto

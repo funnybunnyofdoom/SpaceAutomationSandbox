@@ -25,13 +25,13 @@ public partial class TopBar : PanelContainer
         GrowHorizontal = GrowDirection.Both;
         OffsetTop = 6;
         var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 2);
+        row.AddThemeConstantOverride("separation", 1);
         AddChild(row);
         foreach (var item in items)
         {
             var button = new Button
             {
-                ToggleMode = true, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(34, 32), Icon = UiIcons.Get(item.Icon),
+                ToggleMode = true, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(32, 32), Icon = UiIcons.Get(item.Icon),
                 IconAlignment = HorizontalAlignment.Center, ExpandIcon = true, TextureFilter = TextureFilterEnum.Nearest,
             };
             button.AddThemeConstantOverride("icon_max_width", 16);
@@ -66,7 +66,7 @@ public partial class TopBar : PanelContainer
             _large = value;
             foreach (var (_, button, _) in _buttons)
             {
-                button.CustomMinimumSize = value ? new Vector2(50, 46) : new Vector2(34, 32);
+                button.CustomMinimumSize = value ? new Vector2(50, 46) : new Vector2(32, 32);
                 button.AddThemeConstantOverride("icon_max_width", value ? 32 : 16);
             }
         }

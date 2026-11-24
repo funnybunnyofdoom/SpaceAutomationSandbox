@@ -51,7 +51,7 @@ public sealed partial class SectorState
             if (contained) { craft.ContainmentFailS = 0; continue; }
             if (craft.ContainmentFailS <= 0)
                 AddEvent($"DANGER: antimatter containment is failing on {craft.Name}! {ContainmentGraceS:0} s until it explodes"
-                         + (craft.IsWreck || held > craft.Stats.AntimatterCapacityKg ? " (containment destroyed)." : " (no power)."));
+                         + (craft.IsWreck || held > craft.Stats.AntimatterCapacityKg ? " (containment destroyed)." : " (no power)."), EventKind.Danger, TargetRef.Of(craft));
             craft.ContainmentFailS += FixedStepClock.TickSeconds;
             if (craft.ContainmentFailS >= ContainmentGraceS) (failed ??= new()).Add(craft);
         }
@@ -67,7 +67,7 @@ public sealed partial class SectorState
         Eject(AntimatterMaterial, kg);
         source.ContainmentFailS = 0;
         var radius = BlastRadiusM * Math.Sqrt(kg);
-        AddEvent($"{kg} kg of antimatter exploded on {source.Name}.");
+        AddEvent($"{kg} kg of antimatter exploded on {source.Name}.", EventKind.Danger, TargetRef.Of(source));
         _blasts.Add((Tick, source.Position, radius));
         var centre = source.Position;
         foreach (var craft in _crafts.ToList())
@@ -190,7 +190,7 @@ public sealed partial class SectorState
             if (!craft.QuantumRequested || craft.QuantumChargeKJ + 1e-6 < need || QuantumBlocker(craft) is not null) continue;
             if (QuantumGoal(craft) is not { } goal || StarAt(goal.Position) != StarAt(craft.Position)) { craft.QuantumRequested = false; continue; }
             QuantumJump(craft, goal.Position, goal.Velocity);
-            AddEvent($"{craft.Name} made a quantum jump.");
+            AddEvent($"{craft.Name} made a quantum jump.", EventKind.Fleet, TargetRef.Of(craft));
         }
     }
 

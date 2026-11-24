@@ -196,7 +196,7 @@ public partial class MapPanel : PanelContainer
                     if (s.Bodies.FirstOrDefault(b => b.Id == id) is not { } b) return new HudRow("idle", "(gone)", Severity.Muted);
                     var unsurveyed = b.IsMineable && !b.AnySiteSurveyed;
                     return new HudRow(UiIcons.BodyIcon(b), $"{b.Name}{Far(s, s.GetPosition(id), b.RadiusM)}{(unsurveyed ? "  ?" : "")}", unsurveyed ? Severity.Muted : Severity.Normal,
-                        Tip: unsurveyed ? "Not surveyed yet" : "");
+                        Tip: unsurveyed ? "Not surveyed yet" : "", Link: TargetRef.Of(b));
                 }, () => _targetBody(id));
             foreach (var child in bodies.Where(b => b.Orbit?.Parent == body.Id && b.Kind != BodyKind.Star)) AddBody(child, depth + 1);
         }
@@ -213,7 +213,7 @@ public partial class MapPanel : PanelContainer
                 if (s.Crafts.FirstOrDefault(x => x.Id == id) is not { } c) return new HudRow("idle", "(gone)", Severity.Muted);
                 var closed = c.GateClosed ? "  closed" : "";
                 return new HudRow(SectorState.IsGate(c) ? "gate" : c.IsShipyard ? "shipyard" : c.IsTradeStation ? "trade" : "orbit", $"{c.Name}{Far(s, c.Position, c.CollisionRadiusM)}{closed}",
-                    c.GateClosed || FleetPanel.Trouble(c) is not null ? Severity.Warning : Severity.Normal, Tip: FleetPanel.Trouble(c) ?? "");
+                    c.GateClosed || FleetPanel.Trouble(c) is not null ? Severity.Warning : Severity.Normal, Tip: FleetPanel.Trouble(c) ?? "", Link: TargetRef.Of(c));
             }, () => _targetCraft(id));
         }
         if (named.Count > MostRows) _rows.AddChild(new Label { Text = $"{named.Count - MostRows} more: search for a name", ThemeTypeVariation = "HudText", Modulate = new Color(1, 1, 1, 0.6f) });

@@ -57,7 +57,7 @@ public sealed partial class SectorState
     {
         if (_milestones.ContainsKey(id)) return;
         _milestones[id] = MilestonesStarted ? Tick : 0;
-        if (MilestonesStarted && Milestones.All.FirstOrDefault(m => m.Id == id) is { } milestone) AddEvent($"Milestone: {milestone.Title}.");
+        if (MilestonesStarted && Milestones.All.FirstOrDefault(m => m.Id == id) is { } milestone) AddEvent($"Milestone: {milestone.Title}.", EventKind.Milestone);
     }
 
     private void StepMilestones()

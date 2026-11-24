@@ -90,7 +90,8 @@ public partial class Main
             var shown = line.StartsWith("power ") && line.Contains("MJ") && p.Stats.EnergyCapacityKJ > 0 || line.StartsWith("gravity ")
                         || line.StartsWith("shield ") || line.StartsWith("antimatter ") && p.Stats.AntimatterCapacityKg > 0;
             if (shown && !line.Contains("NO POWER") && !line.Contains("DANGER")) continue;
-            rows.Add(line.StartsWith("power ") ? new HudRow("warn", "NO POWER: not everything can run", Severity.Bad, Tip: line) : Row(line));
+            rows.Add(line.StartsWith("power ") ? new HudRow("warn", "NO POWER: not everything can run", Severity.Bad, Tip: line)
+                : line.StartsWith("DOCKED") && p.IsDocked ? Row(line) with { Link = new TargetRef(p.DockedToCraftId, BodyId.None) } : Row(line));
         }
         return new HudCardData($"{p.Name}  ·  {p.Design.Name}", rows, p.Design);
     }
@@ -106,12 +107,12 @@ public partial class Main
             var yard = yards.FirstOrDefault(y => parts[0].StartsWith(y.Key, StringComparison.Ordinal)).Value;
             if (yard is null)
             {
-                rows.Add(parts[0].Contains("warp gate") ? new HudRow("gate", line) : Row(line));
+                rows.Add(parts[0].Contains("warp gate") ? new HudRow("gate", line, Link: _sector.Crafts.FirstOrDefault(c => SectorState.IsGate(c) && line.StartsWith(c.Name + ":", StringComparison.Ordinal)) is { } g ? TargetRef.Of(g) : null) : Row(line));
                 continue;
             }
             var wrong = WarningWords.Any(line.Contains);
-            if (yard.BuildQueue.Count > 0) rows.Add(new HudRow(wrong ? "warn" : "shipyard", parts[0], wrong ? Severity.Warning : Severity.Normal, yard.BuildQueue[0].Fraction, Tip: line));
-            else rows.Add(new HudRow(wrong ? "warn" : "shipyard", parts[0], wrong ? Severity.Warning : Severity.Normal, Tip: line));
+            if (yard.BuildQueue.Count > 0) rows.Add(new HudRow(wrong ? "warn" : "shipyard", parts[0], wrong ? Severity.Warning : Severity.Normal, yard.BuildQueue[0].Fraction, Tip: line, Link: TargetRef.Of(yard)));
+            else rows.Add(new HudRow(wrong ? "warn" : "shipyard", parts[0], wrong ? Severity.Warning : Severity.Normal, Tip: line, Link: TargetRef.Of(yard)));
             foreach (var part in parts.Skip(1))
                 rows.Add(part.StartsWith("storage") && yard.CargoCapacityKg > 0
                     ? new HudRow("cargo", part, yard.CargoKg >= 0.97 * yard.CargoCapacityKg ? Severity.Warning : Severity.Normal, (double)yard.CargoKg / yard.CargoCapacityKg)
@@ -144,7 +145,7 @@ public partial class Main
         foreach (var line in lines.Skip(1))
         {
             var motion = line.StartsWith("gap ") || line.StartsWith("surface ");
-            if (!motion) { rows.Add(Row(line) with { Severity = line.StartsWith("nearest") ? Severity.Muted : Row(line).Severity }); continue; }
+            if (!motion) { rows.Add(Row(line) with { Severity = line.StartsWith("nearest") ? Severity.Muted : Row(line).Severity, Link = line.StartsWith("nearest") ? TargetRef.Of(_sector.NearestBody(p.Position).Body) : null }); continue; }
             var parts = line.Split("   ", StringSplitOptions.RemoveEmptyEntries);
             rows.Add(new HudRow("target", parts[0]));
             rows.Add(new HudRow("speed", string.Join("   ", parts.Skip(1)), line.Contains("MATCHED") ? Severity.Good : Severity.Normal));

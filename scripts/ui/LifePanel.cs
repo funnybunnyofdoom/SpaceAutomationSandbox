@@ -138,7 +138,7 @@ public partial class LifePanel : PanelContainer
         {
             var health = SectorState.HealthOf(body);
             rows.Add(new(UiIcons.BodyIcon(body), $"{body.Name}: {health}" + (health == LifeHealth.Thriving ? " (growing faster)" : health == LifeHealth.Stressed ? " (growing slower: let it recover)" : ""),
-                health == LifeHealth.Lost ? Severity.Bad : health == LifeHealth.Stressed ? Severity.Warning : health == LifeHealth.Thriving ? Severity.Good : Severity.Normal));
+                health == LifeHealth.Lost ? Severity.Bad : health == LifeHealth.Stressed ? Severity.Warning : health == LifeHealth.Thriving ? Severity.Good : Severity.Normal, Link: TargetRef.Of(body)));
             if (health == LifeHealth.Lost) { rows.Add(new("danger", "its native life has died out", Severity.Muted)); continue; }
             var plants = body.Sites.Average(s => s.Flora);
             rows.Add(new("life", $"plants {plants * 100:0}% on average{(body.FloraHazard == FloraHazard.None ? "" : $", {body.FloraHazard.ToString().ToLowerInvariant()}")}", Severity.Good, plants));
@@ -150,7 +150,7 @@ public partial class LifePanel : PanelContainer
                 if (s.Fauna > 0) rows.Add(new(angry ? "warn" : "crew", $"{SurfaceSite.Letter(s.Index)}: animals {s.Fauna * 100:0}%{(angry ? "  ANGRY" : "")}", angry ? Severity.Bad : Severity.Normal, s.Fauna));
             }
             foreach (var c in sector.Crafts.Where(c => c.LandedOnBodyId == body.Id && (c.AnimalStatus is not null || c.RepellerOn)))
-                rows.Add(new("orbit", $"{c.Name}: {c.AnimalStatus ?? "repelling animals"}"));
+                rows.Add(new("orbit", $"{c.Name}: {c.AnimalStatus ?? "repelling animals"}", Link: TargetRef.Of(c)));
         }
         _worlds.Set(rows);
     }

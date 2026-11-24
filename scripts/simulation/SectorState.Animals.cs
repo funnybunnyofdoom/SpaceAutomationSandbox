@@ -126,7 +126,7 @@ public sealed partial class SectorState
         if (!any)
         {
             body.HasAnimals = false;
-            AddEvent($"The {body.AnimalName}s of {body.Name} have died out.");
+            AddEvent($"The {body.AnimalName}s of {body.Name} have died out.", EventKind.Life, TargetRef.Of(body));
             return;
         }
         if (body.AnimalTemper != AnimalTemper.Harmless) Trample(body);
@@ -281,7 +281,7 @@ public sealed partial class SectorState
         body.AnimalName = craft.PenAnimal;
         body.AnimalTemper = craft.PenTemper;
         body.HasAnimals = true;
-        if (settled) AddEvent($"{craft.PenAnimal}s now live on {body.Name}.");
+        if (settled) AddEvent($"{craft.PenAnimal}s now live on {body.Name}.", EventKind.Life, TargetRef.Of(body));
         return new(true, $"{craft.Name}: {kg / 1000.0:0.0##} t of {craft.PenAnimal}s released on {body.Name}.");
     }
 

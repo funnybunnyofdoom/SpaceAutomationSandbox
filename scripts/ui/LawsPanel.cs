@@ -53,6 +53,7 @@ public partial class LawsPanel : PanelContainer
         InputActions.TitleWithKey(title, "LAWS AND CIVILIZATIONS", InputActions.Laws);
         title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(title);
+        box.AddChild(UiTabs.Row(("laws", "Laws", null), ("trade", "Trade", () => DiplomacyChosen?.Invoke(-1))));
         box.AddChild(Dim("Your laws shape how the civilizations you meet see you. Each one drifts slowly towards what it thinks of the laws in force; "
                          + "mining in a civilization's system angers it. Hostile ones raid your gate in their system."));
 
@@ -158,23 +159,15 @@ public partial class LawsPanel : PanelContainer
         {
             if (!_factionRows.TryGetValue(f.Id, out var list)) continue;
             var star = sector.Bodies.FirstOrDefault(b => b.Id == f.HomeStarId)?.Name ?? "?";
-            var rows = new List<HudRow> { new("star", $"{f.Name}  ({f.Culture.Name}, {star} system)") };
+            var rows = new List<HudRow> { new("star", $"{f.Name}  ({f.Culture.Name}, {star} system)", Link: new TargetRef(CraftId.None, f.HomeStarId)) };
             rows.AddRange(CivilizationRows.For(sector, f));
-            if (!f.RaidGateId.IsNone) rows.Add(new("danger", $"RAIDING {sector.Crafts.FirstOrDefault(c => c.Id == f.RaidGateId)?.Name ?? "your gate"}", Severity.Bad));
+            if (!f.RaidGateId.IsNone) rows.Add(new("danger", $"RAIDING {sector.Crafts.FirstOrDefault(c => c.Id == f.RaidGateId)?.Name ?? "your gate"}", Severity.Bad, Link: new TargetRef(f.RaidGateId, BodyId.None)));
             rows.Add(new("weapon", $"{sector.Crafts.Count(c => c.IsPatrol && c.FactionId == f.Id && !c.IsWreck)} patrol ships in their system"
                 + (sector.Factions.Where(o => SectorState.AreEnemies(f, o)).Select(o => o.Name).ToList() is { Count: > 0 } foes ? $"; enemies of the {string.Join(", ", foes)}" : ""), Severity.Muted));
             list.Set(rows);
         }
 
-        var recent = sector.Events.Reverse().Take(12).Select(e => new HudRow(
-            e.Text.StartsWith("DANGER") || e.Text.Contains("destroyed") ? "danger" : e.Text.Contains("raid") ? "warn" : e.Text.StartsWith("Milestone") ? "milestones" : "message",
-            $"{TimeText(e.Tick)}  {e.Text}", e.Text.StartsWith("DANGER") ? Severity.Bad : Severity.Muted)).ToList();
+        var recent = sector.Events.Reverse().Take(12).Select(LogPanel.Row).ToList(); // the rest is in the log (#100)
         _events.Set(recent.Count == 0 ? new[] { new HudRow("message", "Nothing yet.", Severity.Muted) } : recent.ToArray());
-    }
-
-    private static string TimeText(long tick)
-    {
-        var s = (long)(tick * FixedStepClock.TickSeconds);
-        return $"{s / 3600}:{s / 60 % 60:00}:{s % 60:00}";
     }
 }

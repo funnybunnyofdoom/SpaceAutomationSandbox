@@ -132,7 +132,7 @@ public sealed partial class SectorState
         Eject(material, kg - kept);
         AddGoodwill(faction, worth / GiftValuePerGoodwill);
         faction.Grievance = Math.Max(0, faction.Grievance - worth / GiftValuePerGrievance);
-        AddEvent($"You gave the {faction.Name} {kg / 1000.0:0.0##} t of {material}.");
+        AddEvent($"You gave the {faction.Name} {kg / 1000.0:0.0##} t of {material}.", EventKind.Civilization, new TargetRef(CraftId.None, faction.HomeStarId));
         return new(true, $"The {faction.Name} accept your gift of {kg / 1000.0:0.0##} t of {material}.");
     }
 
@@ -166,7 +166,7 @@ public sealed partial class SectorState
         faction.RaidEndTick = Math.Min(faction.RaidEndTick, Tick); // raiders withdraw
         AddGoodwill(faction, 10);
         _lastDisposition[faction.Id] = faction.Disposition;
-        AddEvent($"Peace with the {faction.Name}, for {kg / 1000.0:0.0##} t of {material}.");
+        AddEvent($"Peace with the {faction.Name}, for {kg / 1000.0:0.0##} t of {material}.", EventKind.Civilization, new TargetRef(CraftId.None, faction.HomeStarId));
         return new(true, $"The {faction.Name} agree to peace for {kg / 1000.0:0.0##} t of {material}.");
     }
 

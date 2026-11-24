@@ -85,7 +85,7 @@ public sealed partial class SectorState
             if (wreck.Design.Cells.Count == 1)
             {
                 craft.Inventory.Add(part.Bill.ToWholeKg());
-                AddEvent($"{craft.Name} finished salvaging {wreck.Name}.");
+                AddEvent($"{craft.Name} finished salvaging {wreck.Name}.", EventKind.Fleet, TargetRef.Of(craft));
                 (gone ??= new()).Add(wreck);
             }
             else BreakOff(wreck, new List<DesignCell> { cell }, wreck.Inventory);

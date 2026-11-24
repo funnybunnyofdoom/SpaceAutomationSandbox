@@ -43,6 +43,9 @@ public partial class TradePanel : PanelContainer
 
     public TradePanel() : this(() => new SectorState(0), () => null, new MaterialCatalog(Array.Empty<MaterialDefinition>()), () => { }) { }
 
+    /// <summary>Raised by the Laws tab (#100).</summary>
+    public event Action? LawsChosen;
+
     private static Label Text() => new() { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(430, 0) };
 
     private void Build()
@@ -62,10 +65,8 @@ public partial class TradePanel : PanelContainer
         title.AddThemeFontSizeOverride("font_size", 18);
         title.AddThemeColorOverride("font_color", UiTheme.Accent);
         head.AddChild(title);
-        var close = new Button { Text = "Close", FocusMode = FocusModeEnum.None };
-        close.Pressed += () => Visible = false;
-        head.AddChild(close);
         box.AddChild(head);
+        box.AddChild(UiTabs.Row(("laws", "Laws", () => LawsChosen?.Invoke()), ("trade", "Trade", null)));
         _faction = new OptionButton { FocusMode = FocusModeEnum.None };
         _faction.ItemSelected += _ => { RefreshGoods(); Refresh(); };
         box.AddChild(_faction);
@@ -162,12 +163,12 @@ public partial class TradePanel : PanelContainer
         var station = sector.TradeStationOf(f);
         var hostile = f.Disposition == Disposition.Hostile;
         var system = sector.Bodies.FirstOrDefault(b => b.Id == f.HomeStarId)?.Name ?? "?";
-        var rows = new List<HudRow> { new("star", $"{f.Name}, a {f.Culture.Name} civilization in the {system} system") };
+        var rows = new List<HudRow> { new("star", $"{f.Name}, a {f.Culture.Name} civilization in the {system} system", Link: new TargetRef(CraftId.None, f.HomeStarId)) };
         rows.AddRange(CivilizationRows.For(sector, f));
         rows.Add(hostile ? new("danger", $"They want goods worth {SectorState.PeacePrice(f):N0} for peace, from a ship of yours in their system.", Severity.Warning)
             : station is null ? new("idle", "They have no trade station at the moment.", Severity.Muted)
             : docked ? SectorState.WillTrade(f) ? new HudRow("docked", "Docked at their trade station.", Severity.Good) : new HudRow("warn", "They won't trade while wary, but accept gifts.", Severity.Warning)
-            : new("docked", $"Dock at {station.Name} to trade or give gifts.", Severity.Muted));
+            : new("docked", $"Dock at {station.Name} to trade or give gifts.", Severity.Muted, Link: TargetRef.Of(station)));
         _state.Set(rows);
         _trade.Disabled = !docked || !SectorState.WillTrade(f);
         _gift.Disabled = !docked;

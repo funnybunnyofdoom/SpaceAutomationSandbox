@@ -38,6 +38,7 @@ public partial class Main
             if (!_panelWidths.ContainsKey(panel))
             {
                 _panelWidths[panel] = panel == _settingsPanel ? 460 : Mathf.Max(340, panel.OffsetRight - panel.OffsetLeft);
+                AddCloseButton(panel); // #100
             }
             if (!panel.Visible) _openPanels.Remove(panel);
             else if (!_openPanels.Contains(panel))

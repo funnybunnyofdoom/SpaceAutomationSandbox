@@ -69,10 +69,8 @@ public partial class FleetPanel : PanelContainer
         _title.AddThemeColorOverride("font_color", UiTheme.Accent);
         var head = new HBoxContainer();
         head.AddChild(_title);
-        var swarms = new Button { Text = "Swarms", Icon = UiIcons.Get("swarm"), FocusMode = FocusModeEnum.None, TooltipText = "Run many identical miners as one swarm" };
-        swarms.Pressed += () => SwarmsChosen?.Invoke();
-        head.AddChild(swarms);
         box.AddChild(head);
+        box.AddChild(UiTabs.Row(("fleet", "Fleet", null), ("swarm", "Swarms", () => SwarmsChosen?.Invoke())));
 
         var filters = new HFlowContainer();
         box.AddChild(filters);
@@ -114,6 +112,15 @@ public partial class FleetPanel : PanelContainer
     {
         Visible = true;
         Refresh();
+    }
+
+    /// <summary>Opens on the craft with a name (#100).</summary>
+    public void OpenAt(string name)
+    {
+        _filter = 0;
+        _filterButtons[0].ButtonPressed = true;
+        _search.Text = name;
+        Open();
     }
 
     public override void _Process(double delta)
@@ -249,6 +256,8 @@ public partial class FleetPanel : PanelContainer
         public FleetRow()
         {
             MouseFilter = MouseFilterEnum.Pass;
+            MouseDefaultCursorShape = CursorShape.PointingHand;
+            GuiInput += e => { if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) { AcceptEvent(); UiLinks.Open(new TargetRef(_id, BodyId.None)); } }; // #100
             var back = new StyleBoxFlat { BgColor = new Color(1, 1, 1, 0.04f), ContentMarginLeft = 6, ContentMarginRight = 6, ContentMarginTop = 2, ContentMarginBottom = 2 };
             back.SetCornerRadiusAll(3);
             AddThemeStyleboxOverride("panel", back);

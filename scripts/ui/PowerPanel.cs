@@ -157,13 +157,13 @@ public partial class PowerPanel : PanelContainer
                 Tip: "How much of what's made is used; full: all of it"));
             rows.Add(new("battery", $"{stored / 1000:N1} / {capacity / 1000:N0} MJ" + (used > made + 1e-6 ? $", empty in {Hours(stored / (used - made))}" : ""),
                 capacity > 0 && stored < 0.2 * capacity ? Severity.Warning : Severity.Normal, capacity > 0 ? stored / capacity : 0));
-            foreach (var m in members.Where(m => m.PowerShort)) rows.Add(new("warn", $"{m.Name} is short of power: something couldn't run", Severity.Bad));
+            foreach (var m in members.Where(m => m.PowerShort)) rows.Add(new("warn", $"{m.Name} is short of power: something couldn't run", Severity.Bad, Link: TargetRef.Of(m)));
             _rows.Set(rows);
 
             string Of(CraftState m, string what) => several ? $"{m.Name}: {what}" : what;
             var sources = new List<HudRow>();
             void Source(CraftState m, string icon, string what, double now, double most, string note = "", string tip = "", Severity severity = Severity.Normal)
-                => sources.Add(new(icon, $"{Of(m, what)}  {now:N0} / {most:N0} kW{note}", severity, most > 0 ? now / most : 0, Tip: tip));
+                => sources.Add(new(icon, $"{Of(m, what)}  {now:N0} / {most:N0} kW{note}", severity, most > 0 ? now / most : 0, Tip: tip, Link: several ? TargetRef.Of(m) : null));
             foreach (var m in members.Where(m => m.Stats.PowerGenerationKW > 0))
                 Source(m, "star", "solar", Kw(m.SolarKJThisTick), m.Stats.PowerGenerationKW, m.InShadow ? "  in shadow" : "",
                     $"{m.SolarFactor * 100:0}% sunlight here{(m.InShadow ? $"; a body's shadow dims it to {SectorState.ShadowLight * 100:0}%" : "")}", m.InShadow ? Severity.Warning : Severity.Normal);

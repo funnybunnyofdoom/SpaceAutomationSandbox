@@ -40,6 +40,7 @@ public partial class Main
             Panel("laws", "Laws and civilizations", InputActions.Laws, _lawsPanel, () => _lawsPanel!.Open(),
                 badge: () => _sector.Factions.FirstOrDefault(f => !f.RaidGateId.IsNone) is { } raider ? $"The {raider.Name} are raiding" : null),
             Panel("life", "Native life", InputActions.Life, _lifePanel, () => _lifePanel!.Open()),
+            Panel("message", "Message log", InputActions.Log, _logPanel, () => _logPanel!.Open(), badge: () => _logPanel!.NewEvents() is > 0 and var n ? $"{n} new" : null),
             Panel("milestones", "Milestones", InputActions.Milestones, _milestonesPanel, () => _milestonesPanel!.Open()),
             Panel("settings", "Settings", InputActions.Settings, _settingsPanel, () => _settingsPanel!.Open()),
             new TopBarItem("help", "Keys and help", InputActions.Help, () => FromBar(null, _hud.ToggleHelp), () => _hud.HelpOpen),

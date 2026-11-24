@@ -110,7 +110,7 @@ public sealed partial class SectorState
         if (body.LifeSampled) return;
         body.LifeSampled = true;
         ResearchPoints += LifeSampledPoints;
-        AddEvent($"First samples of {body.Name}'s native life: {LifeSampledPoints:0} research points.");
+        AddEvent($"First samples of {body.Name}'s native life: {LifeSampledPoints:0} research points.", EventKind.Life, TargetRef.Of(body));
     }
 
     /// <summary>Every ten seconds: living worlds are found, plants grow and spread, and corrosive ones wear at machines.</summary>
@@ -125,7 +125,7 @@ public sealed partial class SectorState
                 body.LifeFound = true;
                 ResearchPoints += LifeFoundPoints;
                 AddEvent($"Life found on {body.Name}: {LifeFoundPoints:0} research points."
-                         + (body.FloraHazard switch { FloraHazard.Clinging => " Its plants cling to machines and slow them.", FloraHazard.Corrosive => " Its plants eat at machines.", _ => "" }));
+                         + (body.FloraHazard switch { FloraHazard.Clinging => " Its plants cling to machines and slow them.", FloraHazard.Corrosive => " Its plants eat at machines.", _ => "" }), EventKind.Life, TargetRef.Of(body));
             }
             GrowFlora(body);
             StepAnimals(body); // #93
@@ -137,7 +137,7 @@ public sealed partial class SectorState
                 body.HasAnimals = false; // nothing left to eat
                 foreach (var site in body.SiteList) site.Fauna = 0;
             }
-            AddEvent($"The native life of {body.Name} has died out.");
+            AddEvent($"The native life of {body.Name} has died out.", EventKind.Life, TargetRef.Of(body));
         }
     }
 

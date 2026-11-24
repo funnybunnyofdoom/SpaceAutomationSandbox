@@ -113,6 +113,9 @@ public partial class Main : Node2D
     /// <summary>Native life (#94).</summary>
     private LifePanel? _lifePanel;
 
+    /// <summary>The message log (#100).</summary>
+    private LogPanel? _logPanel;
+
     /// <summary>Milestones (#38).</summary>
     private MilestonesPanel? _milestonesPanel;
 
@@ -185,7 +188,8 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_fleetPanel);
             _swarmPanel = new SwarmPanel(() => _sector, () => _changedSinceSave = true) { Visible = false }; // #30
             _uiRoot.AddChild(_swarmPanel);
-            _fleetPanel.SwarmsChosen += () => Toggle(_swarmPanel, () => _swarmPanel.Open());
+            _fleetPanel.SwarmsChosen += () => SwapPanel(_fleetPanel, _swarmPanel, () => _swarmPanel.Open()); // #100
+            _swarmPanel.FleetChosen += () => SwapPanel(_swarmPanel, _fleetPanel, () => _fleetPanel.Open());
             _cargoPanel = new CargoPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
             _uiRoot.AddChild(_cargoPanel);
             _jobPanel = new JobPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
@@ -204,11 +208,15 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_lawsPanel);
             _tradePanel = new TradePanel(() => _sector, () => _player, _catalog.Materials, () => _changedSinceSave = true) { Visible = false }; // #89
             _uiRoot.AddChild(_tradePanel);
-            _lawsPanel.DiplomacyChosen += id => { _lawsPanel.Visible = false; _tradePanel.Open(id); };
+            _lawsPanel.DiplomacyChosen += id => SwapPanel(_lawsPanel, _tradePanel, () => _tradePanel.Open(id < 0 ? null : id));
+            _tradePanel.LawsChosen += () => SwapPanel(_tradePanel, _lawsPanel, () => _lawsPanel.Open());
             _powerPanel = new PowerPanel(() => _sector, () => _player) { Visible = false }; // #75
             _uiRoot.AddChild(_powerPanel);
             _lifePanel = new LifePanel(() => _sector, () => _player, () => _changedSinceSave = true) { Visible = false }; // #94
             _uiRoot.AddChild(_lifePanel);
+            _logPanel = new LogPanel(() => _sector, () => Messages) { Visible = false }; // #100
+            _uiRoot.AddChild(_logPanel);
+            UiLinks.Open = OpenLink;
             _milestonesPanel = new MilestonesPanel(() => _sector) { Visible = false }; // #38
             _uiRoot.AddChild(_milestonesPanel);
             _debugPanel = new DebugPanel(() => _sector, () => _warp.Speed, SetGameSpeed, _catalog.Materials) { Visible = false };
@@ -310,6 +318,7 @@ public partial class Main : Node2D
         DemoSwarm(args); // #30
         if (args.FirstOrDefault(x => x.StartsWith("--window=")) is { } size && size["--window=".Length..].Split('x') is [var w, var h]) // dev: test small windows (#96)
             GetWindow().Size = new Vector2I(int.Parse(w), int.Parse(h));
+        if (System.Array.IndexOf(args, "--open-log") >= 0) _logPanel?.Open(); // #100
         if (System.Array.IndexOf(args, "--open-milestones") >= 0) _milestonesPanel?.Open(); // #38
         if (System.Array.IndexOf(args, "--open-life") >= 0) _lifePanel?.Open(); // #94, with --add-life
         if (System.Array.IndexOf(args, "--open-trade") >= 0) { if (_lawsPanel != null) _lawsPanel.Visible = false; _tradePanel?.Open(); } // #89, with --demo-civ
@@ -720,7 +729,7 @@ public partial class Main : Node2D
             if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1); // settings open above the menu
         }
         _hud.Visible = false;
-        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel })
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel })
             if (panel != null) panel.Visible = false;
         _title.Open(SaveSummary());
     }
@@ -777,11 +786,12 @@ public partial class Main : Node2D
         var first = _lastEventShown is null;
         _lastEventShown = last;
         if (first && _sector.Tick > 1) return; // just loaded: old news
-        ShowStatus(last.Text);
+        ShowStatus(last.Text, remember: false); // it's in the log as an event
     }
 
-    private void ShowStatus(string message)
+    private void ShowStatus(string message, bool remember = true)
     {
+        if (remember) Remember(message);
         _status = message;
         _statusUntilMs = Time.GetTicksMsec() + StatusShowMs;
     }
@@ -898,6 +908,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Settings)) Toggle(_settingsPanel, () => _settingsPanel!.Open());
         else if (Pressed(InputActions.Research)) Toggle(_researchPanel, () => _researchPanel!.Open());
         else if (Pressed(InputActions.Laws)) Toggle(_lawsPanel, () => _lawsPanel!.Open());
+        else if (Pressed(InputActions.Log)) Toggle(_logPanel, () => _logPanel!.Open());
         else if (Pressed(InputActions.Milestones)) Toggle(_milestonesPanel, () => _milestonesPanel!.Open());
         else if (Pressed(InputActions.Life)) Toggle(_lifePanel, () => _lifePanel!.Open());
         else if (Pressed(InputActions.Power)) Toggle(_powerPanel, () => _powerPanel!.Open());
@@ -911,7 +922,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
-            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel };
+            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _logPanel };
             var anyOpen = _mapMode || _hud.HelpOpen || panels.Any(p => p is { Visible: true });
             if (!anyOpen) OpenPause();
             if (_mapMode) ToggleMap();
@@ -1018,6 +1029,7 @@ public partial class Main : Node2D
     {
         _framesShown++;
         // Dev hooks (#108): --click=x,y, --right-click=x,y or --point=x,y (window pixels), and --press=action, through the real input path.
+        var clickAt = OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--click-frame=")) is { } clickArg ? int.Parse(clickArg["--click-frame=".Length..]) : 11;
         foreach (var arg0 in OS.GetCmdlineUserArgs())
         {
             var parts = arg0.Split('=');
@@ -1026,8 +1038,8 @@ public partial class Main : Node2D
             var at = new Vector2(float.Parse(px), float.Parse(py));
             if (parts[0] == "--point") _devPointer = at;
             if (parts[0] == "--wheel" && _framesShown is >= 10 and < 40) Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, Pressed = true, ButtonIndex = MouseButton.WheelUp });
-            if (_framesShown is 11 or 12 && parts[0] is ("--click" or "--right-click"))
-                Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, Pressed = _framesShown == 11, ButtonIndex = parts[0] == "--click" ? MouseButton.Left : MouseButton.Right });
+            if ((_framesShown == clickAt || _framesShown == clickAt + 1) && parts[0] is ("--click" or "--right-click"))
+                Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, Pressed = _framesShown == clickAt, ButtonIndex = parts[0] == "--click" ? MouseButton.Left : MouseButton.Right });
         }
         var shotAt = OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot-frame=")) is { } frameArg ? int.Parse(frameArg["--screenshot-frame=".Length..]) : 20;
         if (_framesShown != shotAt) return;

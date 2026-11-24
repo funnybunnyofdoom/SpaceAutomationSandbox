@@ -130,7 +130,7 @@ public sealed partial class SectorState
         faction.RaidGateId = gate.Id;
         faction.RaidEndTick = Tick + (long)(RaidDurationS * FixedStepClock.TicksPerSecond);
         faction.Invading = CanInvade(faction, gate) && rng.NextDouble() < InvadeChance; // #95
-        AddEvent($"{ships} {faction.Name} raiders are {(faction.Invading ? "heading for" : "attacking")} {gate.Name}!");
+        AddEvent($"{ships} {faction.Name} raiders are {(faction.Invading ? "heading for" : "attacking")} {gate.Name}!", EventKind.Danger, TargetRef.Of(gate));
     }
 
     /// <summary>Once a second per raid: is it over?</summary>
@@ -149,7 +149,7 @@ public sealed partial class SectorState
             }
             if (gate is not null && IsGate(gate) && !gate.IsWreck)
                 AddEvent(alive.Count == 0 ? $"The {faction.Name} raided {gate.Name}; your defenses drove them off."
-                    : $"The {faction.Name} raid on {gate.Name} is over: their raiders withdrew.");
+                    : $"The {faction.Name} raid on {gate.Name} is over: their raiders withdrew.", EventKind.Fleet, gate is null ? TargetRef.None : TargetRef.Of(gate));
             foreach (var raider in alive) // they leave the way they came, with what they carry
             {
                 DiscoveredKg -= (long)Math.Round(raider.Stats.TotalMassKg) + raider.CargoKg;
@@ -494,7 +494,7 @@ public sealed partial class SectorState
             if (ship.DockedToCraftId == craft.Id) ship.DockedToCraftId = CraftId.None; // left floating there
             if (ship.DockClaimStation == craft.Id) ReleaseClaim(ship);
         }
-        AddEvent(IsPlayers(craft) ? $"{craft.Name} was destroyed: its wreck is adrift." : $"{craft.Name} was destroyed.");
+        AddEvent(IsPlayers(craft) ? $"{craft.Name} was destroyed: its wreck is adrift." : $"{craft.Name} was destroyed.", IsPlayers(craft) ? EventKind.Danger : EventKind.Fleet, TargetRef.Of(craft));
         if (!wasGate) return;
         // Its twin stays tied to this system (#36): the next jump sends a new far gate through, from its own stock.
         var star = StarAt(craft.Position);
@@ -504,7 +504,7 @@ public sealed partial class SectorState
             near.GateLinkId = CraftId.None;
             if (star is null) continue;
             near.GateLostStarId = star.Id;
-            AddEvent($"The {owner?.Name ?? "enemy"} destroyed {craft.Name}. {near.Name} can send a new gate through to {star.Name} on its next jump, from its own stock.");
+            AddEvent($"The {owner?.Name ?? "enemy"} destroyed {craft.Name}. {near.Name} can send a new gate through to {star.Name} on its next jump, from its own stock.", EventKind.Danger, TargetRef.Of(near));
         }
         craft.GateLinkId = CraftId.None;
     }

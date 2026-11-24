@@ -5,7 +5,7 @@ using SpaceAutomationSandbox.Construction;
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>A stop on a route: a craft's picture or an icon, with a name under it.</summary>
-public readonly record struct RouteStop(string Name, ShipDesign? Design, string Icon);
+public readonly record struct RouteStop(string Name, ShipDesign? Design, string Icon, Simulation.TargetRef Link = default);
 
 /// <summary>A route as a picture (#103): stops in a row, with what travels between them on the arrows.</summary>
 public partial class RouteView : HBoxContainer
@@ -48,6 +48,13 @@ public partial class RouteView : HBoxContainer
                 Text = stops[i].Name, ThemeTypeVariation = "HudText", HorizontalAlignment = HorizontalAlignment.Center, CustomMinimumSize = new Vector2(112, 0),
                 ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
             });
+            if (!stops[i].Link.IsNone)
+            {
+                var link = stops[i].Link;
+                stop.MouseDefaultCursorShape = CursorShape.PointingHand;
+                foreach (var child in stop.GetChildren()) ((Control)child).MouseFilter = MouseFilterEnum.Ignore;
+                stop.GuiInput += e => { if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) UiLinks.Open(link); }; // #100
+            }
             AddChild(stop);
         }
         Visible = stops.Count > 0;

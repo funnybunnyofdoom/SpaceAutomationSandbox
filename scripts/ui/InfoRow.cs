@@ -15,10 +15,31 @@ public partial class InfoRow : HBoxContainer
         MouseFilter = MouseFilterEnum.Pass; // for its tooltip
         AddThemeConstantOverride("separation", 6);
         _icon.SizeFlagsVertical = SizeFlags.ShrinkBegin;
-        GuiInput += e => { if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) _row?.Click?.Invoke(); };
+        GuiInput += e =>
+        {
+            if (e is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } && !e.IsActionPressed("ui_accept")) return;
+            if (!HasLink) return;
+            AcceptEvent();
+            _row?.Click?.Invoke();
+            if (_row?.Link is { } link) UiLinks.Open(link);
+        };
+        MouseEntered += () => Lit(true);
+        MouseExited += () => Lit(false);
+        FocusEntered += QueueRedraw;
+        FocusExited += QueueRedraw;
         AddChild(_icon);
         AddChild(_label);
         AddChild(_bar);
+    }
+
+    /// <summary>Clicking it (or choosing it with keys or a controller) does something.</summary>
+    public bool HasLink => _row is { Click: not null } or { Link: not null };
+
+    private void Lit(bool lit) => _label.SelfModulate = lit && HasLink ? UiTheme.Accent : Colors.White;
+
+    public override void _Draw()
+    {
+        if (HasFocus()) DrawRect(new Rect2(-2, -1, Size.X + 4, Size.Y + 2), Core.Palette.Focus, filled: false, width: 2);
     }
 
     public void Set(HudRow? row)
@@ -27,7 +48,7 @@ public partial class InfoRow : HBoxContainer
         if (row is null || row == _row) return;
         if (row.Icon != _row?.Icon) _icon.Texture = UiIcons.Get(row.Icon);
         if (row.Tip != _row?.Tip) TooltipText = row.Tip;
-        MouseDefaultCursorShape = row.Click is null ? CursorShape.Arrow : CursorShape.PointingHand;
+        MouseDefaultCursorShape = row.Click is null && row.Link is null ? CursorShape.Arrow : CursorShape.PointingHand;
         _label.Visible = row.Fraction is null;
         _bar.Visible = row.Fraction is not null;
         if (row.Fraction is { } fraction) _bar.Set(fraction, row.Text, row.Severity, row.Marker);

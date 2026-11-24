@@ -49,6 +49,7 @@ public static class SaveMigrations
         [27] = ("v28 added antimatter containment and quantum drives: an older save has none", (_, _) => { }),
         [28] = ("v29 added milestones and closable gates: what an older game already reached is noted without a time; its gates are open", (_, _) => { }),
         [29] = ("v30 added flying to a target: an older save has none under way", (_, _) => { }),
+        [30] = ("v31 added what events are about: older events are kept as plain ones", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

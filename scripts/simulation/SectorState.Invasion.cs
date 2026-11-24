@@ -66,6 +66,6 @@ public sealed partial class SectorState
         faction.Invading = false;
         faction.RaidGateId = exit.Id;
         faction.RaidEndTick = Tick + (long)(InvasionS * FixedStepClock.TicksPerSecond);
-        AddEvent($"DANGER: {through.Count} {faction.Name} raider{(through.Count == 1 ? " has" : "s have")} come through to {exit.Name} in the {StarAt(exit.Position)?.Name} system!");
+        AddEvent($"DANGER: {through.Count} {faction.Name} raider{(through.Count == 1 ? " has" : "s have")} come through to {exit.Name} in the {StarAt(exit.Position)?.Name} system!", EventKind.Danger, TargetRef.Of(exit));
     }
 }

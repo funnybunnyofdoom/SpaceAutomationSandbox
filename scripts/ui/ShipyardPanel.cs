@@ -136,6 +136,13 @@ public partial class ShipyardPanel : PanelContainer
         Refresh(force: true);
     }
 
+    /// <summary>Opens on a shipyard (#100).</summary>
+    public void Open(CraftId yard)
+    {
+        Open();
+        if (_yards.IndexOf(yard) is var at and >= 0) { _yardPicker.Select(at); Refresh(force: true); }
+    }
+
     /// <summary>Dev/test: picks the design at this index in the list (if there is one).</summary>
     public void SelectDesign(int index)
     {
@@ -306,6 +313,9 @@ public partial class ShipyardPanel : PanelContainer
                 var row = new VBoxContainer();
                 var top = new HBoxContainer { Name = "Top" };
                 row.AddChild(top);
+                var linked = c.Id;
+                top.MouseDefaultCursorShape = CursorShape.PointingHand;
+                top.GuiInput += e => { if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) UiLinks.Open(new TargetRef(linked, BodyId.None)); }; // #100
                 top.AddChild(new DesignPicture { Design = c.Design, CustomMinimumSize = new Vector2(36, 36) });
                 top.AddChild(new Label { Name = "Text", SizeFlagsHorizontal = SizeFlags.ExpandFill, ThemeTypeVariation = "HudText", AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(290, 0) });
                 var buttons = new HBoxContainer();

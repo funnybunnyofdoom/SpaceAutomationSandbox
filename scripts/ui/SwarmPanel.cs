@@ -52,10 +52,8 @@ public partial class SwarmPanel : PanelContainer
         title.AddThemeFontSizeOverride("font_size", 18);
         title.AddThemeColorOverride("font_color", UiTheme.Accent);
         head.AddChild(title);
-        var close = new Button { Text = "Close", FocusMode = FocusModeEnum.None };
-        close.Pressed += () => Visible = false;
-        head.AddChild(close);
         box.AddChild(head);
+        box.AddChild(UiTabs.Row(("fleet", "Fleet", () => FleetChosen?.Invoke()), ("swarm", "Swarms", null)));
         box.AddChild(Text($"A swarm runs {SectorState.MinSwarmShips} or more identical miners with the same job as one, so fleets can be huge. "
                           + "It fills and empties at the pace its design, distance, the destination's free docking ports and storage allow.", dim: true));
         _message = Text("");
@@ -68,6 +66,9 @@ public partial class SwarmPanel : PanelContainer
         box.AddChild(_swarms);
     }
 
+    /// <summary>Raised by the Fleet tab (#100).</summary>
+    public event Action? FleetChosen;
+
     private static Label Text(string text, bool dim = false) => new()
     {
         Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(450, 0),
@@ -76,7 +77,7 @@ public partial class SwarmPanel : PanelContainer
 
     private static Label Heading(string text) => UiTheme.Header(text);
 
-    private static Button Action(string text, string tip, Action pressed)
+    private static Button Act(string text, string tip, Action pressed)
     {
         var button = new Button { Text = text, TooltipText = tip, FocusMode = FocusModeEnum.None };
         button.Pressed += pressed;
@@ -135,7 +136,7 @@ public partial class SwarmPanel : PanelContainer
                 label.CustomMinimumSize = new Vector2(260, 0);
                 label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 row.AddChild(label);
-                row.AddChild(Action("Form swarm", "Run these ships as one swarm (they join the swarm with the same blueprint and job, if there is one)", () => Show(_sector().FormSwarm(c.Ships))));
+                row.AddChild(Act("Form swarm", "Run these ships as one swarm (they join the swarm with the same blueprint and job, if there is one)", () => Show(_sector().FormSwarm(c.Ships))));
                 _candidates.AddChild(row);
             }
         }
@@ -161,7 +162,7 @@ public partial class SwarmPanel : PanelContainer
         var rows = new List<HudRow>
         {
             new("swarm", $"{swarm.Name}: {swarm.Count:N0} × {swarm.Design.Name}"),
-            new("mat_" + swarm.MaterialId, $"{swarm.MaterialId} from {Body(sector, swarm.SourceBodyId)} to {Craft(sector, swarm.DestinationId)}, trip {swarm.Rate.CycleS / 60:0.0} min", Severity.Muted),
+            new("mat_" + swarm.MaterialId, $"{swarm.MaterialId} from {Body(sector, swarm.SourceBodyId)} to {Craft(sector, swarm.DestinationId)}, trip {swarm.Rate.CycleS / 60:0.0} min", Severity.Muted, Link: new TargetRef(swarm.DestinationId, BodyId.None)),
             new("freight", $"{swarm.DeliveryKgPerS * 3.6:N0} of {full * 3.6:N0} t/h", swarm.DeliveryKgPerS < 0.5 * full ? Severity.Warning : Severity.Good, full > 0 ? swarm.DeliveryKgPerS / full : 0,
                 Tip: $"Delivering now, of what the ships could do. {swarm.DeliveredKg / 1000.0:N0} t so far"),
             new("cargo", $"{swarm.Inventory.TotalKg / 1000.0:N1} / {swarm.CargoCapacityKg / 1000.0:N0} t in the holds", Severity.Normal, swarm.Inventory.TotalKg / (double)Math.Max(1, swarm.CargoCapacityKg)),
@@ -197,9 +198,9 @@ public partial class SwarmPanel : PanelContainer
             if (growing >= 0) yard.Select(growing);
             grow.AddChild(yard);
             foreach (var n in new[] { 10, 100, 500 })
-                grow.AddChild(Action($"+{n}", $"Build {n} more ships into this swarm, one after another, as materials allow",
+                grow.AddChild(Act($"+{n}", $"Build {n} more ships into this swarm, one after another, as materials allow",
                     () => Show(_sector().GrowSwarm(id, yards[Math.Max(0, yard.Selected)].Id, n))));
-            grow.AddChild(Action("Stop", "Order no more ships; one already being built still joins", () =>
+            grow.AddChild(Act("Stop", "Order no more ships; one already being built still joins", () =>
             {
                 _sector().StopGrowing(id);
                 Show(new ActionResult(true, "Growth stopped."));
@@ -210,7 +211,7 @@ public partial class SwarmPanel : PanelContainer
         var split = new HBoxContainer();
         split.AddChild(new Label { Text = "Split off" });
         foreach (var n in new[] { 1, 10, SectorState.MaxSwarmSplit })
-            split.AddChild(Action($"{n}", $"{n} ship{(n == 1 ? " leaves" : "s leave")} the swarm and appear beside its destination as ordinary ships, with their cargo and the same job",
+            split.AddChild(Act($"{n}", $"{n} ship{(n == 1 ? " leaves" : "s leave")} the swarm and appear beside its destination as ordinary ships, with their cargo and the same job",
                 () => Show(_sector().SplitSwarm(id, n))));
         box.AddChild(split);
 
@@ -246,7 +247,7 @@ public partial class SwarmPanel : PanelContainer
                 option.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 job.AddChild(option);
             }
-            job.AddChild(Action("Set job", "Mine this here and deliver it there; what's in the holds goes to the new destination", () =>
+            job.AddChild(Act("Set job", "Mine this here and deliver it there; what's in the holds goes to the new destination", () =>
             {
                 if (materials.Count == 0) { Show(new ActionResult(false, "Nothing to mine there.")); return; }
                 Show(_sector().RetargetSwarm(id, sources[Math.Max(0, source.Selected)].Id, materials[Math.Max(0, material.Selected)],

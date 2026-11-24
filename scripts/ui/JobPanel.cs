@@ -433,8 +433,8 @@ public partial class JobPanel : PanelContainer
     private void ShowRoute(CraftState? craft)
     {
         var sector = _sector();
-        RouteStop Station(CraftId id) => sector.Crafts.FirstOrDefault(c => c.Id == id) is { } c ? new(c.Name, c.Design, "orbit") : new("?", null, "help");
-        RouteStop Body(BodyId id) => sector.Bodies.FirstOrDefault(b => b.Id == id) is { } b ? new(b.Name, null, UiIcons.BodyIcon(b)) : new("?", null, "help");
+        RouteStop Station(CraftId id) => sector.Crafts.FirstOrDefault(c => c.Id == id) is { } c ? new(c.Name, c.Design, "orbit", TargetRef.Of(c)) : new("?", null, "help");
+        RouteStop Body(BodyId id) => sector.Bodies.FirstOrDefault(b => b.Id == id) is { } b ? new(b.Name, null, UiIcons.BodyIcon(b), TargetRef.Of(b)) : new("?", null, "help");
         RouteStop Ship() => craft is null ? new("?", null, "fleet") : new(craft.Name, craft.Design, "fleet");
         CraftId At(OptionButton option, List<CraftId> ids) => option.Selected >= 0 && option.Selected < ids.Count ? ids[option.Selected] : CraftId.None;
         var stops = new List<RouteStop>();

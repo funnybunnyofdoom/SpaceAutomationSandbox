@@ -25,7 +25,7 @@ public partial class Main
     private readonly List<Control> _navMadeFocusable = new();
 
     private IEnumerable<Control?> SidePanels => new Control?[]
-        { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel };
+        { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel };
 
     private bool PanelNavActive => _navPanel != null;
 
@@ -53,7 +53,7 @@ public partial class Main
     /// <summary>Buttons, option lists, checkboxes and sliders under the panel take focus while it's used.</summary>
     private void MakeFocusable(Node node)
     {
-        if (node is Control { FocusMode: Control.FocusModeEnum.None } control and (BaseButton or Slider or ItemList or LineEdit))
+        if (node is Control { FocusMode: Control.FocusModeEnum.None } control and (BaseButton or Slider or ItemList or LineEdit or InfoRow { HasLink: true }))
         {
             control.FocusMode = Control.FocusModeEnum.All;
             _navMadeFocusable.Add(control);
@@ -84,6 +84,7 @@ public partial class Main
                 if (_pause.Visible && !_confirm.Visible && !_saveScreen.Visible) _pause.FocusFirst();
                 return;
             }
+            if (Engine.GetProcessFrames() % 30 == 0) MakeFocusable(_navPanel); // rows come and go
             if (owner != null && _navPanel.IsAncestorOf(owner)) _navLastFocus = owner;
             else if (_navLastFocus is { } last && IsInstanceValid(last) && last.IsVisibleInTree() && _navPanel.IsAncestorOf(last)) last.GrabFocus();
             else (_navLastFocus = FirstFocusable(_navPanel))?.GrabFocus();

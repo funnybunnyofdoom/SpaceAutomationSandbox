@@ -64,7 +64,7 @@ public sealed partial class SectorState
         faction.Goodwill = 0;
         faction.TruceUntilTick = 0;
         _lastDisposition[faction.Id] = faction.Disposition;
-        AddEvent($"You attacked the {faction.Name}. They are now hostile towards you.");
+        AddEvent($"You attacked the {faction.Name}. They are now hostile towards you.", EventKind.Civilization, new TargetRef(CraftId.None, faction.HomeStarId));
         return new(true, $"Weapons free on the {faction.Name}.");
     }
 

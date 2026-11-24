@@ -6,7 +6,7 @@ using SpaceAutomationSandbox.Construction;
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>A line of a HUD card: an icon and either text, or (with a fraction) a bar with the text on it.</summary>
-public sealed record HudRow(string Icon, string Text, Severity Severity = Severity.Normal, double? Fraction = null, double? Marker = null, string Tip = "", Action? Click = null);
+public sealed record HudRow(string Icon, string Text, Severity Severity = Severity.Normal, double? Fraction = null, double? Marker = null, string Tip = "", Action? Click = null, Simulation.TargetRef? Link = null);
 
 /// <summary>What a HUD card shows: a heading, a picture (a design or an icon) and its rows. No rows and no heading: hidden.</summary>
 public sealed record HudCardData(string Heading, IReadOnlyList<HudRow> Rows, ShipDesign? Design = null, string? Icon = null)
