@@ -131,7 +131,12 @@ public sealed record ShipStats(
     double ShieldPowerKW = 0,
     int ArmourCount = 0,
     double HarvestRateKgPerS = 0,
-    double HarvestPowerKW = 0)
+    double HarvestPowerKW = 0,
+    int RepellerCount = 0,
+    double RepelPowerKW = 0,
+    double RanchRateKgPerS = 0,
+    double RanchPowerKW = 0,
+    double PenCapacityKg = 0)
 {
     /// <summary>Weapons, in cell order (#85); empty if none.</summary>
     public IReadOnlyList<WeaponMount> WeaponList => Weapons ?? Array.Empty<WeaponMount>();
@@ -158,7 +163,7 @@ public sealed record ShipStats(
     public int CrewRequired => CellCount <= UncrewedMaxParts ? 0 : (CellCount + PartsPerCrew - 1) / PartsPerCrew;
 
     /// <summary>Everything running at once (full throttle, drilling, refining, building, ejecting), kW.</summary>
-    public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW + HabitatPowerKW + FarmPowerKW + RobotPowerKW + SalvagePowerKW + RepairPowerKW + ShieldPowerKW + HarvestPowerKW + LabPowerKW;
+    public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW + HabitatPowerKW + FarmPowerKW + RobotPowerKW + SalvagePowerKW + RepairPowerKW + ShieldPowerKW + HarvestPowerKW + RepelPowerKW + RanchPowerKW + LabPowerKW;
 
     /// <summary>Can lock onto a body once landed (clamps release again; foundations never do).</summary>
     public bool CanAnchor => AnchorClampCount > 0 || FoundationCount > 0;
@@ -219,7 +224,7 @@ public sealed class ShipDesign
 
     private static bool IsStationFacility(PartDefinition p) =>
         p.FabricationRateKgPerS > 0 || p.IsDockingPort || p.CargoCapacityKg > 0 || p.RefiningRateKgPerS > 0
-        || p.CrewCapacity > 0 || p.FoodRateKgPerS > 0 || p.IsWarpGate || p.ResearchRatePerS > 0 || p.IsGateDefense || p.GeneratorKW > 0 || p.ConverterKW > 0 || p.GeothermalKW > 0 || p.StellarHeatKW > 0;
+        || p.CrewCapacity > 0 || p.FoodRateKgPerS > 0 || p.IsWarpGate || p.ResearchRatePerS > 0 || p.IsGateDefense || p.GeneratorKW > 0 || p.ConverterKW > 0 || p.GeothermalKW > 0 || p.StellarHeatKW > 0 || p.IsRepeller || p.RanchRateKgPerS > 0;
 
     /// <summary>Human-readable problems for the given role; empty means the design is usable in that role.</summary>
     /// <param name="requireConnected">
@@ -312,7 +317,8 @@ public sealed class ShipDesign
         double salvage = 0, salvagePower = 0, repair = 0, repairPower = 0;
         double shield = 0, shieldRecharge = 0, shieldPower = 0;
         var armour = 0;
-        double harvest = 0, harvestPower = 0;
+        double harvest = 0, harvestPower = 0, repelPower = 0, ranch = 0, ranchPower = 0, pens = 0;
+        var repellers = 0;
         var generatorKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         var converterKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         double geothermal = 0, stellarHeat = 0;
@@ -371,6 +377,11 @@ public sealed class ShipDesign
             else if (part.RepairRateKgPerS > 0) repairPower += part.PowerUseKW;
             else if (part.ShieldCapacity > 0) shieldPower += part.PowerUseKW;
             else if (part.HarvestRateKgPerS > 0) harvestPower += part.PowerUseKW;
+            else if (part.IsRepeller) repelPower += part.PowerUseKW;
+            else if (part.RanchRateKgPerS > 0) ranchPower += part.PowerUseKW;
+            if (part.IsRepeller) repellers++; // #93
+            ranch += part.RanchRateKgPerS * h;
+            pens += part.PenCapacityKg;
             harvest += part.HarvestRateKgPerS * h; // #92
             shield += part.ShieldCapacity * h; // #90
             shieldRecharge += part.ShieldRechargePerS * h;
@@ -412,7 +423,7 @@ public sealed class ShipDesign
             converterKW.Count == 0 ? null : converterKW.Select(c => ConverterStats.From(catalog.Get(c.Key), c.Value)).ToList(),
             geothermal,
             drives.Count == 0 ? null : drives.Select(d => PropellantDrive.From(catalog.Get(d.Key.Item1), d.Key.Item2, d.Value)).ToList(),
-            stellarHeat, weapons, salvage, salvagePower, repair, repairPower, shield, shieldRecharge, shieldPower, armour, harvest, harvestPower);
+            stellarHeat, weapons, salvage, salvagePower, repair, repairPower, shield, shieldRecharge, shieldPower, armour, harvest, harvestPower, repellers, repelPower, ranch, ranchPower, pens);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

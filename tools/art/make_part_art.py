@@ -389,6 +389,31 @@ def harvester(a):
     return b, d
 
 
+def repeller(a):
+    b, d = panel(), Img()
+    d.rect(7, 8, 8, 13, DARK); d.disc(8, 7, 1.8, a)
+    for r in (3.2, 5.2):  # rings of sound
+        d.ring(8, 7, r, r + 0.8, shade(a, 1.2 if r < 4 else 0.8))
+    return b, d
+
+
+def ranch(a):
+    b, d = panel(), Img()
+    d.rect(3, 7, 12, 13, shade(a, 0.8)); d.outline(3, 7, 12, 13, OUT)
+    for i in range(5):  # a roof
+        d.hline(7 - i, 8 + i, 2 + i, a if i % 2 else shade(a, 1.25))
+    d.rect(7, 9, 8, 13, DARK); d.set(5, 9, (240, 220, 140, 255)); d.set(10, 9, (240, 220, 140, 255))
+    return b, d
+
+
+def animal_pen(a):
+    b, d = panel(), Img()
+    d.rect(3, 3, 12, 12, shade(a, 0.5)); d.outline(3, 3, 12, 12, OUT)
+    for x in range(4, 13, 2): d.vline(x, 3, 12, PLATE_L)  # bars
+    d.hline(3, 12, 6, PLATE_L); d.set(5, 9, shade(a, 1.7)); d.set(9, 9, shade(a, 1.7))
+    return b, d
+
+
 def research_lab(a):
     b, d = panel(), Img()
     for y in range(4, 10):  # a dish, open to the front
@@ -549,7 +574,7 @@ DRAW = {
     "solar_panel_mk2": lambda a: solar(a, 2), "solar_panel_mk3": lambda a: solar(a, 3),
     "battery_mk2": lambda a: battery(a, 2), "refinery_mk2": lambda a: refinery(a, 2),
     "fabricator_mk2": lambda a: fabricator(a, 2), "warp_gate": warp_gate, "gate_defense": gate_defense,
-    "harvester": harvester, "armour_plate": armour_plate, "missile_launcher": missile_launcher, "point_defense": point_defense,
+    "repeller": repeller, "ranch": ranch, "animal_pen": animal_pen, "harvester": harvester, "armour_plate": armour_plate, "missile_launcher": missile_launcher, "point_defense": point_defense,
     "shield_generator": shield_generator, "salvage_arm": salvage_arm, "repair_drones": repair_drones,
     "autocannon": autocannon, "laser": laser,
     "research_lab": research_lab,

@@ -110,6 +110,9 @@ public partial class Main : Node2D
     /// <summary>Power networks and sources (#75).</summary>
     private PowerPanel? _powerPanel;
 
+    /// <summary>Native life (#94).</summary>
+    private LifePanel? _lifePanel;
+
     /// <summary>The title screen and main menu (#58). While it shows, no game is running.</summary>
     private TitleScreen? _title;
 
@@ -200,6 +203,8 @@ public partial class Main : Node2D
             _lawsPanel.DiplomacyChosen += id => { _lawsPanel.Visible = false; _tradePanel.Open(id); };
             _powerPanel = new PowerPanel(() => _sector, () => _player) { Visible = false }; // #75
             _uiRoot.AddChild(_powerPanel);
+            _lifePanel = new LifePanel(() => _sector, () => _player, () => _changedSinceSave = true) { Visible = false }; // #94
+            _uiRoot.AddChild(_lifePanel);
             _debugPanel = new DebugPanel(() => _sector, () => _warp.Speed, SetGameSpeed, _catalog.Materials) { Visible = false };
             _uiRoot.AddChild(_debugPanel);
         }
@@ -296,6 +301,7 @@ public partial class Main : Node2D
         if (args.FirstOrDefault(a => a.StartsWith("--shipyard-design=")) is { } designArg && int.TryParse(designArg["--shipyard-design=".Length..], out var designIndex))
             _shipyardPanel?.SelectDesign(designIndex);
         DemoSwarm(args); // #30
+        if (System.Array.IndexOf(args, "--open-life") >= 0) _lifePanel?.Open(); // #94, with --add-life
         if (System.Array.IndexOf(args, "--open-trade") >= 0) { if (_lawsPanel != null) _lawsPanel.Visible = false; _tradePanel?.Open(); } // #89, with --demo-civ
         if (System.Array.IndexOf(args, "--open-swarms") >= 0) _swarmPanel?.Open();
         if (System.Array.IndexOf(args, "--open-fleet") >= 0) _fleetPanel?.Open();
@@ -702,7 +708,7 @@ public partial class Main : Node2D
             if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1); // settings open above the menu
         }
         _hud.Visible = false;
-        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel })
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel })
             if (panel != null) panel.Visible = false;
         _title.Open(SaveSummary());
     }
@@ -876,6 +882,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Settings)) Toggle(_settingsPanel, () => _settingsPanel!.Open());
         else if (Pressed(InputActions.Research)) Toggle(_researchPanel, () => _researchPanel!.Open());
         else if (Pressed(InputActions.Laws)) Toggle(_lawsPanel, () => _lawsPanel!.Open());
+        else if (Pressed(InputActions.Life)) Toggle(_lifePanel, () => _lifePanel!.Open());
         else if (Pressed(InputActions.Power)) Toggle(_powerPanel, () => _powerPanel!.Open());
         else if (Pressed(InputActions.Map)) ToggleMap();
         else if (Pressed(InputActions.Help)) _hud.ToggleHelp();
@@ -886,7 +893,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
-            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel };
+            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel };
             var anyOpen = _mapMode || _hud.HelpOpen || panels.Any(p => p is { Visible: true });
             if (!anyOpen) OpenPause();
             if (_mapMode) ToggleMap();
@@ -1039,6 +1046,7 @@ public partial class Main : Node2D
                        : "")
                    + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
                    + WeaponsLine(p) // #85
+                   + (p.AnimalStatus is { } animals ? animals + "\n" : "") // #93
                    + (p.SalvageStatus is { } salvage ? salvage + "\n" : p.Stats.SalvageRateKgPerS > 0 && p.Job is null && _sector.Crafts.Any(c => c.IsWreck) ? "salvage arm: target a wreck and hold beside it\n" : "") // #86
                    + (SectorState.PropellantStatus(p) is { Length: > 0 } drives ? drives + "\n" : "") // #80
                    + (SectorState.CrewStatus(p) is { Length: > 0 } crew ? crew + "\n" : "")
@@ -1175,7 +1183,8 @@ public partial class Main : Node2D
             : site.DepositsKg.Count == 0 ? "no ore" + (body.BulkKg > 0 ? $" (bulk {body.BulkMaterialId})" : "")
             : string.Join(", ", site.DepositsKg.Select(kv => $"{kv.Key} {kv.Value / 1000.0:0.#} t"));
         return $"site {site.Name}: {ore}" + (site.Surveyed && site.IsHot ? " - geothermal hot spot" : "")
-               + (site.Flora > 0 ? $" - native plants {site.Flora * 100:0}%{(body.FloraHazard switch { FloraHazard.Clinging => ", clinging (machines are slower)", FloraHazard.Corrosive => ", corrosive (machines wear)", _ => "" })}" : "") // #92
+               + (site.Flora > 0 ? $" - native plants {site.Flora * 100:0}%{(body.FloraHazard switch { FloraHazard.Clinging => ", clinging (machines are slower)", FloraHazard.Corrosive => ", corrosive (machines wear)", _ => "" })}" : "")
+               + (site.Fauna > 0 ? $" - {body.AnimalName}s {site.Fauna * 100:0}%{(SectorState.AnimalsAngry(body, site) ? ", ANGRY" : "")}" : "") // #92, #93
                + (_sector.IsHotBody(body) ? $" ({body.Name} is hot all over: near its star)" : "");
     }
 

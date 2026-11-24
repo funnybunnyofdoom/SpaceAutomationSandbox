@@ -101,6 +101,15 @@ public sealed class CelestialBodyState
 
     internal IReadOnlyList<SurfaceSite> SiteList => _sites;
 
+    /// <summary>Native animals live here now, what they're called, and when they damage machines (#93). Saved.</summary>
+    public bool HasAnimals { get; internal set; }
+    public string AnimalName { get; internal set; } = "";
+    public AnimalTemper AnimalTemper { get; internal set; }
+
+    /// <summary>Takes living mass out of the body, or gives it back (#93).</summary>
+    internal void TakeBulk(long kg) => MassKg -= kg;
+    internal void ReturnBulk(long kg) => MassKg += kg;
+
     /// <summary>Biomass that can be harvested at a site, leaving this much cover standing. Biomass is part of the body's bulk.</summary>
     public long BiomassKg(SurfaceSite? site, double leaveCover = 0) =>
         site is null ? 0 : Math.Min(BulkKg, (long)Math.Floor(Math.Max(0, site.Flora - leaveCover) * FullFloraKg));

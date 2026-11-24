@@ -92,7 +92,9 @@ public sealed class LifeTests
         sector.TryRelease(ship.Id);
         foreach (var s in world.SiteList) s.Flora = 0;
         world.SiteList[0].Flora = 0.3;
-        Run(sector, 120 * Minute);
+        world.HasAnimals = false;
+        foreach (var s in world.SiteList) s.Fauna = 0;
+        Run(sector, 240 * Minute); // a stressed world recovers slowly (#94)
         Assert.True(world.SiteList[0].Flora > 0.8, $"{world.SiteList[0].Flora}");
         Assert.True(world.SiteList[1].Flora > 0.05);
         Assert.True(world.SiteList[^1].Flora > 0.05); // the ring wraps round

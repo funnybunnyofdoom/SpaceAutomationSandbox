@@ -47,11 +47,12 @@ public static class SaveGameSerializer
     /// further star systems (their bodies are ordinary bodies; gates record their link and queue); v19
     /// added research (points, techs done; older saves have everything unlocked) and star types; v20 added
     /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids); v22 added salvage jobs (#86); v23 added missiles (#87) and shields (#90); v24 added guard, escort and patrol jobs (#88) and civilization patrols (#89);
-    /// v25 added trade stations, trade routes and diplomacy (#89); v26 added native life (#91, #92).
+    /// v25 added trade stations, trade routes and diplomacy (#89); v26 added native life (#91, #92); v27 added
+    /// native animals (#93).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 26;
+    public const int SchemaVersion = 27;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -137,11 +138,15 @@ public static class SaveGameSerializer
                     FloraHazard = b.FloraHazard,
                     LifeFound = b.LifeFound,
                     LifeSampled = b.LifeSampled,
+                    HasAnimals = b.HasAnimals,
+                    AnimalName = b.AnimalName.Length > 0 ? b.AnimalName : null,
+                    AnimalTemper = b.AnimalTemper,
                     Sites = b.Sites.Count > 0
                         ? b.Sites.Select(s => new SiteDto
                         {
                             Surveyed = s.Surveyed,
                             Flora = s.Flora,
+                            Fauna = s.Fauna,
                             DepositsKg = s.DepositsKg.Count > 0 ? new SortedDictionary<string, long>(s.DepositsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal) : null,
                         }).ToList()
                         : null,
@@ -191,6 +196,12 @@ public static class SaveGameSerializer
                     IsPatrol = c.IsPatrol,
                     PatrolStop = c.PatrolStop,
                     IsTradeStation = c.IsTradeStation,
+                    PenKg = c.PenKg,
+                    PenAnimal = c.PenAnimal.Length > 0 ? c.PenAnimal : null,
+                    PenTemper = c.PenTemper,
+                    Culling = c.Culling,
+                    RanchRemainderKg = c.RanchRemainderKg,
+                    CullRemainderKg = c.CullRemainderKg,
                     HoldFire = c.HoldFire,
                     SalvageProgressKg = c.SalvageProgressKg,
                     ShieldCharge = c.ShieldCharge,
@@ -384,6 +395,14 @@ public static class SaveGameSerializer
                 craft.IsPatrol = c.IsPatrol;
                 craft.PatrolStop = c.PatrolStop;
                 craft.IsTradeStation = c.IsTradeStation;
+                if (c.PenKg < 0 || !(c.RanchRemainderKg >= 0 && c.RanchRemainderKg < 1) || !(c.CullRemainderKg >= 0 && c.CullRemainderKg < 1))
+                    throw new FormatException($"Craft {c.Id} has invalid animals.");
+                craft.PenKg = c.PenKg;
+                craft.PenAnimal = c.PenAnimal ?? "";
+                craft.PenTemper = c.PenTemper;
+                craft.Culling = c.Culling;
+                craft.RanchRemainderKg = c.RanchRemainderKg;
+                craft.CullRemainderKg = c.CullRemainderKg;
                 craft.HoldFire = c.HoldFire;
                 if (!(c.SalvageProgressKg >= 0)) throw new FormatException($"Craft {c.Id} has invalid salvage progress.");
                 craft.SalvageProgressKg = c.SalvageProgressKg;
@@ -666,10 +685,15 @@ public static class SaveGameSerializer
                     living.FloraHazard = b.FloraHazard;
                     living.LifeFound = b.LifeFound;
                     living.LifeSampled = b.LifeSampled;
+                    living.HasAnimals = b.HasAnimals;
+                    living.AnimalName = b.AnimalName ?? "";
+                    living.AnimalTemper = b.AnimalTemper;
                     for (var i = 0; i < sites.Count; i++)
                     {
                         if (!(sites[i].Flora >= 0 && sites[i].Flora <= 1)) throw new FormatException($"Body {b.Id} has invalid plant cover.");
+                        if (!(sites[i].Fauna >= 0 && sites[i].Fauna <= 1)) throw new FormatException($"Body {b.Id} has invalid animals.");
                         living.SiteList[i].Flora = sites[i].Flora;
+                        living.SiteList[i].Fauna = sites[i].Fauna;
                     }
                 }
                 else if (b.Surveyed) sector.MarkSurveyed(new BodyId(b.Id));
@@ -859,6 +883,16 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool LifeSampled { get; set; }
+
+        /// <summary>v27: native animals (#93).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool HasAnimals { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? AnimalName { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public AnimalTemper AnimalTemper { get; set; }
     }
 
     private sealed class SiteDto
@@ -868,6 +902,10 @@ public static class SaveGameSerializer
         /// <summary>v26: cover of native plants (#92).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double Flora { get; set; }
+
+        /// <summary>v27: native animals (#93).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double Fauna { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public SortedDictionary<string, long>? DepositsKg { get; set; }
@@ -964,6 +1002,25 @@ public static class SaveGameSerializer
         /// <summary>v25: a civilization's trade station (#89).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool IsTradeStation { get; set; }
+
+        /// <summary>v27: animals (#93).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public long PenKg { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? PenAnimal { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public AnimalTemper PenTemper { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool Culling { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double RanchRemainderKg { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double CullRemainderKg { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool HoldFire { get; set; }

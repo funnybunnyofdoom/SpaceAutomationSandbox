@@ -194,6 +194,7 @@ public partial class Main
         }
         // Labels and markers outside the disc can be on screen when the disc isn't.
         if (!view.Grow(radiusPx + 400).HasPoint(centre)) return;
+        DrawAnimals(body, centre, radiusPx, renderTimeS);
         DrawSites(body, centre, radiusPx);
         DrawClaim(body, centre, radiusPx);
 
@@ -381,9 +382,38 @@ public partial class Main
             if (!view.HasPoint(labelAt)) continue;
             var ore = !site.Surveyed ? "?" : (site.DepositsKg.Count == 0 ? "no ore" : string.Join(", ", site.DepositsKg.Keys.Select(k => k.Replace("_ore", ""))))
                                               + (site.IsHot ? ", HOT" : "") // geothermal hot spot (#77)
-                                              + (site.Flora > 0 ? $", plants {site.Flora * 100:0}%" : ""); // #92
+                                              + (site.Flora > 0 ? $", plants {site.Flora * 100:0}%" : "")
+                                              + (site.Fauna > 0 ? $", {body.AnimalName}s {site.Fauna * 100:0}%" : ""); // #92, #93
             DrawString(ThemeDB.FallbackFont, labelAt - new Vector2(20, 0), $"{SurfaceSite.Letter(site.Index)}: {ore}",
                 HorizontalAlignment.Left, -1, 12, site.Surveyed ? SiteLabelColor : SiteUnknownColor);
+        }
+    }
+
+    /// <summary>Animals close up (#93): a few little shapes wandering near the rim of each site, more where there are more. View only.</summary>
+    private void DrawAnimals(CelestialBodyState body, Vector2 centre, float radiusPx, double renderTimeS)
+    {
+        if (!body.HasAnimals || _pixelsPerMetre < 0.4f) return;
+        var view = new Rect2(-GetViewportRect().Size / 2, GetViewportRect().Size).Grow(10);
+        var hue = BodyVariation(body.Id, 7);
+        foreach (var site in body.Sites)
+        {
+            if (site.Fauna <= 0) continue;
+            var count = 3 + (int)(site.Fauna * 60);
+            for (var i = 0; i < count; i++)
+            {
+                var wander = renderTimeS / (40 + i % 13) + i * 1.7;
+                var along = 0.5 + 0.48 * System.Math.Sin(i * 2.399963 + 0.15 * System.Math.Sin(wander));
+                var depth = 12 + i * 37 % 260 + 10 * System.Math.Sin(wander * 0.7);
+                var angle = site.StartRad + along * site.WidthRad;
+                var at = centre + new Vector2((float)System.Math.Cos(angle), (float)System.Math.Sin(angle)) * (radiusPx - (float)depth * _pixelsPerMetre);
+                if (!view.HasPoint(at)) continue;
+                var size = Mathf.Clamp(2.2f * _pixelsPerMetre, 2f, 9f);
+                var color = Color.FromHsv(hue, 0.35f, i % 3 == 0 ? 0.95f : 0.8f);
+                var facing = System.Math.Cos(wander) >= 0 ? 1 : -1;
+                DrawRect(new Rect2((at - new Vector2(size, size / 2)).Round(), new Vector2(size * 2, size)), new Color(0.06f, 0.06f, 0.08f));
+                DrawRect(new Rect2((at - new Vector2(size, size / 2)).Round() + Vector2.One * 0.5f, new Vector2(size * 2 - 1, size - 1)), color);
+                DrawRect(new Rect2((at + new Vector2(facing * size * 0.9f - size * 0.3f, -size * 0.8f)).Round(), new Vector2(size * 0.8f, size * 0.8f)), color);
+            }
         }
     }
 

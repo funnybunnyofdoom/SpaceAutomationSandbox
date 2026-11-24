@@ -44,6 +44,7 @@ public sealed partial class SectorState
         {
             stock += craft.Inventory.TotalKg;
             kits += craft.KitsKg;
+            stock += craft.PenKg; // live animals (#93)
             foreach (var order in craft.BuildQueueList) foreach (var kg in order.MaterialsKg.Values) orders += kg;
             if (craft.RefiningBatch is { } batch) foreach (var kg in batch.InputsKg.Values) refining += kg;
             craftKg += (long)Math.Round(craft.Stats.TotalMassKg);

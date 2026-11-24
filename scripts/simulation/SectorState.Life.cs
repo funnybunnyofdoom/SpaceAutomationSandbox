@@ -82,6 +82,7 @@ public sealed partial class SectorState
         foreach (var site in body.SiteList) site.Flora = rng.NextDouble() < 0.75 ? rng.Range(0.4, 1) : 0;
         if (body.Sites.Count > 0 && body.Sites.All(s => s.Flora <= 0)) body.SiteList[0].Flora = 0.8;
         body.HasLife = true;
+        if (rng.NextDouble() < AnimalChance) AddAnimals(body, rng); // #93
     }
 
     /// <summary>Plants lost at a bearing because something was mined there.</summary>
@@ -127,9 +128,15 @@ public sealed partial class SectorState
                          + (body.FloraHazard switch { FloraHazard.Clinging => " Its plants cling to machines and slow them.", FloraHazard.Corrosive => " Its plants eat at machines.", _ => "" }));
             }
             GrowFlora(body);
+            StepAnimals(body); // #93
             if (body.FloraHazard == FloraHazard.Corrosive) Corrode(body);
             if (body.Sites.Any(s => s.Flora > 0)) continue;
             body.HasLife = false;
+            if (body.HasAnimals)
+            {
+                body.HasAnimals = false; // nothing left to eat
+                foreach (var site in body.SiteList) site.Fauna = 0;
+            }
             AddEvent($"The native life of {body.Name} has died out.");
         }
     }
@@ -137,6 +144,7 @@ public sealed partial class SectorState
     private static void GrowFlora(CelestialBodyState body)
     {
         const double minutes = FloraStepTicks * FixedStepClock.TickSeconds / 60;
+        var pace = HealthOf(body) switch { LifeHealth.Thriving => ThrivingGrowth, LifeHealth.Stressed => StressedGrowth, _ => 1 }; // #94
         var sites = body.SiteList;
         var before = new double[sites.Count];
         for (var i = 0; i < before.Length; i++) before[i] = sites[i].Flora;
@@ -145,7 +153,7 @@ public sealed partial class SectorState
             var c = before[i];
             var fullest = Math.Max(before[(i + 1) % before.Length], before[(i + before.Length - 1) % before.Length]);
             var growth = c * (1 - c) * FloraGrowthPerMinute + Math.Max(0, fullest - c) * FloraSpreadPerMinute;
-            sites[i].Flora = Math.Min(1, c + growth * minutes);
+            sites[i].Flora = Math.Min(1, c + pace * growth * minutes);
         }
     }
 
@@ -156,13 +164,7 @@ public sealed partial class SectorState
         foreach (var craft in _crafts)
         {
             if (!craft.IsAnchored || craft.LandedOnBodyId != body.Id || craft.IsWreck || SiteUnder(craft) is not { Flora: > 0 } site) continue;
-            var cells = craft.Design.Cells;
-            var cell = cells[(int)((Tick / FloraStepTicks + craft.Id.Value) % cells.Count)];
-            var health = craft.HealthList.GetValueOrDefault(cell.Pos, 1);
-            var worn = Math.Max(Math.Min(health, 0.1), health - 0.02 * site.Flora);
-            if (worn >= health) continue;
-            craft.HealthList[cell.Pos] = worn;
-            craft.Stats = craft.Design.ComputeStats(Parts, craft.HealthList);
+            WearPart(craft, (Tick / FloraStepTicks + craft.Id.Value) % craft.Design.Cells.Count, 0.02 * site.Flora);
         }
     }
 }

@@ -100,6 +100,9 @@ public sealed class Faction
     public long TruceUntilTick { get; internal set; }
     public long NextStationTick { get; internal set; }
 
+    /// <summary>What it thinks of how you treat living worlds (#94), if it cares. Worked out every second; not saved.</summary>
+    public double LifeOpinion { get; internal set; }
+
     public const double MaxGoodwill = 40, GoodwillFadePerMinute = 0.05;
 
     public const double HostileBelow = -30, FriendlyFrom = 30;
@@ -112,7 +115,7 @@ public sealed class Faction
 
     /// <summary>Where its attitude is heading with these laws in force.</summary>
     public double TargetAttitude(IReadOnlyCollection<string> laws) =>
-        Math.Clamp(Baseline + laws.Sum(l => Culture.StanceOn(l)) * PointsPerStance - Grievance + Goodwill, -100, 100);
+        Math.Clamp(Baseline + laws.Sum(l => Culture.StanceOn(l)) * PointsPerStance - Grievance + Goodwill + LifeOpinion, -100, 100);
 }
 
 /// <summary>Something that happened, for the player's log and status line (#36).</summary>

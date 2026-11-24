@@ -225,6 +225,24 @@ public sealed class CraftState
     /// <summary>The player's order not to fire. Saved.</summary>
     public bool HoldFire { get; set; }
 
+    // --- Animals (#93) ---
+
+    /// <summary>Live animals in its pens: kg, kind and temper. Saved.</summary>
+    public long PenKg { get; internal set; }
+    public string PenAnimal { get; internal set; } = "";
+    public AnimalTemper PenTemper { get; internal set; }
+
+    /// <summary>Its weapons are hunting the animals where it's anchored. Saved.</summary>
+    public bool Culling { get; internal set; }
+
+    /// <summary>Ranched and culled mass not yet a whole kg. Saved.</summary>
+    internal double RanchRemainderKg { get; set; }
+    internal double CullRemainderKg { get; set; }
+
+    /// <summary>Its repeller worked this tick; what its animal machines are doing. Recomputed every tick; not saved.</summary>
+    public bool RepellerOn { get; internal set; }
+    public string? AnimalStatus { get; internal set; }
+
     /// <summary>Charge in its shield (#90), and the tick it was last hit. Saved.</summary>
     public double ShieldCharge { get; internal set; }
     public long ShieldHitTick { get; internal set; } = -1_000_000;
@@ -372,7 +390,7 @@ public sealed class CraftState
     public double MiningRemainderKg { get; internal set; }
 
     /// <summary>Dry mass plus cargo: what thrust has to push.</summary>
-    public double MassKg => Stats.TotalMassKg + CargoKg;
+    public double MassKg => Stats.TotalMassKg + CargoKg + PenKg;
 
     internal List<BuildOrder> BuildQueueList { get; } = new();
 

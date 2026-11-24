@@ -99,6 +99,8 @@ public sealed partial class SectorState
         wreck.KitsList.Clear();
         foreach (var order in wreck.BuildQueueList) wreck.Inventory.Add(order.MaterialsKg);
         wreck.BuildQueueList.Clear();
+        wreck.Inventory.Add(BiomassMaterial, wreck.PenKg);
+        wreck.PenKg = 0;
         if (wreck.RefiningBatch is not { } batch) return;
         wreck.Inventory.Add(batch.InputsKg);
         wreck.RefiningBatch = null;

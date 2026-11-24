@@ -45,6 +45,7 @@ public static class SaveMigrations
         [23] = ("v24 added guard, escort and patrol jobs, and civilization patrols: an older save has none (patrols appear after loading)", (_, _) => { }),
         [24] = ("v25 added trade stations, trade routes and goodwill: an older save has none (stations appear after loading)", (_, _) => { }),
         [25] = ("v26 added native life: no body of an older save has any; systems opened later may", (_, _) => { }),
+        [26] = ("v27 added native animals: living worlds of an older save have none (they can be settled)", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

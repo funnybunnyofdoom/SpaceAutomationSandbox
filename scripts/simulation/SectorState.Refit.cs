@@ -145,6 +145,7 @@ public sealed partial class SectorState
     {
         if (craft.Inventory.TotalKg > 0) return $"{craft.Name} still holds {craft.Inventory.TotalKg / 1000.0:0.0} t of cargo: unload it first.";
         if (craft.Kits.Count > 0) return $"{craft.Name} still holds construction kits: unload them first.";
+        if (craft.PenKg > 0) return $"{craft.Name} still holds animals: release them first.";
         if (craft.BuildQueue.Count > 0) return $"{craft.Name} has build orders: cancel them first.";
         if (craft.RefiningBatch is not null) return $"{craft.Name} is refining: wait for the batch to finish.";
         if (_crafts.Any(c => c.DockedToCraftId == craft.Id)) return $"Ships are docked at {craft.Name}: undock them first.";

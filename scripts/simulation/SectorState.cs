@@ -239,6 +239,7 @@ public sealed partial class SectorState
         StepCombat(endS); // weapons, shots and wrecks (#84, #85)
         ResolveCraftCollisions(); // after everything moved (#34)
         StepMining();
+        StepAnimalWork(); // ranches, repellers, culling, pens (#93)
         StepLife(); // native plants (#92)
         StepSwarms(); // many ships as one flow (#30)
         StepBodiesGone(); // a body mined down to its remnant breaks up (#27)

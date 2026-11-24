@@ -80,6 +80,7 @@ public sealed partial class SectorState
             return "its design does more than mine";
         if (craft.PartHealth.Count > 0 || craft.PartsLost > 0 || craft.IntactDesign is not null) return "it is damaged";
         if (craft.Kits.Count > 0) return "it carries a construction kit";
+        if (craft.PenKg > 0 || s.RanchRateKgPerS > 0 || s.RepellerCount > 0 || s.PenCapacityKg > 0) return "its design handles animals";
         if (craft.YardOrder is not null || !craft.ServiceAt.IsNone) return "a shipyard is working on it";
         if (craft.Requests.Count > 0 || craft.JumpRequestTick > 0) return "it is busy";
         return null;

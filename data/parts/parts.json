@@ -106,6 +106,9 @@
     { "id": "missile_launcher", "name": "Missile launcher", "massKg": 2500, "placeholderColor": "#c05a3c", "cargoCapacityKg": 500, "toughness": 2, "weapon": { "kind": "missile", "rangeM": 2500, "damagePerShot": 1.2, "intervalS": 6, "energyKJPerShot": 10, "ammoMaterial": "missiles", "ammoKgPerShot": 25, "shotSpeedMps": 300, "arcDeg": 360 }, "materialsKg": { "metal": 1700, "electronics": 800 } },
     { "id": "point_defense", "name": "Point defense", "massKg": 1200, "placeholderColor": "#6fd0e0", "toughness": 2, "weapon": { "kind": "laser", "rangeM": 450, "damagePerShot": 0.008, "intervalS": 0.2, "energyKJPerShot": 8, "arcDeg": 360, "pointDefense": true }, "materialsKg": { "metal": 600, "electronics": 600 } },
     { "id": "shield_generator", "name": "Shield generator", "massKg": 4000, "placeholderColor": "#7a8cff", "shieldCapacity": 2, "shieldRechargePerS": 0.1, "powerUseKW": 150, "materialsKg": { "metal": 1800, "electronics": 1700, "composites": 500 } },
-    { "id": "harvester", "name": "Harvester", "massKg": 2000, "placeholderColor": "#6fae3c", "harvestRateKgPerS": 50, "powerUseKW": 60, "materialsKg": { "metal": 1600, "electronics": 400 } }
+    { "id": "harvester", "name": "Harvester", "massKg": 2000, "placeholderColor": "#6fae3c", "harvestRateKgPerS": 50, "powerUseKW": 60, "materialsKg": { "metal": 1600, "electronics": 400 } },
+    { "id": "repeller", "name": "Animal repeller", "massKg": 1200, "placeholderColor": "#d0c040", "isRepeller": true, "powerUseKW": 30, "materialsKg": { "metal": 800, "electronics": 400 } },
+    { "id": "ranch", "name": "Ranch", "massKg": 3000, "placeholderColor": "#b07a4a", "ranchRateKgPerS": 1, "powerUseKW": 20, "materialsKg": { "metal": 1600, "composites": 1100, "electronics": 300 } },
+    { "id": "animal_pen", "name": "Animal pen", "massKg": 1800, "placeholderColor": "#8a9a5a", "penCapacityKg": 5000, "materialsKg": { "metal": 1200, "composites": 600 } }
   ]
 }

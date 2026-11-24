@@ -144,6 +144,7 @@ public sealed partial class SectorState
     private void StepFactions()
     {
         if (_factions.Count == 0 || Tick % FixedStepClock.TicksPerSecond != 0) return; // once a second is plenty
+        UpdateLifeOpinion(); // #94
         StepFleets(); // their patrols (#89)
         StepTrade(); // their trade stations (#89)
         foreach (var faction in _factions)
