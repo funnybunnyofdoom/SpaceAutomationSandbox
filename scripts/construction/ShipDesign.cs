@@ -30,6 +30,22 @@ public readonly record struct DesignCell(GridPos Pos, string PartId, int Rotatio
 public readonly record struct DockingPortInfo(GridPos Pos, int Rotation);
 
 /// <summary>
+/// All generators of one part type on a craft (#75): their total power (kW, health included), and the batch they
+/// burn: whole kg in, whole kg left in stock, kJ out. The rest of a batch's mass leaves as exhaust (ejected mass).
+/// </summary>
+public sealed record GeneratorStats(string PartId, double KW, IReadOnlyDictionary<string, long> BurnsKg,
+    IReadOnlyDictionary<string, long> MakesKg, double KJPerBatch)
+{
+    public static GeneratorStats From(PartDefinition part, double kw) => new(part.Id, kw,
+        (part.GeneratorBurnsKg ?? new Dictionary<string, double>()).ToDictionary(kv => kv.Key, kv => (long)kv.Value),
+        (part.GeneratorMakesKg ?? new Dictionary<string, double>()).ToDictionary(kv => kv.Key, kv => (long)kv.Value),
+        part.GeneratorKJPerBatch);
+
+    /// <summary>Kg of exhaust per batch: what's burned and not left behind.</summary>
+    public long ExhaustKg => BurnsKg.Values.Sum() - MakesKg.Values.Sum();
+}
+
+/// <summary>
 /// What a design is meant to be. All roles use the same grid and data; only validation differs.
 /// Ship: flyable (one cockpit, forward thrust, no foundation). Station: hosts facilities
 /// (a fabricator, docking port or cargo bay); may have a foundation (fixed structure).
@@ -79,8 +95,15 @@ public sealed record ShipStats(
     int WarpGateCount = 0,
     double ResearchRatePerS = 0,
     double LabPowerKW = 0,
-    int GateDefenseCount = 0)
+    int GateDefenseCount = 0,
+    IReadOnlyList<GeneratorStats>? Generators = null)
 {
+    /// <summary>Generators by part type (#75); empty if none.</summary>
+    public IReadOnlyList<GeneratorStats> GeneratorList => Generators ?? Array.Empty<GeneratorStats>();
+
+    /// <summary>Most power all generators give together (kW), health included.</summary>
+    public double GeneratorKW => GeneratorList.Sum(g => g.KW);
+
     /// <summary>Craft up to this many parts run without crew (#11).</summary>
     public const int UncrewedMaxParts = 15;
 
@@ -237,6 +260,7 @@ public sealed class ShipDesign
         double food = 0, habitatPower = 0, farmPower = 0, robots = 0, robotPower = 0;
         var gates = 0;
         var defenses = 0;
+        var generatorKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         double research = 0, labPower = 0;
         var crew = 0;
         int clamps = 0, foundations = 0;
@@ -287,6 +311,7 @@ public sealed class ShipDesign
             else if (part.ResearchRatePerS > 0) labPower += part.PowerUseKW;
             if (part.IsWarpGate) gates++;
             if (part.IsGateDefense) defenses++;
+            if (part.GeneratorKW > 0) generatorKW[part.Id] = generatorKW.GetValueOrDefault(part.Id) + part.GeneratorKW * h; // #75
             if (part.IsAnchorClamp) clamps++;
             if (part.IsFoundation) foundations++;
             if (part.IsDockingPort) ports.Add(new DockingPortInfo(cell.Pos, cell.Rotation));
@@ -310,7 +335,8 @@ public sealed class ShipDesign
             Math.Sqrt(radiusCellsSq) * CellSizeM, fabrication, clamps, foundations, otherThrust, ports, mining, refining,
             generation, thrustPower, drillPower, refineryPower, fabricatorPower, ejectorPower, ejection,
             reverse, left, right, reversePower, leftPower, rightPower, crew, food, habitatPower, farmPower,
-            (int)Math.Floor(robots + 1e-9), robotPower, gates, research, labPower, defenses);
+            (int)Math.Floor(robots + 1e-9), robotPower, gates, research, labPower, defenses,
+            generatorKW.Count == 0 ? null : generatorKW.Select(g => GeneratorStats.From(catalog.Get(g.Key), g.Value)).ToList());
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

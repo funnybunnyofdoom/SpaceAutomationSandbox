@@ -52,6 +52,7 @@ public static class InputActions
     public const string Jump = "ship_warp_jump";
     public const string Research = "open_research";
     public const string Laws = "open_laws";
+    public const string Power = "open_power";
     public const string PanelFocus = "panel_focus";
 
     /// <summary>Every action the player can rebind, in the order the Controls screen lists them, with its name and group.</summary>
@@ -64,7 +65,7 @@ public static class InputActions
         (TargetCycle, "Cycle target", "Targets and view"), (TargetNearest, "Target the nearest body", "Targets and view"),
         (ZoomIn, "Zoom in", "Targets and view"), (ZoomOut, "Zoom out", "Targets and view"), (Map, "Map", "Targets and view"),
         (Editor, "Blueprint editor", "Panels"), (Shipyard, "Shipyard", "Panels"), (Fleet, "Fleet", "Panels"), (Cargo, "Cargo", "Panels"),
-        (Job, "Job", "Panels"), (Research, "Research", "Panels"), (Laws, "Laws and civilizations", "Panels"), (Settings, "Settings", "Panels"), (Debug, "Debug menu", "Panels"),
+        (Job, "Job", "Panels"), (Research, "Research", "Panels"), (Laws, "Laws and civilizations", "Panels"), (Power, "Power", "Panels"), (Settings, "Settings", "Panels"), (Debug, "Debug menu", "Panels"),
         (Diagnostics, "Diagnostics", "Panels"), (Help, "Keys and help", "Panels"),
         (PanelFocus, "Use the open panel with keys / controller", "Panels"),
         (ClosePanels, "Close panels / pause menu", "Game"), (TimeFaster, "Time faster", "Game"), (TimeSlower, "Time slower", "Game"),
@@ -110,6 +111,7 @@ public static class InputActions
         Add(Jump, 0.5f, Keys(Key.N));
         Add(Research, 0.5f, Keys(Key.R));
         Add(Laws, 0.5f, Keys(Key.L)); // #36
+        Add(Power, 0.5f, Keys(Key.O)); // #75
         Add(PanelFocus, 0.5f, Keys(Key.Quoteleft), Pad(JoyButton.Back)); // #68
         // Menus with a controller (#68): A chooses, B goes back (Godot's own UI actions, not rebindable).
         AddEvent("ui_accept", Pad(JoyButton.A));

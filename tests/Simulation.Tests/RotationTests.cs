@@ -75,12 +75,13 @@ public class RotationTests
         var ship = new CraftState(sector.AllocateCraftId(), "R", design, design.ComputeStats(Catalog), yard.Position, 0);
         sector.AddCraft(ship);
         sector.RestoreDock(ship.Id, yard.Id, sector.FreePorts(yard)[0]);
-        ship.StoredEnergyKJ = 1_000; // part charged, so the battery cap doesn't hide what was used
-        var energy = ship.StoredEnergyKJ;
-
         ship.Controls = new ShipControls(-1, 0, false);
         sector.Step();
         Assert.False(ship.IsDocked);
+        // Measured on its own (the tick it undocked it still shared the yard's pool, #75).
+        ship.StoredEnergyKJ = 1_000; // part charged, so the battery cap doesn't hide what was used
+        var energy = ship.StoredEnergyKJ;
+        sector.Step();
         var used = energy + ship.Stats.PowerGenerationKW * FixedStepClock.TickSeconds - ship.StoredEnergyKJ;
         Assert.Equal(ship.Stats.ReversePowerKW * FixedStepClock.TickSeconds, used, 6);
     }

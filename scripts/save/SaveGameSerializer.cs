@@ -140,6 +140,7 @@ public static class SaveGameSerializer
                     Anchored = c.IsAnchored,
                     LegacyUnlimitedStorage = c.LegacyUnlimitedStorage,
                     StoredEnergyKJ = c.StoredEnergyKJ,
+                    GeneratorBankKJ = c.GeneratorBankKJ.Count > 0 ? new SortedDictionary<string, double>(c.GeneratorBankKJ, StringComparer.Ordinal) : null,
                     LegacyFreePower = c.LegacyFreePower,
                     EjectionRemainderKg = c.EjectionRemainderKg,
                     Cruising = c.Cruising,
@@ -304,6 +305,11 @@ public static class SaveGameSerializer
                 if (c.StoredEnergyKJ < 0 || c.StoredEnergyKJ > craft.Stats.EnergyCapacityKJ + 1e-6)
                     throw new FormatException($"Craft {c.Id} holds {c.StoredEnergyKJ} kJ but its batteries take {craft.Stats.EnergyCapacityKJ} kJ.");
                 craft.StoredEnergyKJ = c.StoredEnergyKJ;
+                foreach (var (part, kj) in c.GeneratorBankKJ ?? new SortedDictionary<string, double>()) // #75
+                {
+                    if (!(kj >= 0) || !double.IsFinite(kj)) throw new FormatException($"Craft {c.Id} has an invalid generator store.");
+                    if (kj > 0) craft.GeneratorBankKJ[part] = kj;
+                }
                 if (c.EjectionRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has an ejection remainder of {c.EjectionRemainderKg} kg.");
                 craft.EjectionRemainderKg = c.EjectionRemainderKg;
                 if (c.CruiseFuelRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has a cruise fuel remainder of {c.CruiseFuelRemainderKg} kg.");
@@ -688,6 +694,10 @@ public static class SaveGameSerializer
         public bool LegacyUnlimitedStorage { get; set; }
 
         public double StoredEnergyKJ { get; set; }
+
+        /// <summary>v19 (later addition, optional, #75): energy left from generator batches already burned, by part id.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public SortedDictionary<string, double>? GeneratorBankKJ { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] // only on craft from pre-v10 saves
         public bool LegacyFreePower { get; set; }

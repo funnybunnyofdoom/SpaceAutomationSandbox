@@ -116,9 +116,9 @@ public sealed partial class SectorState
             if (!Operational(gate)) { next.GateStatus = $"waiting: {gate.Name} isn't working ({gate.CrewShortReason})"; continue; }
 
             var energy = next.MassKg / 1000 * JumpEnergyKJPerTonne;
-            if (!gate.LegacyFreePower && gate.EnergyPoolKJ + 1e-9 < energy)
+            if (!gate.LegacyFreePower && !EnsurePower(gate, energy)) // generators help (#75)
             {
-                next.GateStatus = $"waiting: {gate.Name} is charging (a jump takes {energy / 1000:0} MJ, it has {gate.EnergyPoolKJ / 1000:0})";
+                next.GateStatus = $"waiting: {gate.Name} is charging (a jump takes {energy / 1000:0} MJ, it has {PowerPoolKJ(gate) / 1000:0})";
                 continue;
             }
             if (gate.GateLinkId.IsNone || !_craftsById.TryGetValue(gate.GateLinkId, out var far))

@@ -139,6 +139,7 @@ public class WarpTests
         var sector = game.Sector;
         var gate = DeployGate(sector, sector.GetCraft(game.ShipyardId), power: false);
         var ship = DockedShip(sector, gate, "Ship", 0);
+        ship.StoredEnergyKJ = 0; // a docked ship's battery would help the gate (one shared pool, #75)
         sector.RequestJump(ship.Id);
         for (var i = 0; i < 40; i++) sector.Step();
         Assert.Equal(gate.Id, ship.DockedToCraftId);

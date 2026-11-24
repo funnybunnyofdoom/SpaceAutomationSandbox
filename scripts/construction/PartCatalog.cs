@@ -45,6 +45,20 @@ public sealed record PartDefinition
     /// <summary>A warp gate (#22): the station it's on can send craft to its linked gate in another star system.</summary>
     public bool IsWarpGate { get; init; }
 
+    // --- Generators (#75): a part that turns a batch of materials into energy. Data-driven: any fuel, any products. ---
+
+    /// <summary>Most power one generator part gives (kW). It burns only what's needed (#75).</summary>
+    public double GeneratorKW { get; init; }
+
+    /// <summary>One batch it burns, whole kg by material (e.g. 1 kg fuel).</summary>
+    public Dictionary<string, double>? GeneratorBurnsKg { get; init; }
+
+    /// <summary>What a batch leaves behind in the craft's stock (whole kg); the rest of the batch's mass is exhaust (ejected).</summary>
+    public Dictionary<string, double>? GeneratorMakesKg { get; init; }
+
+    /// <summary>Energy from one batch (kJ).</summary>
+    public double GeneratorKJPerBatch { get; init; }
+
     /// <summary>A gate defense battery (#36): with the Armed gates law, each makes a raid on its gate less likely to succeed.</summary>
     public bool IsGateDefense { get; init; }
 
@@ -103,6 +117,7 @@ public sealed class PartCatalog
                 || part.CrewCapacity < 0 || part.FoodRateKgPerS < 0 || part.RobotCount < 0 || part.ResearchRatePerS < 0)
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
             ValidateMaterials(part, materials);
+            ValidateGenerator(part, materials);
             if (!_parts.TryAdd(part.Id, part)) throw new FormatException($"Duplicate part id '{part.Id}'.");
             _ordered.Add(part);
         }
@@ -122,6 +137,22 @@ public sealed class PartCatalog
         research.Validate(this);
         Research = research;
         return this;
+    }
+
+    private static void ValidateGenerator(PartDefinition part, MaterialCatalog materials)
+    {
+        if (part.GeneratorKW <= 0) return;
+        if (part.GeneratorBurnsKg is not { Count: > 0 } burns || !(part.GeneratorKJPerBatch > 0))
+            throw new FormatException($"Generator '{part.Id}' needs generatorBurnsKg and generatorKJPerBatch.");
+        double burned = 0, made = 0;
+        foreach (var (id, kg) in burns.Concat(part.GeneratorMakesKg ?? new Dictionary<string, double>()))
+        {
+            if (!materials.Contains(id)) throw new FormatException($"Generator '{part.Id}' uses unknown material '{id}'.");
+            if (!(kg > 0) || kg != Math.Floor(kg)) throw new FormatException($"Generator '{part.Id}': '{id}' must be a positive whole number of kg.");
+        }
+        foreach (var kg in burns.Values) burned += kg;
+        foreach (var kg in (part.GeneratorMakesKg ?? new Dictionary<string, double>()).Values) made += kg;
+        if (made > burned) throw new FormatException($"Generator '{part.Id}' makes more mass than it burns.");
     }
 
     private static void ValidateMaterials(PartDefinition part, MaterialCatalog materials)

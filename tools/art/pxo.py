@@ -34,11 +34,14 @@ def write_pxo(path, width, height, layers):
         "guides": [],
         "brushes": [],
     }
+    def entry(name):  # a fixed timestamp, so the same art always gives the same file (no churn in git)
+        return zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("mimetype", "application/x-pixelorama")
-        z.writestr("data.json", json.dumps(data, indent=1))
+        z.writestr(entry("mimetype"), "application/x-pixelorama", zipfile.ZIP_DEFLATED)
+        z.writestr(entry("data.json"), json.dumps(data, indent=1), zipfile.ZIP_DEFLATED)
         for i, (_, rows) in enumerate(layers, start=1):
-            z.writestr(f"image_data/frames/1/layer_{i}", rgba_bytes(rows))
+            z.writestr(entry(f"image_data/frames/1/layer_{i}"), rgba_bytes(rows), zipfile.ZIP_DEFLATED)
 
 
 def read_pxo(path):

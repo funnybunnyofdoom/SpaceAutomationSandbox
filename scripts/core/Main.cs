@@ -100,6 +100,9 @@ public partial class Main : Node2D
     /// <summary>Laws and civilizations (#36).</summary>
     private LawsPanel? _lawsPanel;
 
+    /// <summary>Power networks and sources (#75).</summary>
+    private PowerPanel? _powerPanel;
+
     /// <summary>The title screen and main menu (#58). While it shows, no game is running.</summary>
     private TitleScreen? _title;
 
@@ -181,6 +184,8 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_researchPanel);
             _lawsPanel = new LawsPanel(() => _sector, () => _changedSinceSave = true) { Visible = false }; // #36
             _uiRoot.AddChild(_lawsPanel);
+            _powerPanel = new PowerPanel(() => _sector, () => _player) { Visible = false }; // #75
+            _uiRoot.AddChild(_powerPanel);
             _debugPanel = new DebugPanel(() => _sector, () => _warp.Speed, SetGameSpeed, _catalog.Materials) { Visible = false };
             _uiRoot.AddChild(_debugPanel);
         }
@@ -282,6 +287,7 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-controls") >= 0) { _uiRoot.MoveChild(_controls!, _uiRoot.GetChildCount() - 1); _controls!.Open(); }
         if (System.Array.IndexOf(args, "--open-map") >= 0) ToggleMap();
         if (System.Array.IndexOf(args, "--open-research") >= 0) _researchPanel?.Open();
+        if (System.Array.IndexOf(args, "--open-power") >= 0) _powerPanel?.Open(); // #75
         if (System.Array.IndexOf(args, "--open-pause") >= 0) OpenPause();
         if (System.Array.IndexOf(args, "--open-saves=save") >= 0) { OpenPause(); _pause.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Save); }
         if (System.Array.IndexOf(args, "--open-saves=load") >= 0) { OpenPause(); _pause.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Load); }
@@ -674,7 +680,7 @@ public partial class Main : Node2D
             if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1); // settings open above the menu
         }
         _hud.Visible = false;
-        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _mapPanel })
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel })
             if (panel != null) panel.Visible = false;
         _title.Open(SaveSummary());
     }
@@ -847,6 +853,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Settings)) Toggle(_settingsPanel, () => _settingsPanel!.Open());
         else if (Pressed(InputActions.Research)) Toggle(_researchPanel, () => _researchPanel!.Open());
         else if (Pressed(InputActions.Laws)) Toggle(_lawsPanel, () => _lawsPanel!.Open());
+        else if (Pressed(InputActions.Power)) Toggle(_powerPanel, () => _powerPanel!.Open());
         else if (Pressed(InputActions.Map)) ToggleMap();
         else if (Pressed(InputActions.Help)) _hud.ToggleHelp();
         else if (Pressed(InputActions.Fullscreen)) ToggleFullscreen();
@@ -856,7 +863,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
-            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel };
+            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel };
             var anyOpen = _mapMode || _hud.HelpOpen || panels.Any(p => p is { Visible: true });
             if (!anyOpen) OpenPause();
             if (_mapMode) ToggleMap();

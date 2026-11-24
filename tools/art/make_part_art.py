@@ -320,6 +320,17 @@ def research_lab(a):
     return b, d
 
 
+def fuel_generator(a):
+    b, d = panel(), Img()
+    d.rect(3, 6, 12, 13, shade(a, 0.55)); d.outline(3, 6, 12, 13, OUT)  # engine block
+    d.rect(4, 8, 7, 12, a); d.vline(4, 8, 12, shade(a, 1.4))  # fuel tank
+    d.hline(4, 7, 10, shade(a, 0.6))
+    for y in (8, 10, 12): d.hline(9, 11, y, RIVET)  # cooling fins
+    d.rect(9, 2, 10, 6, DARK); d.vline(9, 2, 6, SHADOW); d.hline(9, 10, 1, OUT)  # exhaust stack, out the front
+    d.set(10, 2, (255, 170, 60, 255))
+    return b, d
+
+
 DRAW = {
     "hull": hull, "cockpit": cockpit, "thruster": thruster, "battery": battery, "solar_panel": solar,
     "cargo": cargo, "drill": drill, "fabricator": fabricator, "anchor_clamp": anchor_clamp,
@@ -331,6 +342,7 @@ DRAW = {
     "battery_mk2": lambda a: battery(a, 2), "refinery_mk2": lambda a: refinery(a, 2),
     "fabricator_mk2": lambda a: fabricator(a, 2), "warp_gate": warp_gate, "gate_defense": gate_defense,
     "research_lab": research_lab,
+    "fuel_generator": fuel_generator,
 }
 
 
@@ -348,7 +360,16 @@ def main():
     sheet = []
     for p in parts:
         base, detail = DRAW[p["id"]](hex_rgba(p.get("placeholderColor", "#ff00ff")))
-        pxo.write_pxo(os.path.join(out, p["id"] + ".pxo"), N, N, [("base", base.px), ("detail", detail.px)])
+        target = os.path.join(out, p["id"] + ".pxo")
+        layers = [("base", base.px), ("detail", detail.px)]
+        unchanged = False
+        if os.path.isfile(target):  # leave a source alone if its pixels haven't changed (it may have been edited by hand)
+            try:
+                unchanged = [(n, [list(r) for r in rows]) for n, rows in pxo.read_pxo(target)[2]] == [(n, [list(r) for r in rows]) for n, rows in layers]
+            except Exception:
+                unchanged = False
+        if not unchanged:
+            pxo.write_pxo(target, N, N, layers)
         sheet.append((p["id"], flatten(base, detail)))
     print(f"wrote {len(sheet)} sources to {out}")
     if len(sys.argv) > 1:  # a preview contact sheet (not part of the game): python make_part_art.py preview.png

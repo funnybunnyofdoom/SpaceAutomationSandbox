@@ -67,19 +67,22 @@ public class PowerAndSlagTests
     }
 
     [Fact]
-    public void DockedShips_RechargeFromTheStationsSpareSolar()
+    public void DockedShips_ShareOnePowerPoolWithTheirStation()
     {
+        // #75: everything docked together shares one pool; batteries end each tick at the same charge level.
         var game = TestData.NewGame();
         var sector = game.Sector;
         var yard = sector.GetCraft(game.ShipyardId);
         var ship = sector.GetCraft(game.PlayerCraftId);
         sector.RestoreDock(ship.Id, yard.Id, 0);
         ship.StoredEnergyKJ = 0;
+        var before = yard.StoredEnergyKJ + ship.StoredEnergyKJ;
 
         for (var i = 0; i < 20 * TicksPerSecond; i++) sector.Step();
-        // The yard is idle with a full battery, so all of its solar is spare; the ship adds its own.
-        var expected = 20 * (yard.Stats.PowerGenerationKW - yard.Stats.HabitatPowerKW + ship.Stats.PowerGenerationKW); // the yard's habitat uses some (#11)
-        Assert.Equal(System.Math.Min(expected, ship.Stats.EnergyCapacityKJ), ship.StoredEnergyKJ, 3);
+        Assert.Equal(yard.StoredEnergyKJ / yard.Stats.EnergyCapacityKJ, ship.StoredEnergyKJ / ship.Stats.EnergyCapacityKJ, 6);
+        // Both craft's solar went in; the yard's habitat (#11) took its share out.
+        var expected = before + 20 * (yard.Stats.PowerGenerationKW - yard.Stats.HabitatPowerKW + ship.Stats.PowerGenerationKW);
+        Assert.Equal(System.Math.Min(expected, yard.Stats.EnergyCapacityKJ + ship.Stats.EnergyCapacityKJ), yard.StoredEnergyKJ + ship.StoredEnergyKJ, 3);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using System.Collections.Generic;
 using SpaceAutomationSandbox.Construction;
@@ -54,8 +55,46 @@ public sealed class CraftState
     /// <summary>Battery charge, kJ (0..Stats.EnergyCapacityKJ).</summary>
     public double StoredEnergyKJ { get; internal set; }
 
-    /// <summary>This tick's available energy (battery + solar), spent by machines in order. Not saved.</summary>
+    /// <summary>This tick's available energy (battery + solar), spent by machines in order. Not saved.
+    /// Only meaningful on a power network's root (#75): use <c>SectorState.PowerPoolKJ</c>.</summary>
     internal double EnergyPoolKJ { get; set; }
+
+    // --- Power networks and generators (#75) ---
+
+    /// <summary>The craft whose pool this craft draws from this tick: what it's docked to (followed to the end), else itself. Not saved.</summary>
+    internal CraftState? PowerRoot { get; set; }
+
+    /// <summary>On a root: every craft sharing its pool this tick, in id order. Not saved.</summary>
+    internal List<CraftState> PowerMembers { get; } = new();
+
+    /// <summary>Energy from batches already burned but not yet used (kJ), by generator part id: a batch is whole kg, so
+    /// what one batch gives beyond this tick's need is kept for later (saved).</summary>
+    internal SortedDictionary<string, double> GeneratorBankKJ { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Energy this craft's generators gave this tick (kJ), for the power panel. Not saved.</summary>
+    public double GeneratedKJThisTick { get; internal set; }
+
+    /// <summary>On a network root: energy its members used this tick (kJ), for the power panel. Not saved.</summary>
+    public double NetworkUsedKJThisTick { get; internal set; }
+
+    /// <summary>On a network root: energy in its members' batteries at the start of this tick (kJ). Not saved.</summary>
+    internal double NetworkStartKJ { get; set; }
+
+    /// <summary>Solar energy this craft made this tick (kJ). Not saved.</summary>
+    public double SolarKJThisTick { get; internal set; }
+
+    /// <summary>Generator energy kept from burned batches, kJ (#75).</summary>
+    public double GeneratorBankTotalKJ => GeneratorBankKJ.Values.Sum();
+
+    private Dictionary<string, double>? _generatorTickUse;
+
+    /// <summary>Energy a generator type already gave this tick (its rating caps it). Not saved.</summary>
+    internal double GeneratorTickUseKJ(string partId) => _generatorTickUse?.GetValueOrDefault(partId) ?? 0;
+
+    internal void AddGeneratorTickUse(string partId, double kJ) =>
+        (_generatorTickUse ??= new())[partId] = GeneratorTickUseKJ(partId) + kJ;
+
+    internal void ClearGeneratorTickUse() => _generatorTickUse?.Clear();
 
     /// <summary>True if something on this craft couldn't run this tick for lack of power.</summary>
     public bool PowerShort { get; internal set; }

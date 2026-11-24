@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace SpaceAutomationSandbox.Simulation;
 
@@ -29,26 +30,107 @@ public sealed partial class SectorState
         if (kg > 0) _ejectedKg[materialId] = kg;
     }
 
+    /// <summary>
+    /// Builds this tick's power networks (#75): a craft docked to another draws from that one's pool (followed to
+    /// the end of the chain), so a station and its docked ships share generation, generators and batteries.
+    /// </summary>
     private void BeginPowerTick()
     {
         foreach (var craft in _crafts)
         {
             craft.PowerShort = false;
+            craft.PowerMembers.Clear();
+            craft.EnergyPoolKJ = 0;
+            craft.GeneratedKJThisTick = 0;
+            craft.NetworkStartKJ = 0;
+            var root = craft;
+            for (var hops = 0; hops < 8 && root.IsDocked && _craftsById.TryGetValue(root.DockedToCraftId, out var host); hops++) root = host;
+            craft.PowerRoot = root;
+        }
+        foreach (var craft in _crafts) // id order: members are listed deterministically
+        {
+            var root = craft.PowerRoot!;
+            root.PowerMembers.Add(craft);
             craft.SolarFactor = craft.Stats.PowerGenerationKW > 0 ? SolarFactorAt(craft.Position) : 1;
-            craft.EnergyPoolKJ = craft.StoredEnergyKJ + craft.Stats.PowerGenerationKW * craft.SolarFactor * FixedStepClock.TickSeconds;
+            craft.SolarKJThisTick = craft.Stats.PowerGenerationKW * craft.SolarFactor * FixedStepClock.TickSeconds;
+            root.EnergyPoolKJ += craft.StoredEnergyKJ + craft.SolarKJThisTick;
+            root.NetworkStartKJ += craft.StoredEnergyKJ;
         }
     }
 
-    /// <summary>Takes <paramref name="kJ"/> from the craft's pool if it can; otherwise marks it short and takes nothing.</summary>
+    /// <summary>The craft whose pool another draws from (its network's root, #75); itself before the first tick.</summary>
+    public CraftState PowerRootOf(CraftState craft) => craft.PowerRoot ?? craft;
+
+    /// <summary>The craft sharing a root's pool, in id order.</summary>
+    public IReadOnlyList<CraftState> PowerMembersOf(CraftState root) => root.PowerMembers.Count > 0 ? root.PowerMembers : new[] { root };
+
+    /// <summary>The energy a craft's network has left this tick (kJ).</summary>
+    public double PowerPoolKJ(CraftState craft) => (craft.PowerRoot ?? craft).EnergyPoolKJ;
+
+    /// <summary>
+    /// Makes sure the craft's network has <paramref name="kJ"/> this tick, running its generators for what's
+    /// missing (#75). True if it has it now. Nothing is spent.
+    /// </summary>
+    private bool EnsurePower(CraftState craft, double kJ)
+    {
+        var root = craft.PowerRoot ?? craft;
+        if (root.EnergyPoolKJ + 1e-9 >= kJ) return true;
+        root.EnergyPoolKJ += Generate(root, kJ - root.EnergyPoolKJ);
+        return root.EnergyPoolKJ + 1e-9 >= kJ;
+    }
+
+    /// <summary>
+    /// Runs the network's generators for up to <paramref name="neededKJ"/> (members in id order, each up to its
+    /// rating this tick), burning whole batches from the generator craft's own stock. Returns the energy made.
+    /// What's burned leaves as exhaust (ejected mass) or as the generator's products in stock, so mass stays exact.
+    /// </summary>
+    private double Generate(CraftState root, double neededKJ)
+    {
+        double made = 0;
+        foreach (var craft in root.PowerMembers.Count > 0 ? root.PowerMembers : new List<CraftState> { root })
+        {
+            if (made >= neededKJ - 1e-9) break;
+            if (craft.Stats.GeneratorList.Count == 0 || !Operational(craft)) continue;
+            foreach (var gen in craft.Stats.GeneratorList)
+            {
+                var want = neededKJ - made;
+                var capacity = gen.KW * FixedStepClock.TickSeconds - craft.GeneratorTickUseKJ(gen.PartId);
+                if (want <= 1e-9 || capacity <= 1e-9) continue;
+                var give = Math.Min(want, capacity);
+                var bank = craft.GeneratorBankKJ.GetValueOrDefault(gen.PartId);
+                while (bank + 1e-9 < give && craft.Inventory.TryRemove(gen.BurnsKg)) // burn another whole batch
+                {
+                    bank += gen.KJPerBatch;
+                    foreach (var (material, kg) in gen.MakesKg) craft.Inventory.Add(material, kg);
+                    var exhaust = gen.ExhaustKg;
+                    if (exhaust > 0) // exhaust is recorded as the burned material (like cruise fuel)
+                    {
+                        var exhaustMaterial = gen.BurnsKg.Keys.First();
+                        _ejectedKg[exhaustMaterial] = _ejectedKg.GetValueOrDefault(exhaustMaterial) + exhaust;
+                    }
+                }
+                give = Math.Min(give, bank);
+                if (give <= 0) continue;
+                bank -= give;
+                if (bank > 1e-9) craft.GeneratorBankKJ[gen.PartId] = bank; else craft.GeneratorBankKJ.Remove(gen.PartId);
+                craft.AddGeneratorTickUse(gen.PartId, give);
+                craft.GeneratedKJThisTick += give;
+                made += give;
+            }
+        }
+        return made;
+    }
+
+    /// <summary>Takes <paramref name="kJ"/> from the craft's network if it can (running generators for the rest); otherwise marks it short.</summary>
     private bool TryUsePower(CraftState craft, double kJ)
     {
         if (kJ <= 0 || craft.LegacyFreePower) return true;
-        if (craft.EnergyPoolKJ + 1e-9 < kJ)
+        if (!EnsurePower(craft, kJ))
         {
             craft.PowerShort = true;
             return false;
         }
-        craft.EnergyPoolKJ -= kJ;
+        (craft.PowerRoot ?? craft).EnergyPoolKJ -= kJ;
         return true;
     }
 
@@ -80,27 +162,28 @@ public sealed partial class SectorState
         }
     }
 
+    /// <summary>
+    /// Ends the tick's power (#75): generators top the batteries up if there's room (so they run only on demand),
+    /// then each network's energy is shared out to its members' batteries in proportion to their capacity.
+    /// </summary>
     private void EndPowerTick()
     {
-        // Charge batteries; remember each station's leftover for its docked ships.
-        Dictionary<CraftId, double>? leftovers = null;
-        foreach (var craft in _crafts)
+        foreach (var root in _crafts)
         {
-            var capacity = craft.Stats.EnergyCapacityKJ;
-            craft.StoredEnergyKJ = Math.Min(capacity, craft.EnergyPoolKJ);
-            var leftover = craft.EnergyPoolKJ - craft.StoredEnergyKJ;
-            if (leftover > 0 && craft.Stats.DockingPorts.Count > 0) (leftovers ??= new())[craft.Id] = leftover;
-        }
-        if (leftovers is null) return;
-
-        // Docked ships recharge from their station's spare power, in id order (deterministic).
-        foreach (var ship in _crafts)
-        {
-            if (!ship.IsDocked || !leftovers.TryGetValue(ship.DockedToCraftId, out var spare) || spare <= 0) continue;
-            var room = ship.Stats.EnergyCapacityKJ - ship.StoredEnergyKJ;
-            var given = Math.Min(room, spare);
-            ship.StoredEnergyKJ += given;
-            leftovers[ship.DockedToCraftId] = spare - given;
+            if (root.PowerRoot != root) continue;
+            double capacity = 0;
+            foreach (var member in root.PowerMembers) capacity += member.Stats.EnergyCapacityKJ;
+            if (capacity > root.EnergyPoolKJ) root.EnergyPoolKJ += Generate(root, capacity - root.EnergyPoolKJ);
+            var pool = root.EnergyPoolKJ;
+            double made = 0;
+            foreach (var member in root.PowerMembers) made += member.SolarKJThisTick + member.GeneratedKJThisTick;
+            root.NetworkUsedKJThisTick = Math.Max(0, root.NetworkStartKJ + made - pool);
+            foreach (var member in root.PowerMembers)
+            {
+                var cap = member.Stats.EnergyCapacityKJ;
+                member.StoredEnergyKJ = capacity > 0 ? Math.Min(cap, pool * cap / capacity) : 0;
+                member.ClearGeneratorTickUse();
+            }
         }
     }
 
@@ -109,9 +192,10 @@ public sealed partial class SectorState
     {
         if (craft.LegacyFreePower) return "power: unlimited (old save)";
         var stats = craft.Stats;
-        if (stats.EnergyCapacityKJ <= 0 && stats.PowerGenerationKW <= 0 && stats.TotalPowerUseKW <= 0) return "";
+        if (stats.EnergyCapacityKJ <= 0 && stats.PowerGenerationKW <= 0 && stats.GeneratorKW <= 0 && stats.TotalPowerUseKW <= 0) return "";
         return $"power {craft.StoredEnergyKJ / 1000:0.0}/{stats.EnergyCapacityKJ / 1000:0} MJ, solar {stats.PowerGenerationKW * craft.SolarFactor:0} kW"
-               + (craft.SolarFactor != 1 ? $" ({craft.SolarFactor * 100:0}% sunlight)" : "") + ", "
+               + (craft.SolarFactor != 1 ? $" ({craft.SolarFactor * 100:0}% sunlight)" : "")
+               + (stats.GeneratorKW > 0 ? $", generators {craft.GeneratedKJThisTick / FixedStepClock.TickSeconds:0}/{stats.GeneratorKW:0} kW" : "") + ", "
                + $"max use {stats.TotalPowerUseKW:0} kW" + (craft.PowerShort ? "  NO POWER" : "");
     }
 }
