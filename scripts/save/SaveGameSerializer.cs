@@ -46,11 +46,11 @@ public static class SaveGameSerializer
     /// (removed craft's ids are never reused, and jobs may still name them); v18 added warp gates and
     /// further star systems (their bodies are ordinary bodies; gates record their link and queue); v19
     /// added research (points, techs done; older saves have everything unlocked) and star types; v20 added
-    /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids).
+    /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids); v22 added salvage jobs (#86).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 21;
+    public const int SchemaVersion = 22;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -181,6 +181,7 @@ public static class SaveGameSerializer
                     FactionId = c.FactionId,
                     IsWreck = c.IsWreck,
                     HoldFire = c.HoldFire,
+                    SalvageProgressKg = c.SalvageProgressKg,
                     WeaponReady = c.WeaponReadyTicks.Any(w => w.Value > sector.Tick)
                         ? c.WeaponReadyTicks.Where(w => w.Value > sector.Tick).OrderBy(w => w.Key.Y).ThenBy(w => w.Key.X)
                             .Select(w => new WeaponReadyDto { X = w.Key.X, Y = w.Key.Y, Tick = w.Value }).ToList()
@@ -213,6 +214,11 @@ public static class SaveGameSerializer
                         : null,
                     Job = c.Job switch
                     {
+                        SalvageJob sg => new JobDto
+                        {
+                            Kind = sg.Kind, PickupId = sg.WreckId.Value, DestinationId = sg.DestinationId.Value, SalvageState = sg.State, Active = sg.Active,
+                            WaitReason = sg.WaitReason, CompletedCycles = sg.CompletedCycles, DeliveredKg = sg.DeliveredKg, RetryAtTick = sg.RetryAtTick,
+                        },
                         SurveyJob sv => new JobDto
                         {
                             Kind = sv.Kind, SourceBodyId = sv.TargetBodyId.Value, SurveyState = sv.State, Active = sv.Active,
@@ -351,6 +357,8 @@ public static class SaveGameSerializer
                 craft.FactionId = c.FactionId; // #84
                 craft.IsWreck = c.IsWreck;
                 craft.HoldFire = c.HoldFire;
+                if (!(c.SalvageProgressKg >= 0)) throw new FormatException($"Craft {c.Id} has invalid salvage progress.");
+                craft.SalvageProgressKg = c.SalvageProgressKg;
                 foreach (var w in c.WeaponReady ?? new List<WeaponReadyDto>()) craft.WeaponReadyTicks[new GridPos(w.X, w.Y)] = w.Tick;
                 craft.CruiseFuelRemainderKg = c.CruiseFuelRemainderKg;
                 foreach (var (m, kg) in c.PropellantDebtKg ?? new SortedDictionary<string, double>()) // #80
@@ -497,7 +505,16 @@ public static class SaveGameSerializer
                     if (c.YardProgressKg < 0) throw new FormatException($"Craft {c.Id} has negative yard progress.");
                     sector.RestoreYardOrder(restored.Id, new YardOrder(yod.Kind, new CraftId(yod.YardId), target), c.YardProgressKg);
                 }
-                if (c.Job is { Kind: "survey" } sj)
+                if (c.Job is { Kind: "salvage" } salvage)
+                {
+                    // The wreck or the destination may be gone since: the job picks another, or waits with that reason.
+                    sector.RestoreJob(restored.Id, new SalvageJob(new CraftId(salvage.DestinationId))
+                    {
+                        Active = salvage.Active, State = salvage.SalvageState, WreckId = new CraftId(salvage.PickupId), WaitReason = salvage.WaitReason,
+                        CompletedCycles = salvage.CompletedCycles, DeliveredKg = salvage.DeliveredKg, RetryAtTick = salvage.RetryAtTick,
+                    });
+                }
+                else if (c.Job is { Kind: "survey" } sj)
                 {
                     // The target may have been mined away since (#27): the scout picks another.
                     sector.RestoreJob(restored.Id, new SurveyJob
@@ -838,6 +855,9 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool HoldFire { get; set; }
 
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double SalvageProgressKg { get; set; }
+
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<WeaponReadyDto>? WeaponReady { get; set; }
 
@@ -986,6 +1006,10 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public SurveyJobState SurveyState { get; set; }
+
+        /// <summary>v22: salvage jobs (#86); the wreck is in <see cref="PickupId"/>.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public SalvageJobState SalvageState { get; set; }
 
         /// <summary>Mining: this trip's landing spot bearing (v14+, #55); null when not picked yet.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

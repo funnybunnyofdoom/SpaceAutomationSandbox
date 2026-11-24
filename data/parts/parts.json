@@ -99,6 +99,8 @@
     { "id": "solar_panel_mk3", "name": "Solar panel Mk3", "massKg": 800, "placeholderColor": "#7aa8ff", "powerGenerationKW": 350,
       "materialsKg": { "metal": 200, "electronics": 250, "superconductors": 200, "composites": 150 } },
     { "id": "autocannon", "name": "Autocannon", "massKg": 2000, "placeholderColor": "#b5823c", "cargoCapacityKg": 500, "toughness": 2, "weapon": { "kind": "gun", "rangeM": 900, "damagePerShot": 0.15, "intervalS": 1, "energyKJPerShot": 5, "ammoMaterial": "shells", "ammoKgPerShot": 2, "shotSpeedMps": 600, "arcDeg": 60 }, "materialsKg": { "metal": 1600, "electronics": 400 } },
-    { "id": "laser", "name": "Laser", "massKg": 1500, "placeholderColor": "#e0507a", "toughness": 2, "weapon": { "kind": "laser", "rangeM": 600, "damagePerShot": 0.03, "intervalS": 0.25, "energyKJPerShot": 30, "arcDeg": 180 }, "materialsKg": { "metal": 700, "electronics": 600, "composites": 200 } }
+    { "id": "laser", "name": "Laser", "massKg": 1500, "placeholderColor": "#e0507a", "toughness": 2, "weapon": { "kind": "laser", "rangeM": 600, "damagePerShot": 0.03, "intervalS": 0.25, "energyKJPerShot": 30, "arcDeg": 180 }, "materialsKg": { "metal": 700, "electronics": 600, "composites": 200 } },
+    { "id": "salvage_arm", "name": "Salvage arm", "massKg": 2000, "placeholderColor": "#e0a030", "salvageRateKgPerS": 100, "powerUseKW": 80, "materialsKg": { "metal": 1700, "electronics": 300 } },
+    { "id": "repair_drones", "name": "Repair drones", "massKg": 1500, "placeholderColor": "#5fc9a0", "repairRateKgPerS": 5, "powerUseKW": 40, "materialsKg": { "metal": 700, "electronics": 700, "composites": 100 } }
   ]
 }

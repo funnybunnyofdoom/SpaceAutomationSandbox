@@ -33,6 +33,8 @@ public partial class JobPanel : PanelContainer
     private GridContainer _freightRows = null!;
     private GridContainer _serveRows = null!;
     private Label _surveyNote = null!;
+    private GridContainer _salvageRows = null!;
+    private OptionButton _salvageDestination = null!;
     private OptionButton _serveMinLoad = null!;
     private OptionButton _source = null!, _mineMaterial = null!, _mineDestination = null!, _returnAt = null!;
     private OptionButton _pickup = null!, _haulMaterial = null!, _haulDestination = null!, _minPickup = null!, _keepStocked = null!;
@@ -78,6 +80,7 @@ public partial class JobPanel : PanelContainer
         _kind.AddItem("Freight: fixed route");
         _kind.AddItem("Freight: serve requests");
         _kind.AddItem("Survey: scout unsurveyed bodies");
+        _kind.AddItem("Salvage: cut up wrecks");
         _kind.ItemSelected += _ => ShowKind();
         kindRow.AddChild(_kind);
         box.AddChild(kindRow);
@@ -118,6 +121,16 @@ public partial class JobPanel : PanelContainer
             AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(410, 0), Modulate = new Color(1, 1, 1, 0.6f),
         };
         box.AddChild(_surveyNote);
+
+        _salvageRows = new GridContainer { Columns = 2 };
+        box.AddChild(_salvageRows);
+        _salvageDestination = AddRow(_salvageRows, "Deliver to");
+        _salvageRows.AddChild(new Label { Text = "" });
+        _salvageRows.AddChild(new Label
+        {
+            Text = "Needs a salvage arm. Cuts up the nearest wreck (through warp gates too), delivers, and goes on.",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(250, 0), Modulate = new Color(1, 1, 1, 0.6f),
+        });
 
         var buttons = new HBoxContainer();
         var start = new Button { Text = "Start job", FocusMode = FocusModeEnum.None, TooltipText = "The craft runs this job on its own until you stop it; the panel shows what it's waiting for" };
@@ -170,6 +183,7 @@ public partial class JobPanel : PanelContainer
         _freightRows.Visible = _kind.Selected == 1;
         _serveRows.Visible = _kind.Selected == 2;
         _surveyNote.Visible = _kind.Selected == 3;
+        _salvageRows.Visible = _kind.Selected == 4;
     }
 
     private void RefreshChoices()
@@ -189,8 +203,8 @@ public partial class JobPanel : PanelContainer
                 : $"{body.Name} ({surveyed.Sum(s => s.DepositsKg.Values.Sum()) / 1000.0:0} t of ore in {surveyed.Count} of {body.Sites.Count} sites{(body.BulkKg > 0 ? $", {body.BulkKg / 1e9:0.###} Mt of {body.BulkMaterialId}" : "")})");
         }
 
-        _stations = sector.Crafts.Where(c => c.Stats.DockingPorts.Count > 0 && c.Id != craft?.Id).Select(c => c.Id).ToList();
-        foreach (var option in new[] { _mineDestination, _pickup, _haulDestination })
+        _stations = sector.Crafts.Where(c => c.Stats.DockingPorts.Count > 0 && !c.IsWreck && c.Id != craft?.Id).Select(c => c.Id).ToList();
+        foreach (var option in new[] { _mineDestination, _pickup, _haulDestination, _salvageDestination })
         {
             option.Clear();
             foreach (var id in _stations) option.AddItem($"{sector.GetCraft(id).Name} ({id})");
@@ -200,6 +214,7 @@ public partial class JobPanel : PanelContainer
 
         Select(_source, 0);
         Select(_mineDestination, 0);
+        Select(_salvageDestination, 0);
         Select(_returnAt, 0);
         Select(_pickup, 0);
         Select(_haulDestination, Math.Min(1, _stations.Count - 1));
@@ -226,6 +241,11 @@ public partial class JobPanel : PanelContainer
                 Select(_haulMaterial, _materials.Materials.ToList().FindIndex(m => m.Id == haul.MaterialId));
                 Select(_minPickup, Array.IndexOf(MinPickups, haul.MinPickupKg));
                 Select(_keepStocked, Array.IndexOf(KeepStocked, haul.KeepStockedKg));
+                RefreshDeposits();
+                break;
+            case SalvageJob salvage:
+                _kind.Select(4);
+                Select(_salvageDestination, _stations.IndexOf(salvage.DestinationId));
                 RefreshDeposits();
                 break;
             case SurveyJob:
@@ -278,6 +298,7 @@ public partial class JobPanel : PanelContainer
                            + $"{Station(m.DestinationId)}, return at {m.ReturnFraction * 100:0}%",
             HaulJob h => $"Freight: {job.MaterialId} from {Station(h.PickupId)} to {Station(h.DestinationId)}"
                          + (h.KeepStockedKg > 0 ? $", keep {h.KeepStockedKg / 1000} t there" : ""),
+            SalvageJob s => $"Salvaging for {Station(s.DestinationId)}: {(s.WreckId.IsNone ? "no wreck picked" : Station(s.WreckId))}, {sector.Crafts.Count(c => c.IsWreck)} wrecks in all",
             SurveyJob => $"Surveying: {job.CompletedCycles} bodies surveyed, {sector.Bodies.Count(b => !b.Surveyed && b.Kind != BodyKind.Star)} left",
             ServeRequestsJob s => "Freight: serving station requests"
                                   + (s.Contract is { } c ? $" (now {c.AmountKg / 1000.0:0.0} t {c.MaterialId}, {Station(c.PickupId)} → {Station(c.DestinationId)})" : ""),
@@ -304,6 +325,11 @@ public partial class JobPanel : PanelContainer
         if (_kind.Selected == 3) { Show(_sector().StartJob(craft.Id, new SurveyJob())); return; }
         if (_stations.Count == 0 && _kind.Selected != 2) { Show(new ActionResult(false, "No station with a docking port.")); return; }
 
+        if (_kind.Selected == 4)
+        {
+            Show(_sector().StartJob(craft.Id, new SalvageJob(_stations[Math.Max(0, _salvageDestination.Selected)])));
+            return;
+        }
         if (_kind.Selected == 0)
         {
             if (_source.Selected < 0 || _source.Selected >= _sources.Count) { Show(new ActionResult(false, "No mineable body.")); return; }

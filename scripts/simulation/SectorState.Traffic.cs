@@ -104,13 +104,13 @@ public sealed partial class SectorState
     private static bool IsHolding(CraftState craft) =>
         craft.ServiceAt.IsNone && craft.YardOrder is null // going for repairs or a refit: moving, whatever its job's state (#3, #56)
         && craft.Job is { Active: true } and (MiningJob { State: MiningJobState.Waiting } or HaulJob { State: HaulJobState.Waiting }
-            or ServeRequestsJob { State: HaulJobState.Waiting } or SurveyJob { State: SurveyJobState.Waiting });
+            or ServeRequestsJob { State: HaulJobState.Waiting } or SurveyJob { State: SurveyJobState.Waiting } or SalvageJob { State: SalvageJobState.Waiting });
 
     /// <summary>True if <paramref name="other"/> keeps its course and <paramref name="craft"/> must give way to it.</summary>
     private static bool HasRightOfWay(CraftState other, CraftState craft)
     {
         if (!other.IsAutomated) return true; // the player's ships and idle craft
-        if (IsHolding(other)) return true; // holding still
+        if (IsHolding(other) || other.Job is SalvageJob { State: SalvageJobState.Cutting }) return true; // holding still
         if (other.Job is MiningJob { State: MiningJobState.Lifting }) return true; // climbing straight out: hard to steer
         return false; // two moving automated craft both steer clear of each other
     }

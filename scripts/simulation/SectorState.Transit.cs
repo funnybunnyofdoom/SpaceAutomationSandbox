@@ -92,6 +92,10 @@ public sealed partial class SectorState
                 // A scout surveys on the way in, so the leg ends where it's in range.
                 var from = craft.Position - GetPosition(unsurveyed.Id);
                 return (unsurveyed.Id, CraftId.None, Math.Atan2(from.Y, from.X), SurveyRadius(unsurveyed, craft));
+            case SalvageJob { Active: true, State: SalvageJobState.ToWreck } s when _craftsById.TryGetValue(s.WreckId, out var wreck) && wreck.IsWreck:
+                station = wreck; break;
+            case SalvageJob { Active: true, State: SalvageJobState.ToDestination } s2 when _craftsById.TryGetValue(s2.DestinationId, out var d5):
+                station = d5; break;
             case MiningJob { Active: true, State: MiningJobState.ToSource } mining when _byId.TryGetValue(mining.SourceBodyId, out var source):
                 if (MineableSurveyed(source, mining.MaterialId) == 0) return null; // only surveyed sites count (#70), as the laws allow (#36)
                 SurfacePoint(source, craft, JobHoverAltitudeM, mining); // picks this trip's spot if not yet

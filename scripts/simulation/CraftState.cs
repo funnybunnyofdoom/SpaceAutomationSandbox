@@ -218,6 +218,12 @@ public sealed class CraftState
     /// <summary>The player's order not to fire. Saved.</summary>
     public bool HoldFire { get; set; }
 
+    /// <summary>Work done on the part being cut (or not yet a whole kg loaded), kg (#86). Saved.</summary>
+    internal double SalvageProgressKg { get; set; }
+
+    /// <summary>What the salvage arm is doing this tick, for display. Not saved.</summary>
+    public string? SalvageStatus { get; internal set; }
+
     /// <summary>When each weapon can fire again, by cell. Saved.</summary>
     internal Dictionary<GridPos, long> WeaponReadyTicks { get; } = new();
 

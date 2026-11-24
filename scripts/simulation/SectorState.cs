@@ -250,6 +250,8 @@ public sealed partial class SectorState
         // Shipyards advance after movement, so a finished craft is placed against the yard's new position.
         StepRepairs(); // the fabricator repairs before it builds (#3)
         StepFabrication(endS);
+        StepFieldRepairs(); // drones and robots (#86)
+        StepSalvage(); // wrecks cut up (#86)
         StepWarpGates(); // gates send queued craft, paid from their power (#22)
         StepFactions(); // other civilizations' attitude and raids (#36)
         StepEjection();

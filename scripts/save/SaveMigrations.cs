@@ -40,6 +40,7 @@ public static class SaveMigrations
             (root, _) => { if (root["sector"] is System.Text.Json.Nodes.JsonObject sector) sector["researchAllUnlocked"] = true; }),
         [19] = ("v20 added swarms: an older save has none", (_, _) => { }),
         [20] = ("v21 added combat: every craft in an older save is the player's and whole, and no raid is on", (_, _) => { }),
+        [21] = ("v22 added salvage jobs: an older save has none", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

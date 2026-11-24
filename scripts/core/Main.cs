@@ -1031,6 +1031,7 @@ public partial class Main : Node2D
                        : "")
                    + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
                    + WeaponsLine(p) // #85
+                   + (p.SalvageStatus is { } salvage ? salvage + "\n" : p.Stats.SalvageRateKgPerS > 0 && p.Job is null && _sector.Crafts.Any(c => c.IsWreck) ? "salvage arm: target a wreck and hold beside it\n" : "") // #86
                    + (SectorState.PropellantStatus(p) is { Length: > 0 } drives ? drives + "\n" : "") // #80
                    + (SectorState.CrewStatus(p) is { Length: > 0 } crew ? crew + "\n" : "")
                    + (SectorState.NeedsRepair(p)

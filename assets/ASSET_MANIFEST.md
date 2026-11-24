@@ -12,6 +12,8 @@ Module cell size: **16×16 pixels per 2 m cell** (decided 2026-11-23, #46).
 | `assets/art/test/test_tile.png` | `art_source/pixelorama/test/test_tile.pxo` | 16×16, top-left | original, project-owned | Phase 0 pipeline check only (to be created) |
 | `assets/art/ship_parts/autocannon.png` | `art_source/pixelorama/ship_parts/autocannon.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Autocannon (#85) |
 | `assets/art/ship_parts/laser.png` | `art_source/pixelorama/ship_parts/laser.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Laser (#85) |
+| `assets/art/ship_parts/salvage_arm.png` | `art_source/pixelorama/ship_parts/salvage_arm.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Salvage arm (#86) |
+| `assets/art/ship_parts/repair_drones.png` | `art_source/pixelorama/ship_parts/repair_drones.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Repair drones (#86) |
 | `assets/art/ship_parts/hull.png` | `art_source/pixelorama/ship_parts/hull.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Hull plate (#46) |
 | `assets/art/ship_parts/cockpit.png` | `art_source/pixelorama/ship_parts/cockpit.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Cockpit (#46) |
 | `assets/art/ship_parts/thruster.png` | `art_source/pixelorama/ship_parts/thruster.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Thruster (#46) |

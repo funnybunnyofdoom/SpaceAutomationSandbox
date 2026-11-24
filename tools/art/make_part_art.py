@@ -327,6 +327,25 @@ def laser(a):
     return b, d
 
 
+def salvage_arm(a):
+    b, d = panel(), Img()
+    d.disc(8, 12, 2.8, DARK); d.disc(8, 12, 1.6, a)
+    d.rect(7, 5, 8, 11, PLATE_L); d.vline(6, 5, 11, OUT); d.vline(9, 5, 11, OUT)
+    for x, y in ((6, 4), (5, 3), (4, 2), (4, 1), (9, 4), (10, 3), (11, 2), (11, 1)):  # an open claw facing forward
+        d.set(x, y, a); d.set(x, y + 1, shade(a, 0.6))
+    d.rect(7, 4, 8, 5, shade(a, 1.4))
+    return b, d
+
+
+def repair_drones(a):
+    b, d = panel(), Img()
+    d.rect(3, 3, 12, 12, DARK); d.outline(3, 3, 12, 12, OUT)
+    for cx, cy in ((5.5, 5.5), (10.5, 5.5), (5.5, 10.5), (10.5, 10.5)):  # four docked drones
+        d.disc(cx, cy, 1.8, shade(a, 0.7)); d.disc(cx, cy, 1.0, shade(a, 1.4))
+    d.hline(7, 8, 7, a); d.hline(7, 8, 8, a); d.vline(7, 6, 9, a); d.vline(8, 6, 9, a)
+    return b, d
+
+
 def research_lab(a):
     b, d = panel(), Img()
     for y in range(4, 10):  # a dish, open to the front
@@ -487,6 +506,7 @@ DRAW = {
     "solar_panel_mk2": lambda a: solar(a, 2), "solar_panel_mk3": lambda a: solar(a, 3),
     "battery_mk2": lambda a: battery(a, 2), "refinery_mk2": lambda a: refinery(a, 2),
     "fabricator_mk2": lambda a: fabricator(a, 2), "warp_gate": warp_gate, "gate_defense": gate_defense,
+    "salvage_arm": salvage_arm, "repair_drones": repair_drones,
     "autocannon": autocannon, "laser": laser,
     "research_lab": research_lab,
     "fuel_generator": fuel_generator,

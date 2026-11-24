@@ -71,8 +71,11 @@ public sealed partial class SectorState
         else craft.Stats = craft.Design.ComputeStats(Parts, craft.HealthList);
     }
 
-    /// <summary>Removes broken parts from a craft; their materials become debris (ejected mass).</summary>
-    private void BreakOff(CraftState craft, List<DesignCell> broken)
+    /// <summary>
+    /// Removes broken parts from a craft; their materials become debris (ejected mass), or go into
+    /// <paramref name="salvageInto"/> when they're cut off on purpose (#86).
+    /// </summary>
+    private void BreakOff(CraftState craft, List<DesignCell> broken, Inventory? salvageInto = null)
     {
         var parts = Parts!;
         // Never remove the last part: keep the one that was hit least (first in row order on ties).
@@ -91,7 +94,8 @@ public sealed partial class SectorState
             var part = parts.Get(cell.PartId);
             lostPort |= part.IsDockingPort;
             foreach (var (material, kg) in part.Bill.ToWholeKg())
-                _ejectedKg[material] = (_ejectedKg.TryGetValue(material, out var had) ? had : 0) + kg;
+                if (salvageInto is not null) salvageInto.Add(material, kg);
+                else _ejectedKg[material] = (_ejectedKg.TryGetValue(material, out var had) ? had : 0) + kg;
         }
         craft.PartsLost += broken.Count;
         craft.IntactDesign ??= craft.Design; // remembered so a shipyard can rebuild what broke off (#3)

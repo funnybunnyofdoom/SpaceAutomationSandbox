@@ -89,6 +89,12 @@ public sealed record PartDefinition
     /// <summary>How many ordinary parts' worth of weapon damage it takes (#84); 1 for an ordinary part.</summary>
     public double Toughness { get; init; } = 1;
 
+    /// <summary>How fast a salvage arm loads and cuts up wrecks (#86), kg per second.</summary>
+    public double SalvageRateKgPerS { get; init; }
+
+    /// <summary>Repair work repair drones do away from a shipyard (#86), kg per second.</summary>
+    public double RepairRateKgPerS { get; init; }
+
     /// <summary>Robots this part holds (robot bay, #13): they count as crew for running a craft, using power instead of food.</summary>
     public int RobotCount { get; init; }
 
@@ -141,7 +147,7 @@ public sealed class PartCatalog
             if (part.ThrustN < 0 || part.CargoCapacityKg < 0 || part.EnergyCapacityKJ < 0 || part.MiningRateKgPerS < 0
                 || part.FabricationRateKgPerS < 0 || part.RefiningRateKgPerS < 0
                 || part.PowerUseKW < 0 || part.PowerGenerationKW < 0 || part.EjectionRateKgPerS < 0
-                || part.CrewCapacity < 0 || part.FoodRateKgPerS < 0 || part.RobotCount < 0 || part.ResearchRatePerS < 0)
+                || part.CrewCapacity < 0 || part.FoodRateKgPerS < 0 || part.RobotCount < 0 || part.SalvageRateKgPerS < 0 || part.RepairRateKgPerS < 0 || part.ResearchRatePerS < 0)
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
             ValidateMaterials(part, materials);
             ValidateGenerator(part, materials);
