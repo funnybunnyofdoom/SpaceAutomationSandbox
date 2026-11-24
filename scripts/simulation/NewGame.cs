@@ -58,11 +58,34 @@ public static class NewGame
         ["composites"] = 5_000,
         ["slag"] = 5_000, // hull plates contain slag now (#7)
         ["fuel"] = 5_000, // for the cruise drive (#53)
-        ["food"] = 1_000, // for the yard's starting crew (#11): weeks at 3 kg per person per hour
-        ["water"] = 2_000,
+        // Food and water for the yard's crew depend on the starting supplies chosen (see SuppliesKg).
     };
 
-    public static NewGameResult Create(ulong seed, PartCatalog catalog, ShipDesign starterShip, ShipDesign starterShipyard)
+    /// <summary>
+    /// The yard's starting food and water (creator request, 2026-11-23): chosen on the new-game screen. Its 4 crew
+    /// eat 3 kg and drink 6 kg each an hour, so Lean lasts about 3.5 days, Standard about 17 and Generous about 52.
+    /// </summary>
+    public static (long FoodKg, long WaterKg) SuppliesKg(StartingSupplies supplies) => supplies switch
+    {
+        StartingSupplies.Lean => (1_000, 2_000),
+        StartingSupplies.Generous => (15_000, 30_000),
+        _ => (5_000, 10_000),
+    };
+
+    /// <summary>Everything the starting yard holds with these supplies: <see cref="StartingStockKg"/> plus food and water.</summary>
+    public static IReadOnlyDictionary<string, long> StartingYardStockKg(StartingSupplies supplies = StartingSupplies.Standard)
+    {
+        var (food, water) = SuppliesKg(supplies);
+        var all = new SortedDictionary<string, long>(StartingStockKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal)
+        {
+            [SectorState.FoodMaterial] = food,
+            [SectorState.WaterMaterial] = water,
+        };
+        return all;
+    }
+
+    public static NewGameResult Create(ulong seed, PartCatalog catalog, ShipDesign starterShip, ShipDesign starterShipyard,
+        StartingSupplies supplies = StartingSupplies.Standard)
     {
         Require(starterShip.Validate(catalog, DesignRole.Ship), starterShip);
         Require(starterShipyard.Validate(catalog, DesignRole.Station), starterShipyard);
@@ -96,6 +119,9 @@ public static class NewGame
             if (!catalog.Materials.Contains(material)) throw new InvalidOperationException($"Starting stock uses unknown material '{material}'.");
             yard.Inventory.Add(material, kg);
         }
+        var (food, water) = SuppliesKg(supplies);
+        yard.Inventory.Add(SectorState.FoodMaterial, food);
+        yard.Inventory.Add(SectorState.WaterMaterial, water);
 
         sector.RestoreCrew(yard.Id, StartingCrew, 0, 0, 0, 0, legacyNoCrew: false);
         return new NewGameResult(sector, player.Id, yard.Id);
@@ -105,4 +131,15 @@ public static class NewGame
     {
         if (errors.Count > 0) throw new InvalidOperationException($"Starter design '{design.Id}' is invalid: {string.Join("; ", errors)}");
     }
+}
+
+/// <summary>How much food and water the starting yard has (new-game option).</summary>
+public enum StartingSupplies
+{
+    /// <summary>About 3.5 days for the starting crew (the amount before this option existed).</summary>
+    Lean,
+    /// <summary>About 17 days (the default).</summary>
+    Standard,
+    /// <summary>About 52 days.</summary>
+    Generous,
 }

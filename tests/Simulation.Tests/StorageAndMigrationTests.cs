@@ -20,7 +20,7 @@ public class StorageAndMigrationTests
 
         Assert.True(yard.HasCargoLimit);
         Assert.Equal(400_000, yard.CargoCapacityKg);
-        Assert.Equal(400_000 - NewGame.StartingStockKg.Values.Sum(), yard.FreeCargoKg);
+        Assert.Equal(400_000 - NewGame.StartingYardStockKg().Values.Sum(), yard.FreeCargoKg);
     }
 
     [Fact]

@@ -56,6 +56,7 @@ public partial class Main : Node2D
     private static readonly Color OrbitColor = new(1f, 1f, 1f, 0.12f);
     private static readonly Color NameColor = new(0.8f, 0.8f, 0.85f);
     private static readonly Color FlameColor = new(1f, 0.75f, 0.3f, 0.9f);
+    private static readonly Color IonGlowColor = new(0.45f, 0.7f, 1f, 0.85f);
     private static readonly Color MarkerColor = new(0.4f, 1f, 0.6f);
     private static readonly Color TargetLineColor = new(0.4f, 1f, 0.6f, 0.25f);
     private static readonly Color RailColor = new(0.6f, 0.5f, 1f, 0.18f);
@@ -436,7 +437,7 @@ public partial class Main : Node2D
         });
         _saveScreen.Closed += () => { if (InMenu) ShowTitle(); else OpenPauseAgain(); };
         _newGame = new NewGameScreen();
-        _newGame.StartChosen += (name, seed, goals) => LeaveTitle(() => { StartNewGame(seed, name); _goalsOn = goals; });
+        _newGame.StartChosen += (name, seed, goals, supplies) => LeaveTitle(() => { StartNewGame(seed, name, supplies); _goalsOn = goals; });
         _newGame.BackChosen += ShowTitle;
         _pause = new PauseMenu();
         _pause.ResumeChosen += ResumeFromPause;
@@ -703,7 +704,7 @@ public partial class Main : Node2D
     /// <summary>A new game from a seed (#62); the default seed for command-line starts.</summary>
     private void StartNewGame() => StartNewGame(NewGame.DefaultSeed, "New game");
 
-    private void StartNewGame(ulong seed, string name)
+    private void StartNewGame(ulong seed, string name, StartingSupplies supplies = StartingSupplies.Standard)
     {
         _gameName = name;
         _goalsOn = false;
@@ -718,7 +719,7 @@ public partial class Main : Node2D
             return;
         }
 
-        var game = NewGame.Create(seed, _catalog, _starterDesign, _starterShipyard);
+        var game = NewGame.Create(seed, _catalog, _starterDesign, _starterShipyard, supplies);
         _sector = game.Sector;
         _lastEventShown = null; // events from before don't show as new (#36)
         _player = _sector.GetCraft(game.PlayerCraftId);
@@ -1011,6 +1012,7 @@ public partial class Main : Node2D
                          + (_sector.DeployBlocker(p.Id) is { } blocked ? blocked : $"{InputActions.Key1(InputActions.Deploy)} to deploy here") + "\n"
                        : "")
                    + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
+                   + (SectorState.PropellantStatus(p) is { Length: > 0 } drives ? drives + "\n" : "") // #80
                    + (SectorState.CrewStatus(p) is { Length: > 0 } crew ? crew + "\n" : "")
                    + (SectorState.NeedsRepair(p)
                        ? $"DAMAGE: {p.PartHealth.Count} part(s) damaged"
@@ -1338,11 +1340,14 @@ public partial class Main : Node2D
                 _crackLines.Add((World(rect.Position + rect.Size * new Vector2(0.2f, 0.15f)), World(rect.Position + rect.Size * new Vector2(0.75f, 0.85f)), Mathf.Max(1f, cellPx / 8)));
 
             // Only rear-facing thrusters fire on throttle (docs/06); others stay dark for now.
-            if (cell.PartId.StartsWith("thruster") && cell.Rotation == 0 && craft.Controls.Throttle > 0 && !craft.Controls.Brake) // Mk2/Mk3 too
+            // Engines facing back fire on throttle: thrusters (Mk2/Mk3 too), rockets and ion drives (#80), not when dry.
+            if (cell.Rotation == 0 && craft.Controls.Throttle > 0 && !craft.Controls.Brake
+                && (cell.PartId.StartsWith("thruster") || (cell.PartId is "rocket" or "ion_drive" && !craft.DryDrives.Contains(cell.PartId))))
             {
                 var flameTop = local + new Vector2(0, cellPx / 2);
+                var length = cell.PartId == "rocket" ? 1.6f : cell.PartId == "ion_drive" ? 1.2f : 0.9f;
                 BatchTriangle(World(flameTop + new Vector2(-cellPx * 0.3f, 0)), World(flameTop + new Vector2(cellPx * 0.3f, 0)),
-                    World(flameTop + new Vector2(0, cellPx * 0.9f)), FlameColor);
+                    World(flameTop + new Vector2(0, cellPx * length)), cell.PartId == "ion_drive" ? IonGlowColor : FlameColor);
             }
         }
     }

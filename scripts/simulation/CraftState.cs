@@ -92,6 +92,12 @@ public sealed class CraftState
     /// <summary>Energy this craft's converters used this tick (kJ), for the power panel. Not saved.</summary>
     public double ConvertedKJThisTick { get; internal set; }
 
+    /// <summary>Propellant burned but not yet a whole kg, by material (#80). Saved.</summary>
+    internal SortedDictionary<string, double> PropellantDebtKg { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Drives with an empty tank this tick, by part id (#80), for the HUD. Not saved.</summary>
+    public IReadOnlyList<string> DryDrives { get; internal set; } = Array.Empty<string>();
+
     /// <summary>Geothermal energy this craft's taps made this tick (kJ, #77). Not saved.</summary>
     public double GeothermalKJThisTick { get; internal set; }
 

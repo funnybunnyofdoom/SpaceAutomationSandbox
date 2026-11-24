@@ -218,7 +218,9 @@ public sealed partial class SectorState
             var thrustPowered = Operational(craft) && TryUsePower(craft, ThrustEnergyKJ(craft, reference));
             // Gravity pulls free-flying craft only; landed, docked and parked ones are held in place.
             var gravity = craft.IsDocked || craft.IsLanded || craft.IsOnRails ? Vector2D.Zero : GravityAt(craft.Position, TimeS);
-            FlightModel.Step(craft, FixedStepClock.TickSeconds, reference, thrustPowered, gravity, MovingMassKg(craft));
+            var thrust = DriveThrust(craft); // drives with an empty tank give nothing (#80)
+            FlightModel.Step(craft, FixedStepClock.TickSeconds, reference, thrustPowered, gravity, MovingMassKg(craft), thrust);
+            if (thrustPowered) BurnPropellant(craft, reference, velocityBefore);
             var tugs = TugDeltaV(craft, reference, FixedStepClock.TickSeconds);
             if (tugs.Length > 0)
             {

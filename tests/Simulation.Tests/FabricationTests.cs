@@ -46,7 +46,7 @@ public class FabricationTests
         Assert.True(yard.IsOnRails);
         Assert.Equal(primary.Id, yard.RailOrbit!.Parent);
         Assert.Equal(primary.RadiusM + NewGame.ShipyardAltitudeM, game.Sector.GetPosition(primary.Id).DistanceTo(yard.Position), 6);
-        Assert.Equal(NewGame.StartingStockKg, yard.Inventory.Kg);
+        Assert.Equal(NewGame.StartingYardStockKg(), yard.Inventory.Kg);
         Assert.False(game.Sector.GetCraft(game.PlayerCraftId).IsShipyard);
     }
 
@@ -187,7 +187,7 @@ public class FabricationTests
 
         Assert.True(sector.CancelBuild(yard.Id, order));
         Assert.False(sector.CancelBuild(yard.Id, order));
-        Assert.Equal(NewGame.StartingStockKg, yard.Inventory.Kg);
+        Assert.Equal(NewGame.StartingYardStockKg(), yard.Inventory.Kg);
     }
 
     [Fact]
@@ -196,7 +196,7 @@ public class FabricationTests
         var game = TestData.NewGame();
         var sector = game.Sector;
         var starting = new HashSet<CraftId>(sector.Crafts.Select(c => c.Id));
-        var expected = new SortedDictionary<string, long>(NewGame.StartingStockKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal);
+        var expected = new SortedDictionary<string, long>(NewGame.StartingYardStockKg().ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal);
         var design = TestData.StarterShip();
 
         for (var tick = 0; tick < 3000; tick++)
@@ -223,7 +223,7 @@ public class FabricationTests
         Assert.Contains(bad.Errors, e => e.Contains("control source"));
         Assert.False(notYard.Accepted);
         Assert.Contains(notYard.Errors, e => e.Contains("no fabricator"));
-        Assert.Equal(NewGame.StartingStockKg, game.Sector.GetCraft(game.ShipyardId).Inventory.Kg);
+        Assert.Equal(NewGame.StartingYardStockKg(), game.Sector.GetCraft(game.ShipyardId).Inventory.Kg);
     }
 
     [Fact]

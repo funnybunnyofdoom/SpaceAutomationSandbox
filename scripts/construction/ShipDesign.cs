@@ -29,6 +29,17 @@ public readonly record struct DesignCell(GridPos Pos, string PartId, int Rotatio
 /// <summary>A docking port: one berth. Position is the port cell; facing is where it opens.</summary>
 public readonly record struct DockingPortInfo(GridPos Pos, int Rotation);
 
+/// <summary>
+/// All propellant drives of one part type facing one way (#80): direction 0 forward, 1 right, 2 backward, 3 left;
+/// their thrust and propellant per second at full thrust, both scaled by health.
+/// </summary>
+public sealed record PropellantDrive(string PartId, int Direction, double ThrustN, IReadOnlyDictionary<string, double> KgPerS)
+{
+    /// <param name="units">How many of the part face this way, health included (two half-broken count as one).</param>
+    public static PropellantDrive From(PartDefinition part, int direction, double units) =>
+        new(part.Id, direction, part.ThrustN * units, part.PropellantKgPerS!.ToDictionary(kv => kv.Key, kv => kv.Value * units));
+}
+
 /// <summary>All converters of one part type on a craft (#78): their total power use (kW) and one batch, whole kg in and out (same mass).</summary>
 public sealed record ConverterStats(string PartId, double KW, IReadOnlyDictionary<string, long> InputsKg,
     IReadOnlyDictionary<string, long> OutputsKg, double KJPerBatch)
@@ -107,8 +118,12 @@ public sealed record ShipStats(
     int GateDefenseCount = 0,
     IReadOnlyList<GeneratorStats>? Generators = null,
     IReadOnlyList<ConverterStats>? Converters = null,
-    double GeothermalKW = 0)
+    double GeothermalKW = 0,
+    IReadOnlyList<PropellantDrive>? Drives = null)
 {
+    /// <summary>Drives that burn propellant (#80), by part type and facing; empty if none.</summary>
+    public IReadOnlyList<PropellantDrive> DriveList => Drives ?? Array.Empty<PropellantDrive>();
+
     /// <summary>Converters by part type (#78); empty if none.</summary>
     public IReadOnlyList<ConverterStats> ConverterList => Converters ?? Array.Empty<ConverterStats>();
 
@@ -277,6 +292,7 @@ public sealed class ShipDesign
         var generatorKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         var converterKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         double geothermal = 0;
+        var drives = new SortedDictionary<(string, int), double>();
         double research = 0, labPower = 0;
         var crew = 0;
         int clamps = 0, foundations = 0;
@@ -295,6 +311,8 @@ public sealed class ShipDesign
                 default: left += part.ThrustN * h; break;
             }
             if (cell.Rotation != 0) otherThrust += part.ThrustN * h;
+            if (part.PropellantKgPerS is { Count: > 0 } && part.ThrustN > 0) // #80: grouped by part and facing
+                drives[(part.Id, cell.Rotation & 3)] = drives.GetValueOrDefault((part.Id, cell.Rotation & 3)) + h;
             cargo += part.CargoCapacityKg;
             energy += part.EnergyCapacityKJ;
             fabrication += part.FabricationRateKgPerS * h;
@@ -356,7 +374,8 @@ public sealed class ShipDesign
             (int)Math.Floor(robots + 1e-9), robotPower, gates, research, labPower, defenses,
             generatorKW.Count == 0 ? null : generatorKW.Select(g => GeneratorStats.From(catalog.Get(g.Key), g.Value)).ToList(),
             converterKW.Count == 0 ? null : converterKW.Select(c => ConverterStats.From(catalog.Get(c.Key), c.Value)).ToList(),
-            geothermal);
+            geothermal,
+            drives.Count == 0 ? null : drives.Select(d => PropellantDrive.From(catalog.Get(d.Key.Item1), d.Key.Item2, d.Value)).ToList());
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

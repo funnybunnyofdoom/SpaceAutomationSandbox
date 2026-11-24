@@ -62,6 +62,9 @@ public sealed record PartDefinition
     /// <summary>Power a geothermal tap gives while anchored on a hot surface site or a body close to its star (#77), kW.</summary>
     public double GeothermalKW { get; init; }
 
+    /// <summary>Propellant a drive burns per second at full thrust (#80), kg by material; null for electric thrusters.</summary>
+    public Dictionary<string, double>? PropellantKgPerS { get; init; }
+
     // --- Converters (#78): a part that turns a batch of materials into others using power (e.g. an electrolyser). ---
 
     /// <summary>Most power one converter part uses (kW); it runs only on spare power (#78).</summary>
@@ -134,6 +137,12 @@ public sealed class PartCatalog
             ValidateMaterials(part, materials);
             ValidateGenerator(part, materials);
             ValidateConverter(part, materials);
+            foreach (var (id, kg) in part.PropellantKgPerS ?? new Dictionary<string, double>()) // #80
+            {
+                if (!materials.Contains(id)) throw new FormatException($"Drive '{part.Id}' burns unknown material '{id}'.");
+                if (!(kg > 0) || double.IsInfinity(kg)) throw new FormatException($"Drive '{part.Id}' needs a positive propellant rate for '{id}'.");
+                if (!(part.ThrustN > 0)) throw new FormatException($"Part '{part.Id}' burns propellant but gives no thrust.");
+            }
             if (!_parts.TryAdd(part.Id, part)) throw new FormatException($"Duplicate part id '{part.Id}'.");
             _ordered.Add(part);
         }

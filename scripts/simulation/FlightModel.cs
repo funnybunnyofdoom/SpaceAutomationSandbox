@@ -1,5 +1,7 @@
 using System;
 
+using SpaceAutomationSandbox.Construction;
+
 namespace SpaceAutomationSandbox.Simulation;
 
 /// <summary>
@@ -28,9 +30,11 @@ public static class FlightModel
     /// <param name="thrustAvailable">False when the craft has no power for its thrusters this tick: it can still turn.</param>
     /// <param name="gravity">Local gravity on the craft this tick (#32), applied before the controls so the brake can cancel it.</param>
     /// <param name="massKg">Mass to move (0: the craft's own); a craft with others docked to it moves them too (#29).</param>
+    /// <param name="thrust">The thrust to use this tick if not the craft's full stats (#80: drives with an empty tank left out).</param>
     public static void Step(CraftState craft, double dt, Vector2D brakeReferenceVelocity = default, bool thrustAvailable = true,
-        Vector2D gravity = default, double massKg = 0)
+        Vector2D gravity = default, double massKg = 0, ShipStats? thrust = null)
     {
+        var stats = thrust ?? craft.Stats;
         var mass = massKg > 0 ? massKg : craft.MassKg;
         craft.PreviousPosition = craft.Position;
         craft.PreviousHeadingRad = craft.HeadingRad;
@@ -40,7 +44,7 @@ public static class FlightModel
         craft.HeadingRad = WrapAngle(craft.HeadingRad + controls.Turn * TurnRateRadPerS * dt);
 
         // Cargo counts: a loaded ship accelerates and brakes more slowly.
-        var maxDeltaV = craft.Stats.TotalThrustN / mass * dt;
+        var maxDeltaV = stats.TotalThrustN / mass * dt;
         var velocity = craft.Velocity + gravity * dt;
         if (controls.Brake)
         {
@@ -53,7 +57,6 @@ public static class FlightModel
         }
         else
         {
-            var stats = craft.Stats;
             var forward = ForwardFromHeading(craft.HeadingRad);
             var right = RightFromHeading(craft.HeadingRad);
             var perKg = dt / mass;

@@ -369,6 +369,33 @@ def reactor(a):
     return b, d
 
 
+def rocket(a):
+    b = Img()
+    b.rect(2, 0, 13, 7, PLATE); b.outline(2, 0, 13, 7, OUT); b.hline(3, 12, 1, PLATE_L)
+    d = Img()
+    d.rect(4, 2, 6, 6, (232, 244, 255, 255)); d.rect(9, 2, 11, 6, (159, 216, 255, 255))  # hydrogen and oxygen feeds
+    d.hline(4, 6, 2, OUT); d.hline(9, 11, 2, OUT)
+    for i, y in enumerate(range(8, 16)):  # a big bell for the big push
+        half = 2 + (i * 5 + 3) // 7
+        d.hline(8 - half, 7 + half, y, PLATE if i < 5 else SHADOW)
+        d.set(8 - half, y, OUT); d.set(7 + half, y, OUT); d.set(9 - half, y, HILITE)
+    for i, y in enumerate(range(12, 16)):
+        half = 2 + i // 2
+        d.hline(8 - half, 7 + half, y, shade(a, 1.3) if i >= 2 else a)
+    return b, d
+
+
+def ion_drive(a):
+    b, d = panel(), Img()
+    d.rect(3, 2, 12, 9, shade(a, 0.45)); d.outline(3, 2, 12, 9, OUT)  # power conditioning
+    for x in (5, 8, 11): d.vline(x, 3, 8, RIVET)
+    d.rect(4, 10, 11, 14, DARK); d.outline(4, 10, 11, 14, OUT)  # grid
+    for x in range(5, 11, 2):
+        for y in range(11, 14, 2): d.set(x, y, a)
+    d.hline(5, 10, 14, shade(a, 1.5))  # blue glow at the back
+    return b, d
+
+
 DRAW = {
     "hull": hull, "cockpit": cockpit, "thruster": thruster, "battery": battery, "solar_panel": solar,
     "cargo": cargo, "drill": drill, "fabricator": fabricator, "anchor_clamp": anchor_clamp,
@@ -383,6 +410,7 @@ DRAW = {
     "fuel_generator": fuel_generator,
     "electrolyser": electrolyser, "fuel_cell": fuel_cell,
     "geothermal_tap": geothermal_tap, "reactor": reactor,
+    "rocket": rocket, "ion_drive": ion_drive,
 }
 
 

@@ -96,3 +96,27 @@ public sealed class GoalListTests
         Assert.False(old.Header!.GoalsOn);
     }
 }
+
+/// <summary>Starting supplies option (creator request 2026-11-23): food and water for the yard's crew.</summary>
+public sealed class StartingSuppliesTests
+{
+    [Theory]
+    [InlineData(StartingSupplies.Lean, 1_000, 2_000)]
+    [InlineData(StartingSupplies.Standard, 5_000, 10_000)]
+    [InlineData(StartingSupplies.Generous, 15_000, 30_000)]
+    public void The_yard_starts_with_the_chosen_food_and_water(StartingSupplies supplies, long food, long water)
+    {
+        var game = NewGame.Create(NewGame.DefaultSeed, TestData.Catalog(), TestData.StarterShip(), TestData.StarterShipyard(), supplies);
+        var yard = game.Sector.GetCraft(game.ShipyardId);
+        Assert.Equal(food, yard.Inventory["food"]);
+        Assert.Equal(water, yard.Inventory["water"]);
+        Assert.Equal(NewGame.StartingYardStockKg(supplies), yard.Inventory.Kg);
+    }
+
+    [Fact]
+    public void Standard_is_the_default_and_more_than_before()
+    {
+        var game = TestData.NewGame();
+        Assert.Equal(5_000, game.Sector.GetCraft(game.ShipyardId).Inventory["food"]);
+    }
+}

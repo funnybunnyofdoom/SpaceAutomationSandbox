@@ -179,6 +179,7 @@ public static class SaveGameSerializer
                     CrewGrowthS = c.CrewGrowthProgressS,
                     LegacyNoCrew = c.LegacyNoCrew,
                     CruiseFuelRemainderKg = c.CruiseFuelRemainderKg,
+                    PropellantDebtKg = c.PropellantDebtKg.Count > 0 ? new SortedDictionary<string, double>(c.PropellantDebtKg, StringComparer.Ordinal) : null,
                     MiningRemainderKg = c.MiningRemainderKg,
                     RefiningBatch = c.RefiningBatch is { } rb
                         ? new BatchDto
@@ -324,6 +325,11 @@ public static class SaveGameSerializer
                 sector.RestoreHealth(craft.Id,
                     (c.PartHealth ?? new List<HealthDto>()).ToDictionary(h => new GridPos(h.X, h.Y), h => h.Health), c.PartsLost);
                 craft.CruiseFuelRemainderKg = c.CruiseFuelRemainderKg;
+                foreach (var (m, kg) in c.PropellantDebtKg ?? new SortedDictionary<string, double>()) // #80
+                {
+                    if (kg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has a propellant remainder of {kg} kg.");
+                    if (kg > 0) craft.PropellantDebtKg[m] = kg;
+                }
                 if (c.RailOrbit is { } rail) sector.RestoreRails(craft.Id, OrbitFromDto(rail));
                 foreach (var (material, kg) in c.InventoryKg ?? new SortedDictionary<string, long>())
                 {
@@ -708,6 +714,10 @@ public static class SaveGameSerializer
         /// <summary>v19 (later addition, optional, #78): energy put into each converter's current batch, by part id.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public SortedDictionary<string, double>? ConverterProgressKJ { get; set; }
+
+        /// <summary>v19 (later addition, optional, #80): propellant burned but not yet a whole kg, by material.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public SortedDictionary<string, double>? PropellantDebtKg { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] // only on craft from pre-v10 saves
         public bool LegacyFreePower { get; set; }

@@ -113,6 +113,7 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 19 (later addition, optional) | `header` (`name`, `savedAtUtc`, `playTimeS`, `tick`, `seed`) before `sector` (#60) | Saves without one are listed by file name and time. |
 | 19 (later addition, optional) | `header.gameName`: the game's name from the new-game screen (#62) | Without it the game is named after the save. |
 | 19 (later addition, optional) | `header.goalsOn`, `header.goalsDone`: the new-player goal list and the ids of goals met (#65) | Without them the goal list is off. |
+| 19 (later addition, optional) | `crafts[].propellantDebtKg`: propellant burned but not yet a whole kg, by material (#80) | Without it the fractions start at 0. |
 | 19 (later addition, optional) | `crafts[].converterProgressKJ`: energy put into each converter's current batch, by part id (#78) | Without it converters start their batch again. |
 | 19 (later addition, optional) | `crafts[].generatorBankKJ`: energy left from generator batches already burned, by part id (#75) | Without it the generators start empty. |
 | 19 (later addition, optional) | `sector.factions` (civilizations met: culture, home star, baseline, attitude, grievance, next decision), `sector.laws`, `sector.events` (the log), and `crafts[].gateLostStarId` (a gate whose far end a raid destroyed) (#36) | Without them: no civilizations, no laws, an empty log. |
