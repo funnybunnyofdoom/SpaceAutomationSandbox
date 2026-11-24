@@ -54,12 +54,14 @@ public sealed partial class SectorState
         {
             var root = craft.PowerRoot!;
             root.PowerMembers.Add(craft);
-            craft.InShadow = craft.Stats.PowerGenerationKW > 0 && InShadowAt(craft.Position);
-            craft.SolarFactor = craft.Stats.PowerGenerationKW > 0 ? SolarFactorAt(craft.Position) * (craft.InShadow ? ShadowLight : 1) : 1;
+            var sunlit = craft.Stats.PowerGenerationKW > 0 || craft.Stats.StellarHeatKW > 0;
+            craft.InShadow = sunlit && InShadowAt(craft.Position);
+            craft.SolarFactor = sunlit ? SolarFactorAt(craft.Position) * (craft.InShadow ? ShadowLight : 1) : 1;
+            craft.StellarHeatKJThisTick = craft.Stats.StellarHeatKW * StellarHeatShare(craft.SolarFactor) * FixedStepClock.TickSeconds; // #77
             craft.SolarKJThisTick = craft.Stats.PowerGenerationKW * craft.SolarFactor * FixedStepClock.TickSeconds;
             craft.GeothermalKJThisTick = craft.Stats.GeothermalKW > 0 && GeothermalHeat(craft) is null
                 ? craft.Stats.GeothermalKW * FixedStepClock.TickSeconds : 0; // #77: steady while on a hot spot or near the star
-            root.EnergyPoolKJ += craft.StoredEnergyKJ + craft.SolarKJThisTick + craft.GeothermalKJThisTick;
+            root.EnergyPoolKJ += craft.StoredEnergyKJ + craft.SolarKJThisTick + craft.GeothermalKJThisTick + craft.StellarHeatKJThisTick;
             root.NetworkStartKJ += craft.StoredEnergyKJ;
             root.NetworkCapacityKJ += craft.Stats.EnergyCapacityKJ;
         }
@@ -67,6 +69,13 @@ public sealed partial class SectorState
 
     /// <summary>Bodies this close to their star (sunlight at least this many times Home's) are hot all over (#77).</summary>
     public const double HotSunlightFactor = 2.0;
+
+    /// <summary>
+    /// Share of a stellar heat collector's rating it gives at this much sunlight (#77, the creator's choice: only
+    /// very close to a star): nothing below <see cref="HotSunlightFactor"/>, rising to all of it at twice that.
+    /// </summary>
+    public static double StellarHeatShare(double sunlightFactor) =>
+        Math.Clamp((sunlightFactor - HotSunlightFactor) / HotSunlightFactor, 0, 1);
 
     /// <summary>A body near enough its star that geothermal taps work anywhere on it (#77).</summary>
     public bool IsHotBody(CelestialBodyState body) =>
@@ -277,7 +286,7 @@ public sealed partial class SectorState
             if (capacity > root.EnergyPoolKJ) root.EnergyPoolKJ += Generate(root, capacity - root.EnergyPoolKJ);
             var pool = root.EnergyPoolKJ;
             double made = 0;
-            foreach (var member in root.PowerMembers) made += member.SolarKJThisTick + member.GeothermalKJThisTick + member.GeneratedKJThisTick;
+            foreach (var member in root.PowerMembers) made += member.SolarKJThisTick + member.GeothermalKJThisTick + member.StellarHeatKJThisTick + member.GeneratedKJThisTick;
             root.NetworkUsedKJThisTick = Math.Max(0, root.NetworkStartKJ + made - pool);
             foreach (var member in root.PowerMembers)
             {
@@ -293,11 +302,12 @@ public sealed partial class SectorState
     {
         if (craft.LegacyFreePower) return "power: unlimited (old save)";
         var stats = craft.Stats;
-        if (stats.EnergyCapacityKJ <= 0 && stats.PowerGenerationKW <= 0 && stats.GeneratorKW <= 0 && stats.GeothermalKW <= 0 && stats.TotalPowerUseKW <= 0) return "";
+        if (stats.EnergyCapacityKJ <= 0 && stats.PowerGenerationKW <= 0 && stats.GeneratorKW <= 0 && stats.GeothermalKW <= 0 && stats.StellarHeatKW <= 0 && stats.TotalPowerUseKW <= 0) return "";
         return $"power {craft.StoredEnergyKJ / 1000:0.0}/{stats.EnergyCapacityKJ / 1000:0} MJ, solar {stats.PowerGenerationKW * craft.SolarFactor:0} kW"
                + (craft.SolarFactor != 1 ? $" ({craft.SolarFactor * 100:0}% sunlight{(craft.InShadow ? ", in shadow" : "")})" : "")
                + (stats.GeneratorKW > 0 ? $", generators {craft.GeneratedKJThisTick / FixedStepClock.TickSeconds:0}/{stats.GeneratorKW:0} kW" : "")
-               + (stats.GeothermalKW > 0 ? $", geothermal {craft.GeothermalKJThisTick / FixedStepClock.TickSeconds:0}/{stats.GeothermalKW:0} kW" : "") + ", "
+               + (stats.GeothermalKW > 0 ? $", geothermal {craft.GeothermalKJThisTick / FixedStepClock.TickSeconds:0}/{stats.GeothermalKW:0} kW" : "")
+               + (stats.StellarHeatKW > 0 ? $", stellar heat {craft.StellarHeatKJThisTick / FixedStepClock.TickSeconds:0}/{stats.StellarHeatKW:0} kW" : "") + ", "
                + $"max use {stats.TotalPowerUseKW:0} kW" + (craft.PowerShort ? "  NO POWER" : "");
     }
 }

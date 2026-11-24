@@ -58,13 +58,13 @@ public sealed partial class SectorState
             foreach (var (material, perSecond) in drive.KgPerS)
             {
                 var debt = craft.PropellantDebtKg.GetValueOrDefault(material) + perSecond * use * FixedStepClock.TickSeconds;
-                var whole = (long)Math.Floor(debt);
+                var whole = (long)Math.Floor(debt + 1e-9); // tiny tolerance: 1,200 × 0.0025 kg must make 3 kg, not 2.999…
                 if (whole > 0)
                 {
                     var taken = Math.Min(whole, craft.Inventory[material]);
                     craft.Inventory.TryRemove(new Dictionary<string, long> { [material] = taken });
                     _ejectedKg[material] = _ejectedKg.GetValueOrDefault(material) + taken;
-                    debt = taken == whole ? debt - whole : 0; // ran out mid-tick: the rest of the burn didn't happen
+                    debt = taken == whole ? Math.Max(0, debt - whole) : 0; // ran out mid-tick: the rest of the burn didn't happen
                 }
                 if (debt > 0) craft.PropellantDebtKg[material] = debt; else craft.PropellantDebtKg.Remove(material);
             }

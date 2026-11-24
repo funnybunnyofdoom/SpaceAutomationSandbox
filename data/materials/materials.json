@@ -19,6 +19,9 @@
     { "id": "oxygen",      "name": "Oxygen",      "placeholderColor": "#9fd8ff" },
     { "id": "uranium_ore", "name": "Uranium ore", "placeholderColor": "#7fbf3f" },
     { "id": "fuel_rods",   "name": "Fuel rods",   "placeholderColor": "#b8f060" },
-    { "id": "spent_fuel",  "name": "Spent fuel",  "placeholderColor": "#5f6f3f" }
+    { "id": "spent_fuel",  "name": "Spent fuel",  "placeholderColor": "#5f6f3f" },
+    { "id": "methane_ice", "name": "Methane ice", "placeholderColor": "#d8f0e0" },
+    { "id": "methane",     "name": "Methane",     "placeholderColor": "#f0f0b0" },
+    { "id": "deuterium",   "name": "Deuterium",   "placeholderColor": "#c0b0ff" }
   ]
 }

@@ -119,7 +119,8 @@ public sealed record ShipStats(
     IReadOnlyList<GeneratorStats>? Generators = null,
     IReadOnlyList<ConverterStats>? Converters = null,
     double GeothermalKW = 0,
-    IReadOnlyList<PropellantDrive>? Drives = null)
+    IReadOnlyList<PropellantDrive>? Drives = null,
+    double StellarHeatKW = 0)
 {
     /// <summary>Drives that burn propellant (#80), by part type and facing; empty if none.</summary>
     public IReadOnlyList<PropellantDrive> DriveList => Drives ?? Array.Empty<PropellantDrive>();
@@ -204,7 +205,7 @@ public sealed class ShipDesign
 
     private static bool IsStationFacility(PartDefinition p) =>
         p.FabricationRateKgPerS > 0 || p.IsDockingPort || p.CargoCapacityKg > 0 || p.RefiningRateKgPerS > 0
-        || p.CrewCapacity > 0 || p.FoodRateKgPerS > 0 || p.IsWarpGate || p.ResearchRatePerS > 0 || p.IsGateDefense || p.GeneratorKW > 0 || p.ConverterKW > 0 || p.GeothermalKW > 0;
+        || p.CrewCapacity > 0 || p.FoodRateKgPerS > 0 || p.IsWarpGate || p.ResearchRatePerS > 0 || p.IsGateDefense || p.GeneratorKW > 0 || p.ConverterKW > 0 || p.GeothermalKW > 0 || p.StellarHeatKW > 0;
 
     /// <summary>Human-readable problems for the given role; empty means the design is usable in that role.</summary>
     /// <param name="requireConnected">
@@ -220,6 +221,8 @@ public sealed class ShipDesign
                        + string.Join(", ", loose.Take(5).Select(p => $"({p.X},{p.Y})")) + (loose.Count > 5 ? ", …" : "") + ".");
 
         int controlSources = 0, foundations = 0, facilities = 0;
+
+        var largeArrays = 0;
         double forwardThrust = 0;
         foreach (var cell in Cells)
         {
@@ -232,6 +235,7 @@ public sealed class ShipDesign
             if (cell.Rotation == 0) forwardThrust += part.ThrustN;
             if (part.IsFoundation) foundations++;
             if (IsStationFacility(part)) facilities++;
+            if (part.Id == "solar_array") largeArrays++;
         }
 
         switch (role)
@@ -241,6 +245,7 @@ public sealed class ShipDesign
                 if (forwardThrust <= 0) errors.Add("Needs at least one rear-facing thruster (rotation 0) to push it forward.");
                 // A foundation would lock the ship down for good the first time it lands.
                 if (foundations > 0) errors.Add("Foundations make a fixed structure; a ship can't have one (use an anchor clamp).");
+                if (largeArrays > 0) errors.Add("Large solar arrays are too fragile to fly: stations only (use solar panels on ships)."); // #76
                 break;
             case DesignRole.Station:
                 if (facilities == 0) errors.Add("A station needs a fabricator, docking port or cargo bay (or a refinery).");
@@ -291,7 +296,7 @@ public sealed class ShipDesign
         var defenses = 0;
         var generatorKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         var converterKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
-        double geothermal = 0;
+        double geothermal = 0, stellarHeat = 0;
         var drives = new SortedDictionary<(string, int), double>();
         double research = 0, labPower = 0;
         var crew = 0;
@@ -348,6 +353,7 @@ public sealed class ShipDesign
             if (part.GeneratorKW > 0) generatorKW[part.Id] = generatorKW.GetValueOrDefault(part.Id) + part.GeneratorKW * h; // #75
             if (part.ConverterKW > 0) converterKW[part.Id] = converterKW.GetValueOrDefault(part.Id) + part.ConverterKW * h; // #78
             geothermal += part.GeothermalKW * h; // #77
+            stellarHeat += part.StellarHeatKW * h;
             if (part.IsAnchorClamp) clamps++;
             if (part.IsFoundation) foundations++;
             if (part.IsDockingPort) ports.Add(new DockingPortInfo(cell.Pos, cell.Rotation));
@@ -375,7 +381,8 @@ public sealed class ShipDesign
             generatorKW.Count == 0 ? null : generatorKW.Select(g => GeneratorStats.From(catalog.Get(g.Key), g.Value)).ToList(),
             converterKW.Count == 0 ? null : converterKW.Select(c => ConverterStats.From(catalog.Get(c.Key), c.Value)).ToList(),
             geothermal,
-            drives.Count == 0 ? null : drives.Select(d => PropellantDrive.From(catalog.Get(d.Key.Item1), d.Key.Item2, d.Value)).ToList());
+            drives.Count == 0 ? null : drives.Select(d => PropellantDrive.From(catalog.Get(d.Key.Item1), d.Key.Item2, d.Value)).ToList(),
+            stellarHeat);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

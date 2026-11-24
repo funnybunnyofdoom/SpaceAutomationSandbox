@@ -108,11 +108,11 @@ public static class SectorGenerator
         AddBody(sector, system, giant.Id, "Giant-a", BodyKind.Moon, MoonDensityKgPerM3, 900, 1_200, 25_000, 30_000, 1_500, 2_400, true,
             new Dictionary<string, long> { ["silicate"] = 500_000, ["copper_ore"] = 300_000 });
         AddBody(sector, system, giant.Id, "Giant-b", BodyKind.Moon, IceDensityKgPerM3, 1_000, 1_300, 40_000, 50_000, 2_800, 3_600, true,
-            new Dictionary<string, long> { ["ice"] = 600_000 });
+            new Dictionary<string, long> { ["ice"] = 600_000, ["methane_ice"] = 150_000 }); // #78
 
         Body(sector, "Rime", BodyKind.Planet, system.Range(4_000, 5_000), IceDensityKgPerM3, true,
             AroundStar(star.Id, system.Range(1_480_000, 1_520_000), homePhase + system.Range(-0.15, 0.15)),
-            new Dictionary<string, long> { ["ice"] = 3_000_000, ["silicate"] = 500_000 });
+            new Dictionary<string, long> { ["ice"] = 3_000_000, ["silicate"] = 500_000, ["methane_ice"] = 800_000 }); // #78
 
         return sector;
     }
@@ -170,7 +170,7 @@ public static class SectorGenerator
 
         Body(sector, $"{name} II", BodyKind.Planet, rng.Range(4_000, 5_500), IceDensityKgPerM3, true,
             AroundStar(star.Id, rng.Range(900_000, 1_100_000), phase + rng.Range(-0.3, 0.3)),
-            new Dictionary<string, long> { ["ice"] = 4_000_000, ["silicate"] = 800_000 });
+            new Dictionary<string, long> { ["ice"] = 4_000_000, ["silicate"] = 800_000, ["methane_ice"] = 1_200_000 }); // #78
 
         if (rng.Range(0, 1) < 0.5)
             Body(sector, $"{name} III", BodyKind.Planet, rng.Range(3_000, 4_500), PlanetDensityKgPerM3, true,

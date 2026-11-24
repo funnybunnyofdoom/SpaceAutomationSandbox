@@ -65,6 +65,9 @@ public sealed record PartDefinition
     /// <summary>Propellant a drive burns per second at full thrust (#80), kg by material; null for electric thrusters.</summary>
     public Dictionary<string, double>? PropellantKgPerS { get; init; }
 
+    /// <summary>Most power a stellar heat collector gives (#77), kW: nothing below twice Home's sunlight, full at four times.</summary>
+    public double StellarHeatKW { get; init; }
+
     // --- Converters (#78): a part that turns a batch of materials into others using power (e.g. an electrolyser). ---
 
     /// <summary>Most power one converter part uses (kW); it runs only on spare power (#78).</summary>

@@ -396,6 +396,69 @@ def ion_drive(a):
     return b, d
 
 
+def solar_array(a):
+    b = Img(); b.rect(0, 0, 15, 15, (150, 156, 168, 255)); b.outline(0, 0, 15, 15, OUT)
+    d = Img()
+    d.rect(1, 1, 14, 14, shade(a, 0.6))
+    for y in range(1, 15):
+        for x in range(1, 15):
+            if x % 2 == 0 and y % 2 == 0: d.set(x, y, shade(a, 1.15))  # fine cells: thin film
+    d.vline(7, 1, 14, (150, 156, 168, 255)); d.vline(8, 1, 14, (110, 116, 128, 255))  # fold line
+    for k in range(2, 6): d.set(k, k - 1, shade(a, 1.6))
+    return b, d
+
+
+def heat_collector(a):
+    b, d = panel(), Img()
+    for y in range(2, 14):  # a curved mirror trough facing forward
+        half = 6 - abs(y - 7) // 2
+        d.hline(8 - half, 7 + half, y, a if y < 7 else shade(a, 0.75))
+    d.hline(2, 13, 2, shade(a, 1.5))
+    d.vline(7, 3, 12, (255, 240, 200, 255)); d.vline(8, 3, 12, OUT)  # receiver tube
+    return b, d
+
+
+def methane_generator(a):
+    b, d = panel(), Img()
+    d.rect(3, 6, 12, 13, shade(a, 0.55)); d.outline(3, 6, 12, 13, OUT)
+    d.rect(4, 8, 6, 12, a); d.rect(9, 8, 11, 12, (159, 216, 255, 255))  # methane and oxygen tanks
+    d.vline(4, 8, 12, shade(a, 1.4))
+    d.rect(7, 2, 8, 6, DARK); d.hline(7, 8, 1, OUT); d.set(8, 2, (255, 170, 60, 255))
+    return b, d
+
+
+def methalox_rocket(a):
+    b, d = rocket(a)
+    d.rect(4, 2, 6, 6, a); d.rect(9, 2, 11, 6, (159, 216, 255, 255))  # methane and oxygen feeds
+    d.hline(4, 6, 2, OUT); d.hline(9, 11, 2, OUT)
+    return b, d
+
+
+def nuclear_rocket(a):
+    b, d = rocket(a)
+    d.rect(3, 1, 12, 6, shade(a, 0.5)); d.outline(3, 1, 12, 6, OUT)  # reactor core housing
+    d.rect(6, 2, 9, 5, (235, 255, 180, 255)); d.rect(7, 3, 8, 4, a)
+    return b, d
+
+
+def isotope_separator(a):
+    b, d = panel(), Img()
+    for x0 in (3, 7, 11):  # centrifuge columns
+        d.rect(x0, 2, x0 + 2, 13, shade(a, 0.6)); d.vline(x0, 2, 13, shade(a, 1.3)); d.hline(x0, x0 + 2, 2, OUT)
+    d.hline(3, 13, 8, RIVET)
+    d.set(4, 12, (63, 143, 217, 255)); d.set(12, 4, (235, 230, 255, 255))
+    return b, d
+
+
+def fusion_reactor(a):
+    b, d = panel(), Img()
+    d.ring(8, 8, 4.5, 7.0, shade(a, 0.5)); d.ring(8, 8, 6.4, 7.0, OUT)  # torus
+    d.ring(8, 8, 5.0, 6.0, a)
+    d.disc(8, 8, 2.2, (40, 30, 70, 255)); d.disc(8, 8, 1.2, (255, 240, 255, 255))  # plasma
+    for x, y in ((8, 1), (8, 14), (1, 8), (14, 8)): d.set(x, y, RIVET)
+    return b, d
+
+
 DRAW = {
     "hull": hull, "cockpit": cockpit, "thruster": thruster, "battery": battery, "solar_panel": solar,
     "cargo": cargo, "drill": drill, "fabricator": fabricator, "anchor_clamp": anchor_clamp,
@@ -411,6 +474,9 @@ DRAW = {
     "electrolyser": electrolyser, "fuel_cell": fuel_cell,
     "geothermal_tap": geothermal_tap, "reactor": reactor,
     "rocket": rocket, "ion_drive": ion_drive,
+    "solar_array": solar_array, "heat_collector": heat_collector, "methane_generator": methane_generator,
+    "methalox_rocket": methalox_rocket, "nuclear_rocket": nuclear_rocket, "isotope_separator": isotope_separator,
+    "fusion_reactor": fusion_reactor,
 }
 
 

@@ -1342,10 +1342,10 @@ public partial class Main : Node2D
             // Only rear-facing thrusters fire on throttle (docs/06); others stay dark for now.
             // Engines facing back fire on throttle: thrusters (Mk2/Mk3 too), rockets and ion drives (#80), not when dry.
             if (cell.Rotation == 0 && craft.Controls.Throttle > 0 && !craft.Controls.Brake
-                && (cell.PartId.StartsWith("thruster") || (cell.PartId is "rocket" or "ion_drive" && !craft.DryDrives.Contains(cell.PartId))))
+                && (cell.PartId.StartsWith("thruster") || (cell.PartId is "rocket" or "ion_drive" or "methalox_rocket" or "nuclear_rocket" && !craft.DryDrives.Contains(cell.PartId))))
             {
                 var flameTop = local + new Vector2(0, cellPx / 2);
-                var length = cell.PartId == "rocket" ? 1.6f : cell.PartId == "ion_drive" ? 1.2f : 0.9f;
+                var length = cell.PartId is "rocket" or "methalox_rocket" ? 1.6f : cell.PartId is "ion_drive" or "nuclear_rocket" ? 1.2f : 0.9f;
                 BatchTriangle(World(flameTop + new Vector2(-cellPx * 0.3f, 0)), World(flameTop + new Vector2(cellPx * 0.3f, 0)),
                     World(flameTop + new Vector2(0, cellPx * length)), cell.PartId == "ion_drive" ? IonGlowColor : FlameColor);
             }

@@ -98,7 +98,7 @@ public partial class PowerPanel : PanelContainer
         text.AppendLine($"\n{heading}: {string.Join(", ", members.Select(m => m.Name))}");
         if (members.Any(m => m.LegacyFreePower)) { text.AppendLine("   unlimited power (from an old save)"); return; }
 
-        var solar = members.Sum(m => m.SolarKJThisTick + m.GeothermalKJThisTick);
+        var solar = members.Sum(m => m.SolarKJThisTick + m.GeothermalKJThisTick + m.StellarHeatKJThisTick);
         var generated = members.Sum(m => m.GeneratedKJThisTick);
         var used = root.NetworkUsedKJThisTick;
         var stored = members.Sum(m => m.StoredEnergyKJ);
@@ -111,6 +111,9 @@ public partial class PowerPanel : PanelContainer
         foreach (var m in members.Where(m => m.Stats.PowerGenerationKW > 0))
             text.AppendLine($"      {m.Name}: solar {Kw(m.SolarKJThisTick)} of {m.Stats.PowerGenerationKW:0} kW ({m.SolarFactor * 100:0}% sunlight)"
                             + (m.InShadow ? $"  IN SHADOW (light dimmed to {SectorState.ShadowLight * 100:0}%)" : ""));
+        foreach (var m in members.Where(m => m.Stats.StellarHeatKW > 0)) // #77
+            text.AppendLine($"      {m.Name}: stellar heat {Kw(m.StellarHeatKJThisTick)} of {m.Stats.StellarHeatKW:0} kW"
+                            + (m.StellarHeatKJThisTick <= 0 ? $"   (needs at least {SectorState.HotSunlightFactor * 100:0}% sunlight: closer to the star)" : ""));
         foreach (var m in members.Where(m => m.Stats.GeothermalKW > 0)) // #77
             text.AppendLine($"      {m.Name}: geothermal {Kw(m.GeothermalKJThisTick)} of {m.Stats.GeothermalKW:0} kW"
                             + (sector.GeothermalHeat(m) is { } why ? $"   ({why})" : ""));
@@ -124,7 +127,7 @@ public partial class PowerPanel : PanelContainer
                                 + (energyLeft <= 0 ? $"NO FUEL (burns {string.Join(" + ", g.BurnsKg.Select(b => $"{b.Value} kg {b.Key}"))})"
                                     : $"{fuel} left, {Hours(energyLeft / g.KW)} at full output"));
             }
-        if (members.All(m => m.Stats.PowerGenerationKW <= 0 && m.Stats.GeneratorList.Count == 0 && m.Stats.GeothermalKW <= 0)) text.AppendLine("      none: only batteries");
+        if (members.All(m => m.Stats.PowerGenerationKW <= 0 && m.Stats.GeneratorList.Count == 0 && m.Stats.GeothermalKW <= 0 && m.Stats.StellarHeatKW <= 0)) text.AppendLine("      none: only batteries");
 
         foreach (var m in members.Where(m => m.Stats.ConverterList.Count > 0)) // #78
             foreach (var c in m.Stats.ConverterList)

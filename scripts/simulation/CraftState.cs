@@ -98,6 +98,9 @@ public sealed class CraftState
     /// <summary>Drives with an empty tank this tick, by part id (#80), for the HUD. Not saved.</summary>
     public IReadOnlyList<string> DryDrives { get; internal set; } = Array.Empty<string>();
 
+    /// <summary>Energy this craft's stellar heat collectors made this tick (kJ, #77). Not saved.</summary>
+    public double StellarHeatKJThisTick { get; internal set; }
+
     /// <summary>Geothermal energy this craft's taps made this tick (kJ, #77). Not saved.</summary>
     public double GeothermalKJThisTick { get; internal set; }
 
