@@ -27,16 +27,20 @@ public partial class CargoPanel : PanelContainer
     private readonly Func<CraftState?> _ship;
     private readonly MaterialCatalog _materials;
     private Label _hint = null!;
-    private Label _header = null!;
-    private GridContainer _grid = null!;
+    private VBoxContainer _grid = null!;
+    private CheckBox _showEmpty = null!;
+    private readonly List<(string Id, StatBar Mine, StatBar? Theirs)> _rows = new();
+    private HBoxContainer _sides = null!;
+    private readonly DesignPicture _myPicture = new(), _theirPicture = new();
+    private readonly StatBar _myRoom = new(), _theirRoom = new();
     private Label _status = null!;
     private VBoxContainer _crewRow = null!;
-    private Label _crewLabel = null!;
+    private InfoList _crewBars = null!;
     private Button _crewIn = null!, _crewOut = null!, _recruit = null!;
     private VBoxContainer _kits = null!;
     private string _kitsKey = "";
     private Label _requestsTitle = null!;
-    private Label _requests = null!;
+    private InfoList _requests = null!;
     private HBoxContainer _requestRow = null!;
     private OptionButton _requestMaterial = null!;
     private SpinBox _requestTonnes = null!;
@@ -58,7 +62,7 @@ public partial class CargoPanel : PanelContainer
     {
         // Right side, full height, scrolling: materials, kits and requests don't fit under the HUD.
         SetAnchorsPreset(LayoutPreset.RightWide);
-        OffsetLeft = -450;
+        OffsetLeft = -472;
         OffsetRight = -12;
         OffsetTop = 12;
         OffsetBottom = -12;
@@ -73,15 +77,24 @@ public partial class CargoPanel : PanelContainer
         box.AddChild(title);
         _hint = new Label { Modulate = Dim, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(400, 0) };
         box.AddChild(_hint);
-        _header = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(400, 0) };
-        box.AddChild(_header);
-        _grid = new GridContainer { Columns = 3 };
+        // Both craft with how full they are, then a row per material: bars to compare, arrows or dragging to move (#102).
+        _sides = new HBoxContainer();
+        box.AddChild(_sides);
+        _sides.AddChild(_myPicture);
+        _sides.AddChild(_myRoom);
+        _sides.AddChild(_theirRoom);
+        _sides.AddChild(_theirPicture);
+        _showEmpty = new CheckBox { Text = "Show materials neither holds", FocusMode = FocusModeEnum.None };
+        _showEmpty.Toggled += _ => Refresh();
+        _grid = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _grid.AddThemeConstantOverride("separation", 3);
         box.AddChild(_grid);
+        box.AddChild(_showEmpty);
         // Crew: the counts on one line, the buttons under them (so the panel never grows past its frame).
         _crewRow = new VBoxContainer();
         box.AddChild(_crewRow);
-        _crewLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(400, 0) };
-        _crewRow.AddChild(_crewLabel);
+        _crewRow.AddChild(UiTheme.Header("Crew"));
+        _crewRow.AddChild(_crewBars = new InfoList());
         var crewButtons = new HBoxContainer();
         _crewRow.AddChild(crewButtons);
         _crewIn = MoveButton("+1 crew", "Move one crew member into the craft you fly", () => MoveCrew(true));
@@ -97,18 +110,18 @@ public partial class CargoPanel : PanelContainer
                 Refresh();
             });
         crewButtons.AddChild(_recruit);
-        box.AddChild(new Label { Text = "Construction kits:", Modulate = Dim });
+        box.AddChild(UiTheme.Header("Construction kits"));
         _kits = new VBoxContainer();
         box.AddChild(_kits);
 
-        _requestsTitle = new Label { Modulate = Dim, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(400, 0) };
+        _requestsTitle = new Label { Modulate = Dim, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(400, 0), ThemeTypeVariation = "HudText" };
+        box.AddChild(UiTheme.Header("Requests"));
         box.AddChild(_requestsTitle);
-        _requests = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(400, 0) };
-        box.AddChild(_requests);
+        box.AddChild(_requests = new InfoList());
         _requestRow = new HBoxContainer();
         box.AddChild(_requestRow);
         _requestMaterial = new OptionButton { FocusMode = FocusModeEnum.None, SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        foreach (var m in _materials.Materials) _requestMaterial.AddItem(m.Name);
+        foreach (var m in _materials.Materials) _requestMaterial.AddIconItem(UiIcons.Material(m.Id), m.Name);
         if (_materials.Materials.Count > 0) _requestMaterial.Select(0);
         _requestRow.AddChild(_requestMaterial);
         _requestTonnes = new SpinBox { MinValue = 0, MaxValue = 10_000, Step = 1, Value = 10, Suffix = "t" };
@@ -150,6 +163,12 @@ public partial class CargoPanel : PanelContainer
     private static string Holds(CraftState c) =>
         c.HasCargoLimit ? $"{c.CargoKg / 1000.0:0.0} / {c.CargoCapacityKg / 1000.0:0} t" : $"{c.CargoKg / 1000.0:0.0} t (unlimited)";
 
+    private static double Fullness(CraftState c) => c.HasCargoLimit ? c.CargoKg / (double)Math.Max(1, c.CargoCapacityKg) : 0;
+
+    /// <summary>A material's share of the room (of what's held, where there's no limit).</summary>
+    private static double Share(CraftState c, string id) =>
+        c.Inventory[id] / (double)Math.Max(1, c.HasCargoLimit ? c.CargoCapacityKg : c.Inventory.TotalKg);
+
     private string MaterialName(string id) => _materials.Contains(id) ? _materials.Get(id).Name : id;
 
     private void Refresh()
@@ -160,8 +179,8 @@ public partial class CargoPanel : PanelContainer
         if (self is null)
         {
             _crewRow.Visible = false;
-            _hint.Text = "";
-            _header.Text = "No craft.";
+            _hint.Text = "No craft.";
+            _sides.Visible = false;
             Rebuild("", null, null, false, new List<string>());
             RebuildKits(null, null, false);
             ShowRequests(sector, null, null, false);
@@ -170,21 +189,29 @@ public partial class CargoPanel : PanelContainer
 
         var other = Other(sector, self);
         var canMove = other is not null && DockedTogether(self, other);
-        _hint.Text = canMove ? $"+ loads into {self.Name}, − unloads to {other!.Name}"
+        _hint.Text = canMove ? $"Left: {self.Name}. Right: {other!.Name}. Arrows move 1 t or all that fits; or drag a bar across (Ctrl: 1 t)."
             : other is not null ? $"Viewing only: dock at {other.Name} (K) to move cargo."
             : "Target a station or ship (Tab) to see its stock too; dock (K) to move cargo.";
-        _header.Text = $"{self.Name}: {Holds(self)}" + (other is null ? "" : $"      {other.Name}: {Holds(other)}");
+        _sides.Visible = true;
+        _myPicture.Design = self.Design;
+        _myRoom.Set(Fullness(self), $"{self.Name}  {Holds(self)}");
+        _theirPicture.Visible = _theirRoom.Visible = other is not null;
+        if (other is not null)
+        {
+            _theirPicture.Design = other.Design;
+            _theirRoom.Set(Fullness(other), $"{other.Name}  {Holds(other)}");
+        }
 
         var ids = _materials.Materials.Select(m => m.Id).Concat(self.Inventory.Kg.Keys)
-            .Concat(other?.Inventory.Kg.Keys ?? Enumerable.Empty<string>()).Distinct().ToList();
+            .Concat(other?.Inventory.Kg.Keys ?? Enumerable.Empty<string>()).Distinct()
+            .Where(id => _showEmpty.ButtonPressed || self.Inventory[id] > 0 || other?.Inventory[id] > 0).ToList();
         Rebuild($"{self.Id}|{other?.Id}|{canMove}|{string.Join(",", ids)}", self, other, canMove, ids);
 
-        // Update the amount labels in place (columns 1 and 2 of each row).
-        var columns = _grid.Columns;
-        for (var row = 0; row < ids.Count; row++)
+        // Update the bars in place.
+        foreach (var (id, mine, theirs) in _rows)
         {
-            ((Label)_grid.GetChild(1 + (row + 1) * columns)).Text = $"{self.Inventory[ids[row]] / 1000.0:0.0##} t";
-            if (other is not null) ((Label)_grid.GetChild(2 + (row + 1) * columns)).Text = $"{other.Inventory[ids[row]] / 1000.0:0.0##} t";
+            mine.Set(Share(self, id), $"{self.Inventory[id] / 1000.0:0.0##} t");
+            if (other is not null) theirs?.Set(Share(other, id), $"{other.Inventory[id] / 1000.0:0.0##} t");
         }
 
         RebuildKits(self, other, canMove);
@@ -192,8 +219,12 @@ public partial class CargoPanel : PanelContainer
 
         var anyCrew = self.Stats.CrewCapacity > 0 || self.Crew > 0 || (other is not null && (other.Stats.CrewCapacity > 0 || other.Crew > 0));
         _crewRow.Visible = anyCrew;
-        _crewLabel.Text = $"Crew: {self.Name} {self.Crew}/{self.Stats.CrewCapacity}"
-                          + (other is null ? "" : $"   {other.Name} {other.Crew}/{other.Stats.CrewCapacity}");
+        _crewBars.Set(new[] { self, other }.Where(c => c is not null && (c.Crew > 0 || c.Stats.CrewCapacity > 0)).Select(c =>
+        {
+            var hours = c!.Crew > 0 ? SectorState.SuppliesLastHours(c) : double.PositiveInfinity;
+            return new HudRow("crew", $"{c.Name}: {c.Crew} / {c.Stats.CrewCapacity} crew" + (double.IsFinite(hours) ? $", food and water for {hours:0} h" : ""),
+                c.Crew > 0 && hours < 24 ? Severity.Warning : Severity.Normal, c.Crew / (double)Math.Max(1, c.Stats.CrewCapacity));
+        }).ToList());
         _crewIn.Visible = _crewOut.Visible = canMove;
         _recruit.Visible = RecruitAt() is { } at;
         if (RecruitAt() is { } where) _recruit.Text = $"Recruit 1 at {where.Name}";
@@ -220,25 +251,74 @@ public partial class CargoPanel : PanelContainer
         if (key == _layoutKey) return;
         _layoutKey = key;
         foreach (var child in _grid.GetChildren()) { _grid.RemoveChild(child); child.QueueFree(); }
+        _rows.Clear();
         if (self is null) return;
-
-        _grid.Columns = 2 + (other is null ? 0 : 1) + (canMove ? 4 : 0);
-        _grid.AddChild(new Label { Text = "Material", Modulate = Dim });
-        _grid.AddChild(new Label { Text = self.Name, Modulate = Dim, ClipText = true, CustomMinimumSize = new Vector2(80, 0) });
-        if (other is not null) _grid.AddChild(new Label { Text = other.Name, Modulate = Dim, ClipText = true, CustomMinimumSize = new Vector2(80, 0) });
-        if (canMove) for (var i = 0; i < 4; i++) _grid.AddChild(new Label());
-
+        if (ids.Count == 0) _grid.AddChild(new Label { Text = "  (nothing held)", Modulate = Dim });
         foreach (var id in ids)
         {
-            _grid.AddChild(new Label { Text = MaterialName(id), CustomMinimumSize = new Vector2(96, 0) });
-            _grid.AddChild(new Label { CustomMinimumSize = new Vector2(62, 0) });
-            if (other is not null) _grid.AddChild(new Label { CustomMinimumSize = new Vector2(62, 0) });
-            if (!canMove) continue;
-            var (selfId, otherId) = (self.Id, other!.Id);
-            _grid.AddChild(MoveButton("+1 t", $"Load 1 t into {self.Name}", () => Move(otherId, selfId, id, OneTonne)));
-            _grid.AddChild(MoveButton("+all", $"Load as much as fits into {self.Name}", () => Move(otherId, selfId, id, null)));
-            _grid.AddChild(MoveButton("−1 t", $"Unload 1 t to {other.Name}", () => Move(selfId, otherId, id, OneTonne)));
-            _grid.AddChild(MoveButton("−all", $"Unload everything to {other.Name}", () => Move(selfId, otherId, id, null)));
+            var row = new HBoxContainer { TooltipText = MaterialName(id), MouseFilter = MouseFilterEnum.Pass };
+            row.AddThemeConstantOverride("separation", 4);
+            row.AddChild(UiTheme.Icon("mat_" + id));
+            row.AddChild(new Label { Text = MaterialName(id), ThemeTypeVariation = "HudText", ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, CustomMinimumSize = new Vector2(92, 0), MouseFilter = MouseFilterEnum.Ignore });
+            var selfId = self.Id;
+            var mine = canMove ? new CargoBar(selfId, id, Drop) : new StatBar();
+            row.AddChild(mine);
+            StatBar? theirs = null;
+            if (other is not null)
+            {
+                var otherId = other.Id;
+                if (canMove)
+                {
+                    row.AddChild(MoveButton("«", $"Load all that fits into {self.Name}", () => Move(otherId, selfId, id, null)));
+                    row.AddChild(MoveButton("‹", $"Load 1 t into {self.Name}", () => Move(otherId, selfId, id, OneTonne)));
+                    row.AddChild(MoveButton("›", $"Unload 1 t to {other.Name}", () => Move(selfId, otherId, id, OneTonne)));
+                    row.AddChild(MoveButton("»", $"Unload all that fits to {other.Name}", () => Move(selfId, otherId, id, null)));
+                }
+                theirs = canMove ? new CargoBar(otherId, id, Drop) : new StatBar();
+                row.AddChild(theirs);
+            }
+            _grid.AddChild(row);
+            _rows.Add((id, mine, theirs));
+        }
+    }
+
+    private void Drop(CraftId from, CraftId to, string material, bool oneTonne) => Move(from, to, material, oneTonne ? OneTonne : null);
+
+    /// <summary>A material bar that can be dragged onto the other craft's side (#102): all that fits, or 1 t with Ctrl.</summary>
+    private sealed partial class CargoBar : StatBar
+    {
+        private readonly CraftId _craft;
+        private readonly string _material;
+        private readonly Action<CraftId, CraftId, string, bool> _drop;
+
+        public CargoBar(CraftId craft, string material, Action<CraftId, CraftId, string, bool> drop)
+        {
+            _craft = craft;
+            _material = material;
+            _drop = drop;
+            MouseFilter = MouseFilterEnum.Stop;
+            MouseDefaultCursorShape = CursorShape.Drag;
+        }
+
+        public CargoBar() : this(CraftId.None, "", (_, _, _, _) => { }) { }
+
+        public override Variant _GetDragData(Vector2 atPosition)
+        {
+            SetDragPreview(UiTheme.Icon("mat_" + _material, 32));
+            return $"cargo|{_craft.Value}|{_material}";
+        }
+
+        private static (CraftId From, string Material)? Read(Variant data)
+        {
+            if (data.VariantType != Variant.Type.String || data.AsString().Split('|') is not ["cargo", var craft, var material] || !uint.TryParse(craft, out var id)) return null;
+            return (new CraftId(id), material);
+        }
+
+        public override bool _CanDropData(Vector2 atPosition, Variant data) => Read(data) is { } from && from.From != _craft;
+
+        public override void _DropData(Vector2 atPosition, Variant data)
+        {
+            if (Read(data) is { } from) _drop(from.From, _craft, from.Material, Input.IsKeyPressed(Key.Ctrl));
         }
     }
 
@@ -261,6 +341,7 @@ public partial class CargoPanel : PanelContainer
             foreach (var kit in holder.Kits)
             {
                 var row = new HBoxContainer();
+                row.AddChild(new DesignPicture { Design = kit.Design, CustomMinimumSize = new Vector2(30, 30) });
                 row.AddChild(new Label
                 {
                     Text = $"{kit.Name}  {kit.MassKg / 1000.0:0.0} t  (in {holder.Name}){(kit.NeedsSurface ? "  surface" : "")}",
@@ -293,7 +374,7 @@ public partial class CargoPanel : PanelContainer
         if (station is null)
         {
             _requestsTitle.Text = "Station requests: fly or target a station with a docking port to see them.";
-            _requests.Text = "";
+            _requests.Set(Array.Empty<HudRow>());
             return;
         }
         _requestsTitle.Text = $"{station.Name} requests (serve-requests freighters keep at least this much here)"
@@ -302,11 +383,17 @@ public partial class CargoPanel : PanelContainer
         var wanted = station.Requests.Keys
             .Concat(SectorState.AutoSupplyKg(station, SectorState.FoodMaterial) > 0 ? new[] { SectorState.FoodMaterial, SectorState.WaterMaterial } : Array.Empty<string>())
             .Distinct().OrderBy(m => m, StringComparer.Ordinal).ToList();
-        _requests.Text = wanted.Count == 0 ? "  (none)"
-            : string.Join("\n", wanted.Select(m =>
-                $"  {MaterialName(m)}: keep {SectorState.WantedKg(station, m) / 1000.0:0.0##} t"
-                + (SectorState.AutoSupplyKg(station, m) >= station.Requests.GetValueOrDefault(m) ? $" (auto: {SectorState.AutoSupplyHours:0} h for the crew)" : "")
-                + $", has {station.Inventory[m] / 1000.0:0.0} t, on the way {sector.IncomingKg(station.Id, m) / 1000.0:0.0} t"));
+        _requests.Set(wanted.Count == 0 ? new[] { new HudRow("idle", "none", Severity.Muted) }
+            : wanted.Select(m =>
+            {
+                var want = SectorState.WantedKg(station, m);
+                var has = station.Inventory[m];
+                var coming = sector.IncomingKg(station.Id, m);
+                var auto = SectorState.AutoSupplyKg(station, m) >= station.Requests.GetValueOrDefault(m);
+                return new HudRow("mat_" + m, $"{MaterialName(m)}  {has / 1000.0:0.0} of {want / 1000.0:0.0##} t" + (coming > 0 ? $"  + {coming / 1000.0:0.0} t coming" : "") + (auto ? "  (auto)" : ""),
+                    has >= want ? Severity.Good : has + coming >= want ? Severity.Normal : Severity.Warning, has / (double)Math.Max(1, want),
+                    Tip: $"Keep {want / 1000.0:0.0##} t here" + (auto ? $" (automatic: {SectorState.AutoSupplyHours:0} h for the crew)" : "") + $". Has {has / 1000.0:0.0} t, on the way {coming / 1000.0:0.0} t.");
+            }).ToArray());
     }
 
     private void SetRequest()

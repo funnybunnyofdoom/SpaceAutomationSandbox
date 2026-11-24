@@ -279,6 +279,23 @@ public sealed class ShipDesign
         return errors;
     }
 
+    /// <summary>The cells behind this design's problems in a role, and why, to mark them where they are (#102).</summary>
+    public IReadOnlyDictionary<GridPos, string> ProblemCells(PartCatalog catalog, DesignRole role)
+    {
+        var found = new Dictionary<GridPos, string>();
+        foreach (var pos in LooseCells()) found[pos] = "Not connected to the rest: parts must touch edge to edge.";
+        var controls = Cells.Where(c => catalog.TryGet(c.PartId, out var p) && p!.IsControlSource).ToList();
+        foreach (var cell in Cells)
+        {
+            if (!catalog.TryGet(cell.PartId, out var part)) { found[cell.Pos] = $"Unknown part '{cell.PartId}'."; continue; }
+            if (role != DesignRole.Ship) continue;
+            if (part.IsFoundation) found[cell.Pos] = "A ship can't have a foundation: use an anchor clamp.";
+            else if (part.Id == "solar_array") found[cell.Pos] = "Large solar arrays are for stations only.";
+            else if (part.IsControlSource && controls.Count > 1) found[cell.Pos] = "Only one control source (cockpit) is allowed.";
+        }
+        return found;
+    }
+
     /// <summary>Advice that doesn't block use. None at the moment (every thruster direction is used since #40).</summary>
     public IReadOnlyList<string> Warnings(PartCatalog catalog) => Array.Empty<string>();
 

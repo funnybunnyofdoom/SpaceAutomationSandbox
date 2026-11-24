@@ -76,5 +76,24 @@ public static class PartFacts
         return facts;
     }
 
+    /// <summary>The editor palette's groups, in order, with their icons (#102).</summary>
+    public static readonly (string Name, string Icon)[] Categories =
+    {
+        ("Structure", "hull"), ("Propulsion", "speed"), ("Power", "power"), ("Storage", "cargo"), ("Industry", "work"),
+        ("Crew and life", "crew"), ("Weapons and defense", "weapon"), ("Stations and gates", "gate"),
+    };
+
+    public static string Category(PartDefinition p) =>
+        p.Weapon is not null || p.IsArmour || p.ShieldCapacity > 0 ? "Weapons and defense"
+        : p.IsDockingPort || p.IsWarpGate || p.IsGateLock ? "Stations and gates"
+        : p.ThrustN > 0 || p.IsQuantumDrive ? "Propulsion"
+        : p.EnergyCapacityKJ > 0 || p.PowerGenerationKW > 0 || p.GeneratorKW > 0 || p.GeothermalKW > 0 || p.StellarHeatKW > 0 ? "Power"
+        : p.CrewCapacity > 0 || p.RobotCount > 0 || p.FoodRateKgPerS > 0 || p.IsRepeller || p.RanchRateKgPerS > 0 || p.PenCapacityKg > 0 || p.HarvestRateKgPerS > 0 ? "Crew and life"
+        : p.CargoCapacityKg > 0 || p.AntimatterCapacityKg > 0 ? "Storage"
+        : p.IsControlSource || p.IsAnchorClamp || p.IsFoundation ? "Structure"
+        : p.MiningRateKgPerS > 0 || p.RefiningRateKgPerS > 0 || p.FabricationRateKgPerS > 0 || p.ConverterKW > 0 || p.EjectionRateKgPerS > 0
+          || p.ResearchRatePerS > 0 || p.SalvageRateKgPerS > 0 || p.RepairRateKgPerS > 0 || p.NanoRepairKgPerS > 0 ? "Industry"
+        : "Structure";
+
     private static string N(double value) => value.ToString("#,0.####", CultureInfo.InvariantCulture);
 }

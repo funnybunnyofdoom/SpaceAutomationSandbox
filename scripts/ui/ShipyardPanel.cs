@@ -29,9 +29,13 @@ public partial class ShipyardPanel : PanelContainer
     private readonly Func<ShipDesign?> _currentShipDesign;
 
     private OptionButton _yardPicker = null!;
-    private Label _stock = null!;
-    private OptionButton _designPicker = null!;
-    private Label _bill = null!;
+    private HFlowContainer _stock = null!;
+    private Label _note = null!;
+    private InfoList _room = null!, _bill = null!;
+    private GridContainer _tiles = null!;
+    private readonly List<Button> _tileButtons = new();
+    private int _design = -1;
+    private string _stockSignature = "";
     private VBoxContainer _kits = null!;
     private string _kitsSignature = "";
     private Label _status = null!;
@@ -58,7 +62,7 @@ public partial class ShipyardPanel : PanelContainer
     private void Build()
     {
         SetAnchorsPreset(LayoutPreset.RightWide);
-        OffsetLeft = -380;
+        OffsetLeft = -412;
         OffsetRight = -12;
         OffsetTop = 12;
         OffsetBottom = -12;
@@ -81,34 +85,43 @@ public partial class ShipyardPanel : PanelContainer
         _yardPicker.ItemSelected += _ => Refresh(force: true);
         box.AddChild(_yardPicker);
 
-        _stock = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0) };
+        // What it holds: room as a bar, then an icon and amount per material in stock (#102).
+        box.AddChild(_room = new InfoList());
+        _stock = new HFlowContainer { CustomMinimumSize = new Vector2(340, 0) };
+        _stock.AddThemeConstantOverride("h_separation", 10);
         box.AddChild(_stock);
 
-        box.AddChild(new Label { Text = "Design (to build, or to refit a craft to):" });
-        _designPicker = new OptionButton { FocusMode = FocusModeEnum.None, ClipText = true, CustomMinimumSize = new Vector2(340, 0) };
-        _designPicker.ItemSelected += _ => Refresh(force: true);
-        box.AddChild(_designPicker);
-        _bill = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0) };
-        box.AddChild(_bill);
+        box.AddChild(UiTheme.Header("Design to build, or refit a craft to"));
+        var tileScroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, CustomMinimumSize = new Vector2(340, 216) };
+        box.AddChild(tileScroll);
+        _tiles = new GridContainer { Columns = 4 };
+        _tiles.AddThemeConstantOverride("h_separation", 4);
+        _tiles.AddThemeConstantOverride("v_separation", 4);
+        tileScroll.AddChild(_tiles);
+        _note = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0), ThemeTypeVariation = "HudText" };
+        box.AddChild(_note);
+        box.AddChild(_bill = new InfoList());
 
-        var order = new Button { Text = "Order", FocusMode = FocusModeEnum.None, TooltipText = "Build this design at the yard: ships launch when done, station designs become kits to carry and deploy" };
+        var order = new Button { Text = "Order", Icon = UiIcons.Get("shipyard"), FocusMode = FocusModeEnum.None, TooltipText = "Build this design at the yard: ships launch when done, station designs become kits to carry and deploy" };
         order.Pressed += Order;
         box.AddChild(order);
 
         _status = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0) };
         box.AddChild(_status);
 
-        box.AddChild(new Label { Text = "Queue (first builds first):" });
+        box.AddChild(UiTheme.Header("Queue (first builds first)"));
         _queue = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         box.AddChild(_queue);
 
-        box.AddChild(new Label { Text = "Construction kits in storage:" });
+        box.AddChild(UiTheme.Header("Construction kits in storage"));
         _kits = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         box.AddChild(_kits);
 
+        box.AddChild(UiTheme.Header("Work on craft"));
         box.AddChild(new Label
         {
-            Text = $"Work on craft (docked ships, stations within {SectorState.YardReachM:0} m, the yard itself). Removed parts return {SectorState.RecoveryFraction * 100:0}% of their materials (less if damaged); the rest is slag.",
+            ThemeTypeVariation = "HudText", Modulate = new Color(1, 1, 1, 0.65f),
+            Text = $"Docked ships, stations within {SectorState.YardReachM:0} m, the yard itself. Removed parts return {SectorState.RecoveryFraction * 100:0}% of their materials (less if damaged); the rest is slag.",
             AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0),
         });
         _work = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -126,8 +139,8 @@ public partial class ShipyardPanel : PanelContainer
     /// <summary>Dev/test: picks the design at this index in the list (if there is one).</summary>
     public void SelectDesign(int index)
     {
-        if (index < 0 || index >= _designPicker.ItemCount) return;
-        _designPicker.Select(index);
+        if (index < 0 || index >= _designs.Count) return;
+        _design = index;
         Refresh(force: true);
     }
 
@@ -173,15 +186,43 @@ public partial class ShipyardPanel : PanelContainer
             }
             catch (Exception) { /* unreadable files are listed as such in the editor; skip them here */ }
         }
-        _designPicker.Clear();
-        foreach (var (label, _) in _designs) _designPicker.AddItem(label);
-        if (_designs.Count > 0) _designPicker.Select(0);
+        foreach (var child in _tiles.GetChildren()) { _tiles.RemoveChild(child); child.QueueFree(); }
+        _tileButtons.Clear();
+        var group = new ButtonGroup();
+        for (var i = 0; i < _designs.Count; i++)
+        {
+            var index = i;
+            var (label, load) = _designs[i];
+            var tile = new Button { ToggleMode = true, ButtonGroup = group, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(88, 102), TooltipText = label };
+            var picture = new DesignPicture { Design = load() };
+            picture.SetAnchorsPreset(LayoutPreset.TopWide);
+            picture.OffsetLeft = 12;
+            picture.OffsetRight = -12;
+            picture.OffsetTop = 6;
+            picture.OffsetBottom = 58;
+            tile.AddChild(picture);
+            var name = new Label
+            {
+                Text = label, ThemeTypeVariation = "HudText", HorizontalAlignment = HorizontalAlignment.Center, AutowrapMode = TextServer.AutowrapMode.WordSmart,
+                TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, MaxLinesVisible = 2, ClipText = true, MouseFilter = MouseFilterEnum.Ignore,
+            };
+            name.AddThemeFontSizeOverride("font_size", 12);
+            name.SetAnchorsPreset(LayoutPreset.BottomWide);
+            name.OffsetTop = -41;
+            name.AddThemeConstantOverride("line_spacing", 0);
+            name.OffsetLeft = 3;
+            name.OffsetRight = -3;
+            tile.AddChild(name);
+            tile.Pressed += () => { _design = index; Refresh(force: true); };
+            _tiles.AddChild(tile);
+            _tileButtons.Add(tile);
+        }
+        _design = _designs.Count > 0 ? Mathf.Clamp(_design, 0, _designs.Count - 1) : -1;
     }
 
     private ShipDesign? SelectedDesign()
     {
-        var index = _designPicker.Selected;
-        return index >= 0 && index < _designs.Count ? _designs[index].Load() : null;
+        return _design >= 0 && _design < _designs.Count ? _designs[_design].Load() : null;
     }
 
     private void Refresh(bool force = false)
@@ -191,40 +232,59 @@ public partial class ShipyardPanel : PanelContainer
         var yard = SelectedYard();
         if (yard is null)
         {
-            _stock.Text = "No shipyard in this game. (Saves from before shipyards existed have none: F7 starts a new game with one.)";
-            _bill.Text = "";
+            _note.Text = "No shipyard in this game. (Saves from before shipyards existed have none: F7 starts a new game with one.)";
+            _bill.Set(Array.Empty<HudRow>());
+            _room.Set(Array.Empty<HudRow>());
             ClearQueue();
             return;
         }
 
         var materials = _catalog.Materials;
         string Name(string id) => materials.Contains(id) ? materials.Get(id).Name : id;
-        var ids = materials.Materials.Select(m => m.Id).Concat(yard.Inventory.Kg.Keys).Distinct().ToList();
-        _stock.Text = (yard.HasCargoLimit
-                          ? $"Stock ({yard.CargoKg / 1000.0:0.0} / {yard.CargoCapacityKg / 1000.0:0} t storage, kits included):\n"
-                          : $"Stock ({yard.Inventory.TotalKg / 1000.0:0.0} t, unlimited: old save):\n")
-                      + string.Join("\n", ids.Select(id => $"  {Name(id)}  {yard.Inventory[id] / 1000.0:0.0##} t"));
+        for (var i = 0; i < _tileButtons.Count; i++) _tileButtons[i].SetPressedNoSignal(i == _design);
+        _room.Set(new[]
+        {
+            yard.HasCargoLimit
+                ? new HudRow("cargo", $"{yard.CargoKg / 1000.0:0.0} / {yard.CargoCapacityKg / 1000.0:0} t stored, kits included", yard.CargoKg >= 0.97 * yard.CargoCapacityKg ? Severity.Warning : Severity.Normal,
+                    (double)yard.CargoKg / Math.Max(1, yard.CargoCapacityKg))
+                : new HudRow("cargo", $"{yard.Inventory.TotalKg / 1000.0:0.0} t stored, unlimited (old save)"),
+        });
+        var held = yard.Inventory.Kg.Where(kv => kv.Value > 0).OrderBy(kv => materials.OrderOf(kv.Key)).ToList();
+        var stockSignature = yard.Id + string.Join(",", held.Select(kv => kv.Key));
+        if (force || stockSignature != _stockSignature)
+        {
+            _stockSignature = stockSignature;
+            foreach (var child in _stock.GetChildren()) { _stock.RemoveChild(child); child.QueueFree(); }
+            foreach (var (id, _) in held)
+            {
+                var chip = new HBoxContainer { TooltipText = Name(id), MouseFilter = MouseFilterEnum.Pass, CustomMinimumSize = new Vector2(84, 0) };
+                chip.AddChild(UiTheme.Icon("mat_" + id));
+                chip.AddChild(new Label { ThemeTypeVariation = "HudText", MouseFilter = MouseFilterEnum.Ignore });
+                _stock.AddChild(chip);
+            }
+        }
+        for (var i = 0; i < held.Count && i < _stock.GetChildCount(); i++) ((Label)_stock.GetChild(i).GetChild(1)).Text = $"{held[i].Value / 1000.0:0.0##} t";
 
-        var selected = SelectedDesign();
-
-        if (selected is { } design)
+        if (SelectedDesign() is { } design)
         {
             var bill = design.ComputeBillOfMaterials(_catalog).ToWholeKg();
-            var short_ = yard.Inventory.Shortfall(bill);
             var stats = design.ComputeStats(_catalog);
-            var kit = design.SuggestedRole(_catalog) == DesignRole.Station
-                ? stats.IsFixedStructure ? "\nBuilt as a construction kit: carry it on a ship, land, and deploy (U)."
-                  : "\nBuilt as a construction kit: deploy it beside the yard below, or carry it and deploy (U) in orbit or on a surface."
-                : "";
-            _bill.Text = $"{stats.TotalMassKg / 1000:0.0} t, about {stats.TotalMassKg / yard.Stats.FabricationRateKgPerS:0} s to build{kit}\n"
-                         + string.Join("\n", bill.Select(kv => $"  {Name(kv.Key)}  {kv.Value / 1000.0:0.0##} / {yard.Inventory[kv.Key] / 1000.0:0.0##} t"
-                                                               + (short_.ContainsKey(kv.Key) ? "  SHORT" : "")));
-            _bill.AddThemeColorOverride("font_color", short_.Count > 0 ? ShortColor : OkColor);
+            _note.Text = $"{design.Name}: {stats.CellCount} parts, {stats.TotalMassKg / 1000:0.0} t, about {stats.TotalMassKg / yard.Stats.FabricationRateKgPerS:0} s to build."
+                + (design.SuggestedRole(_catalog) != DesignRole.Station ? ""
+                    : stats.IsFixedStructure ? "\nBuilt as a construction kit: carry it on a ship, land, and deploy (U)."
+                    : "\nBuilt as a construction kit: deploy it beside the yard below, or carry it and deploy (U) in orbit or on a surface.");
+            _bill.Set(bill.OrderBy(kv => materials.OrderOf(kv.Key)).Select(kv =>
+            {
+                var have = yard.Inventory[kv.Key];
+                var missing = kv.Value - have;
+                return new HudRow("mat_" + kv.Key, $"{Name(kv.Key)}  {kv.Value / 1000.0:0.0##} t" + (missing > 0 ? $"   SHORT {missing / 1000.0:0.0##} t" : ""),
+                    missing > 0 ? Severity.Bad : Severity.Good, (double)have / Math.Max(1, kv.Value), Tip: $"Needs {kv.Value / 1000.0:0.0##} t, has {have / 1000.0:0.0##} t");
+            }).ToList());
         }
         else
         {
-            _bill.Text = "No buildable designs. Make one in the blueprint editor (B)."; 
-            _bill.AddThemeColorOverride("font_color", ShortColor);
+            _note.Text = "No buildable designs. Make one in the blueprint editor (B).";
+            _bill.Set(Array.Empty<HudRow>());
         }
 
         RefreshQueue(yard, force);
@@ -244,7 +304,10 @@ public partial class ShipyardPanel : PanelContainer
             foreach (var c in craft)
             {
                 var row = new VBoxContainer();
-                row.AddChild(new Label { Name = "Text", AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0) });
+                var top = new HBoxContainer { Name = "Top" };
+                row.AddChild(top);
+                top.AddChild(new DesignPicture { Design = c.Design, CustomMinimumSize = new Vector2(36, 36) });
+                top.AddChild(new Label { Name = "Text", SizeFlagsHorizontal = SizeFlags.ExpandFill, ThemeTypeVariation = "HudText", AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(290, 0) });
                 var buttons = new HBoxContainer();
                 var (yardId, craftId) = (yard.Id, c.Id);
                 if (c.YardOrder is not null)
@@ -287,7 +350,7 @@ public partial class ShipyardPanel : PanelContainer
         for (var i = 0; i < craft.Count && i < _work.GetChildCount(); i++)
         {
             var c = craft[i];
-            if (_work.GetChild(i).GetNodeOrNull<Label>("Text") is not { } label) continue;
+            if (_work.GetChild(i).GetNodeOrNull<Label>("Top/Text") is not { } label) continue;
             var doing = c.YardStatus ?? c.RepairStatus ?? (c.YardOrder is { } o ? $"{o.Kind.ToString().ToLowerInvariant()} queued" : "");
             var preview = c.YardOrder is null && SelectedDesign() is { } design && design.SuggestedRole(_catalog) == (c.IntactDesign ?? c.Design).SuggestedRole(_catalog)
                 ? RefitSummary(sector, c, design) : "";
@@ -329,10 +392,11 @@ public partial class ShipyardPanel : PanelContainer
         foreach (var kit in yard.Kits)
         {
             var row = new HBoxContainer();
+            row.AddChild(new DesignPicture { Design = kit.Design, CustomMinimumSize = new Vector2(30, 30) });
             row.AddChild(new Label
             {
                 Text = $"{kit.Name}  {kit.MassKg / 1000.0:0.0} t{(kit.NeedsSurface ? "  (surface)" : "")}", SizeFlagsHorizontal = SizeFlags.ExpandFill,
-                AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(200, 0),
+                AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(180, 0),
             });
             if (!kit.NeedsSurface)
             {
@@ -364,11 +428,8 @@ public partial class ShipyardPanel : PanelContainer
             foreach (var order in yard.BuildQueue)
             {
                 var row = new HBoxContainer();
-                row.AddChild(new Label
-                {
-                    SizeFlagsHorizontal = SizeFlags.ExpandFill, Name = "Text",
-                    AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(240, 0),
-                });
+                row.AddChild(new DesignPicture { Design = order.Design, CustomMinimumSize = new Vector2(30, 30) });
+                row.AddChild(new StatBar { Name = "Bar", SizeFlagsVertical = SizeFlags.ShrinkCenter });
                 var cancel = new Button { Text = "Cancel", FocusMode = FocusModeEnum.None, TooltipText = "Cancel the order; materials already used come back to the yard" };
                 var orderId = order.Id;
                 var yardId = yard.Id;
@@ -385,11 +446,11 @@ public partial class ShipyardPanel : PanelContainer
         for (var i = 0; i < yard.BuildQueue.Count && i < _queue.GetChildCount(); i++)
         {
             var order = yard.BuildQueue[i];
-            var label = _queue.GetChild(i).GetNode<Label>("Text");
+            var bar = _queue.GetChild(i).GetNode<StatBar>("Bar");
             var what = order.IsKit ? " (kit)" : "";
-            label.Text = i > 0 ? $"{order.ShipName}{what}  waiting"
+            bar.Set(order.Fraction, i > 0 ? $"{order.ShipName}{what}  waiting"
                 : order.WaitingForRoom ? $"{order.ShipName}{what}  done, needs {order.TotalKg / 1000:0.0} t of storage room"
-                : $"{order.ShipName}{what}  {order.Fraction * 100:0}%";
+                : $"{order.ShipName}{what}  {order.Fraction * 100:0}%", order.WaitingForRoom ? Severity.Warning : Severity.Normal);
         }
         if (yard.BuildQueue.Count == 0 && _queue.GetChildCount() == 0)
             _queue.AddChild(new Label { Text = "  (empty)", Modulate = new Color(1, 1, 1, 0.6f) });

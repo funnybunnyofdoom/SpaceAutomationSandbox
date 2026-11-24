@@ -28,9 +28,11 @@ public partial class BlueprintEditorView : Control
 
     private BlueprintGridCanvas _grid = null!;
     private LineEdit _name = null!;
-    private Label _stats = null!;
-    private Label _bill = null!;
-    private Label _problems = null!;
+    private InfoList _stats = null!, _bill = null!, _problems = null!;
+    private Label _summary = null!, _billTitle = null!;
+    private LineEdit _search = null!;
+    private string _category = "";
+    private List<int> _shown = new(); // palette indices in view, in order: what the number keys pick
     private Label _status = null!;
     private OptionButton _loadList = null!;
     private List<BlueprintEntry> _entries = new();
@@ -69,13 +71,7 @@ public partial class BlueprintEditorView : Control
         }
         RefreshLoadList();
         // Research changes over time: mark the parts that can't be built yet (they can still be planned with).
-        for (var i = 0; i < _palette.Count && i < _paletteButtons.Count; i++)
-        {
-            var part = _palette[i];
-            var tech = LockedBy(part.Id);
-            _paletteButtons[i].Text = $"{KeyLabel(i)}  {part.Name}  {part.MassKg / 1000:0.#} t{PartSummary(part)}" + (tech is null ? "" : "  [locked]");
-            _paletteButtons[i].Modulate = tech is null ? Colors.White : new Color(1, 1, 1, 0.55f);
-        }
+        FilterPalette();
         Visible = true;
         Refresh();
     }
@@ -103,28 +99,40 @@ public partial class BlueprintEditorView : Control
         columns.AddChild(left);
         _left = left;
         left.AddChild(Heading("BLUEPRINT EDITOR"));
-        left.AddChild(new Label { Text = "Parts (1-9, 0; Shift for 11+)" });
+        // Categories (#102): all, then one icon each.
+        var categories = new HFlowContainer();
+        categories.AddThemeConstantOverride("h_separation", 3);
+        left.AddChild(categories);
+        var categoryGroup = new ButtonGroup();
+        foreach (var (name, icon) in PartFacts.Categories.Prepend(("", "map")))
+        {
+            var button = new Button
+            {
+                ToggleMode = true, ButtonGroup = categoryGroup, ButtonPressed = name == "", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(29, 29),
+                TooltipText = name == "" ? "All parts" : name, Icon = name == "" ? null : UiIcons.Get(icon), Text = name == "" ? "All" : "",
+                IconAlignment = HorizontalAlignment.Center, TextureFilter = TextureFilterEnum.Nearest,
+            };
+            button.Pressed += () => { _category = name; FilterPalette(); };
+            categories.AddChild(button);
+        }
+        _search = new LineEdit { PlaceholderText = "Search parts", ClearButtonEnabled = true };
+        _search.TextChanged += _ => FilterPalette();
+        _search.TextSubmitted += _ => _search.ReleaseFocus();
+        left.AddChild(_search);
         var paletteScroll = new ScrollContainer
         {
             SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
         };
         left.AddChild(paletteScroll);
         var paletteList = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        paletteList.AddThemeConstantOverride("separation", 2);
         paletteScroll.AddChild(paletteList);
         var group = new ButtonGroup();
         for (var i = 0; i < _palette.Count; i++)
         {
             var part = _palette[i];
-            var row = new HBoxContainer();
-            row.AddChild(new ColorRect
-            {
-                Color = _colors.TryGetValue(part.Id, out var c) ? c : Colors.Magenta,
-                CustomMinimumSize = new Vector2(18, 18),
-                SizeFlagsVertical = SizeFlags.ShrinkCenter,
-            });
             var button = new Button
             {
-                Text = $"{KeyLabel(i)}  {part.Name}  {part.MassKg / 1000:0.#} t{PartSummary(part)}",
                 ToggleMode = true,
                 ButtonGroup = group,
                 ButtonPressed = part.Id == _selectedPart,
@@ -136,23 +144,25 @@ public partial class BlueprintEditorView : Control
                 Icon = PartSprites.Icon(part.Id), // its pixel art (#46)
             };
             var id = part.Id;
-            button.Pressed += () => _selectedPart = id;
+            button.AddThemeConstantOverride("icon_max_width", 32);
+            button.CustomMinimumSize = new Vector2(0, 36);
+            button.TextureFilter = TextureFilterEnum.Nearest;
+            button.Pressed += () => { _selectedPart = id; _search.ReleaseFocus(); };
             button.MouseEntered += () => Point(id, button, 0.15);
             button.MouseExited += () => { if (_pointed == id) StopPointing(); };
             _paletteButtons.Add(button);
-            row.AddChild(button);
-            paletteList.AddChild(row);
+            paletteList.AddChild(button);
         }
         left.AddChild(new Label
         {
-            Text = "\nLeft drag: place\nRight drag: erase\nR: rotate the part to place\nCtrl+Z: undo   Ctrl+S: save\nB or Esc: close editor",
+            Text = "Left drag: place    Right drag: erase    R: rotate\nCtrl+Z: undo    Ctrl+S: save    B or Esc: close\nNumber keys: pick (Shift for 11 to 20)",
+            ThemeTypeVariation = "HudText", AutowrapMode = TextServer.AutowrapMode.WordSmart,
             Modulate = new Color(1, 1, 1, 0.7f),
         });
 
         // --- centre: grid ---
-        var centre = new VBoxContainer();
+        var centre = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         columns.AddChild(centre);
-        centre.AddChild(new Control { CustomMinimumSize = new Vector2(0, 18) }); // room for the FORWARD label
         _grid = new BlueprintGridCanvas(_model, _colors, () => _selectedPart, () => _rotation);
         _grid.Edited += () => { _pendingConfirm = null; Refresh(); };
         centre.AddChild(_grid);
@@ -165,21 +175,23 @@ public partial class BlueprintEditorView : Control
         AddChild(_card); // over the columns
 
         // --- right: name, stats, problems, file actions ---
+        var rightScroll = new ScrollContainer { CustomMinimumSize = new Vector2(350, 0), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        columns.AddChild(rightScroll);
         var right = new VBoxContainer { CustomMinimumSize = new Vector2(330, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        right.AddThemeConstantOverride("separation", 10);
-        columns.AddChild(right);
+        right.AddThemeConstantOverride("separation", 8);
+        rightScroll.AddChild(right);
 
         right.AddChild(new Label { Text = "Name" });
         _name = new LineEdit { PlaceholderText = "Design name" };
         _name.TextChanged += text => { _model.Name = text; _pendingConfirm = null; Refresh(updateName: false); };
         right.AddChild(_name);
 
-        _stats = new Label();
-        right.AddChild(_stats);
-        _bill = new Label();
-        right.AddChild(_bill);
-        _problems = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(330, 0) };
-        right.AddChild(_problems);
+        _summary = new Label { ThemeTypeVariation = "HudText", Modulate = new Color(1, 1, 1, 0.65f), AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        right.AddChild(_summary);
+        right.AddChild(_problems = new InfoList());
+        right.AddChild(_stats = new InfoList());
+        right.AddChild(_billTitle = UiTheme.Header("Materials"));
+        right.AddChild(_bill = new InfoList());
 
         var actions = new HBoxContainer();
         actions.AddChild(ActionButton("Save", Save));
@@ -261,7 +273,7 @@ public partial class BlueprintEditorView : Control
     public override void _Process(double delta)
     {
         // The palette takes what the grid and the numbers leave.
-        var width = Mathf.Clamp(Size.X - 985, 290, 460);
+        var width = Mathf.Clamp(Size.X * 0.22f, 290, 420);
         if (_left is { } left && !Mathf.IsEqualApprox(left.CustomMinimumSize.X, width)) left.CustomMinimumSize = new Vector2(width, 0);
         if (_pointed is not { } id || _pointedIn is not { } where) return;
         if (!IsVisibleInTree()) { StopPointing(); return; }
@@ -269,7 +281,66 @@ public partial class BlueprintEditorView : Control
         if (_pointedForS < _pointDelayS || !_catalog.TryGet(id, out var part) || part is null) return;
         var area = _pointedArea is { } a ? new Rect2(where.GlobalPosition + a.Position * GetGlobalTransform().Scale, a.Size * GetGlobalTransform().Scale) : where.GetGlobalRect();
         var back = GetGlobalTransform().AffineInverse();
-        _card.Show(part, _catalog.Materials, LockedBy(id), new Rect2(back * area.Position, area.Size / GetGlobalTransform().Scale));
+        _card.Show(part, _catalog.Materials, LockedBy(id), new Rect2(back * area.Position, area.Size / GetGlobalTransform().Scale),
+            where == _grid ? _grid.ProblemAtPointer : null);
+    }
+
+    /// <summary>Shows the parts of the category that match the search, with the keys that pick them.</summary>
+    private void FilterPalette()
+    {
+        var words = _search.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        _shown = new List<int>();
+        for (var i = 0; i < _palette.Count && i < _paletteButtons.Count; i++)
+        {
+            var part = _palette[i];
+            var show = (_category == "" || PartFacts.Category(part) == _category)
+                       && words.All(w => part.Name.Contains(w, StringComparison.OrdinalIgnoreCase)
+                                         || PartFacts.Category(part).Contains(w, StringComparison.OrdinalIgnoreCase)
+                                         || PartFacts.Of(part, _catalog.Materials).Any(f => f.Text.Contains(w, StringComparison.OrdinalIgnoreCase)));
+            _paletteButtons[i].Visible = show;
+            if (!show) continue;
+            // Research changes over time: parts that can't be built yet are marked (they can still be planned with).
+            var locked = LockedBy(part.Id) is not null;
+            _paletteButtons[i].Text = $"{KeyLabel(_shown.Count)} {part.Name}  {part.MassKg / 1000:0.#} t{PartSummary(part)}{(locked ? "  [locked]" : "")}";
+            _paletteButtons[i].Modulate = locked ? new Color(1, 1, 1, 0.55f) : Colors.White;
+            _shown.Add(i);
+        }
+    }
+
+    /// <summary>The design's numbers as bars (#102).</summary>
+    private static List<HudRow> StatRows(ShipStats s)
+    {
+        var rows = new List<HudRow> { new("hull", $"{s.CellCount} parts    {s.TotalMassKg / 1000:0.0} t    radius {s.BoundingRadiusM:0.0} m") };
+        if (s.TotalThrustN > 0)
+            rows.Add(new("speed", $"{s.TotalThrustN / 1000:0} kN    {s.MaxAccelerationMps2:0.0} m/s²", s.MaxAccelerationMps2 < 2 ? Severity.Warning : Severity.Normal, s.MaxAccelerationMps2 / 20,
+                Tip: "Forward thrust and acceleration, empty. Full bar: 20 m/s²"));
+        if (s.NonForwardThrustN > 0)
+            rows.Add(new("speed", $"reverse {s.ReverseThrustN / 1000:0} kN    strafe {s.LeftThrustN / 1000:0} / {s.RightThrustN / 1000:0} kN", Severity.Muted));
+        var made = s.PowerGenerationKW + s.GeneratorKW;
+        if (made > 0 || s.TotalPowerUseKW > 0)
+        {
+            var enough = made >= s.TotalPowerUseKW;
+            rows.Add(new("power", $"{s.PowerGenerationKW:0} kW solar{(s.GeneratorKW > 0 ? $" + {s.GeneratorKW:0} made" : "")} / {s.TotalPowerUseKW:0} kW used",
+                enough ? Severity.Good : s.EnergyCapacityKJ > 0 ? Severity.Warning : Severity.Bad, s.TotalPowerUseKW > 0 ? made / s.TotalPowerUseKW : 1,
+                Tip: $"Power made against the most it can use at once ({s.ThrustPowerKW:0} kW of it for thrust)"));
+        }
+        if (s.EnergyCapacityKJ > 0)
+            rows.Add(new("battery", $"{s.EnergyCapacityKJ / 1000:0} MJ stored" + (s.TotalPowerUseKW > made ? $", lasts {s.EnergyCapacityKJ / (s.TotalPowerUseKW - made):0} s at most use" : "")));
+        else if (s.TotalPowerUseKW > made) rows.Add(new("warn", "No battery: it can't run everything at once", Severity.Warning));
+        if (s.CargoCapacityKg > 0) rows.Add(new("cargo", $"{s.CargoCapacityKg / 1000:0.#} t cargo"));
+        if (s.CrewRequired > 0 || s.CrewCapacity > 0 || s.RobotCount > 0)
+        {
+            var housed = s.CrewCapacity + s.RobotCount;
+            rows.Add(new("crew", $"needs {s.CrewRequired} crew, houses {s.CrewCapacity}{(s.RobotCount > 0 ? $" + {s.RobotCount} robots" : "")}", housed < s.CrewRequired ? Severity.Warning : Severity.Good,
+                s.CrewRequired > 0 ? housed / (double)s.CrewRequired : 1, Tip: housed < s.CrewRequired ? "It can't house the crew it needs" : "Crew or robots to run it"));
+        }
+        else rows.Add(new("crew", $"no crew needed (up to {ShipStats.UncrewedMaxParts} parts)", Severity.Muted));
+        if (s.DockingPorts.Count > 0) rows.Add(new("docked", $"{s.DockingPorts.Count} docking port{(s.DockingPorts.Count == 1 ? "" : "s")}"));
+        if (s.FabricationRateKgPerS > 0) rows.Add(new("shipyard", $"builds {s.FabricationRateKgPerS:0} kg/s"));
+        if (s.MiningRateKgPerS > 0) rows.Add(new("mining", $"mines {s.MiningRateKgPerS:0} kg/s"));
+        if (s.ShieldCapacity > 0) rows.Add(new("shield", $"shield takes {s.ShieldCapacity:0.#} parts' worth"));
+        if (s.WeaponList.Count > 0) rows.Add(new("weapon", $"{s.WeaponList.Count} weapon{(s.WeaponList.Count == 1 ? "" : "s")}"));
+        return rows;
     }
 
     private static Label Heading(string text)
@@ -298,9 +369,9 @@ public partial class BlueprintEditorView : Control
             // 1..9 then 0 pick parts 1–10; with Shift, parts 11–20.
             var digit = key.PhysicalKeycode == Key.Key0 ? 10 : (int)(key.PhysicalKeycode - Key.Key0);
             var index = digit - 1 + (key.ShiftPressed ? 10 : 0);
-            if (index >= _palette.Count) return;
-            _selectedPart = _palette[index].Id;
-            _paletteButtons[index].ButtonPressed = true;
+            if (index >= _shown.Count) return;
+            _selectedPart = _palette[_shown[index]].Id;
+            _paletteButtons[_shown[index]].ButtonPressed = true;
         }
         else return;
 
@@ -312,56 +383,29 @@ public partial class BlueprintEditorView : Control
         if (updateName && _name.Text != _model.Name) _name.Text = _model.Name;
 
         var s = _model.Stats;
-        _stats.Text = s is null
-            ? "Empty design."
-            : $"Id: {_model.Id}{(_model.IsDirty ? "   (unsaved)" : "")}\n"
-              + $"Cells {s.CellCount}    Mass {s.TotalMassKg / 1000:0.0} t\n"
-              + $"Thrust {s.TotalThrustN / 1000:0} kN forward    Accel {s.MaxAccelerationMps2:0.0} m/s²\n"
-              + (s.NonForwardThrustN > 0
-                  ? $"Reverse {s.ReverseThrustN / 1000:0} kN    Strafe left {s.LeftThrustN / 1000:0} / right {s.RightThrustN / 1000:0} kN\n"
-                  : "")
-              + (s.DockingPorts.Count > 0 || s.FabricationRateKgPerS > 0 ? $"Docking ports {s.DockingPorts.Count}    Fabrication {s.FabricationRateKgPerS:0} kg/s\n" : "")
-              + $"Cargo {s.CargoCapacityKg / 1000:0} t    Battery {s.EnergyCapacityKJ / 1000:0} MJ\n"
-              + $"Power: solar {s.PowerGenerationKW:0} kW, use up to {s.TotalPowerUseKW:0} kW\n(thrust {s.ThrustPowerKW:0} kW)"
-              + (s.TotalPowerUseKW <= s.PowerGenerationKW ? "\n"
-                  : s.EnergyCapacityKJ > 0 ? $"  battery: {s.EnergyCapacityKJ / (s.TotalPowerUseKW - s.PowerGenerationKW):0} s at max\n"
-                  : "  NO BATTERY\n")
-              + (s.CrewRequired > 0 || s.CrewCapacity > 0 || s.RobotCount > 0
-                  ? $"Crew: needs {s.CrewRequired}, houses {s.CrewCapacity}" + (s.RobotCount > 0 ? $", robots {s.RobotCount}" : "")
-                    + (s.CrewRequired > s.CrewCapacity + s.RobotCount ? "  - can't house its own crew\n" : "\n")
-                  : $"Crew: none needed (up to {ShipStats.UncrewedMaxParts} parts)\n")
-              + $"Collision radius {s.BoundingRadiusM:0.0} m";
+        _summary.Text = s is null ? "Empty design." : $"Id: {_model.Id}{(_model.IsDirty ? "   (unsaved)" : "")}";
+        _stats.Set(s is null ? Array.Empty<HudRow>() : StatRows(s));
 
-        _bill.Text = BillText();
+        // Materials, biggest share first by the order of the materials file.
+        var bill = _model.BillOfMaterials;
+        var materials = _catalog.Materials;
+        _billTitle.Visible = bill.TotalKg > 0;
+        _bill.Set(bill.Kg.OrderBy(kv => materials.OrderOf(kv.Key))
+            .Select(kv => new HudRow("mat_" + kv.Key, $"{(materials.Contains(kv.Key) ? materials.Get(kv.Key).Name : kv.Key)}  {kv.Value / 1000:0.0##} t", Severity.Normal, kv.Value / bill.TotalKg)).ToList());
 
         var errors = _model.Errors;
         var warnings = _model.Warnings;
-        if (errors.Count == 0 && warnings.Count == 0)
-        {
-            _problems.Text = _model.Role == DesignRole.Ship
-                ? "Valid ship: this design can fly."
-                : $"Valid station{(_model.Stats?.IsFixedStructure == true ? " (fixed structure: foundation)" : "")}: it can be built at a shipyard but can't fly.";
-            _problems.AddThemeColorOverride("font_color", OkColor);
-        }
-        else
-        {
-            var role = _model.Role == DesignRole.Ship ? "As a ship" : "As a station";
-            _problems.Text = (errors.Count > 0 ? role + ":\n" : "")
-                             + string.Join("\n", errors.Select(e => "Error: " + e).Concat(warnings.Select(w => "Warning: " + w)));
-            _problems.AddThemeColorOverride("font_color", errors.Count > 0 ? ErrorColor : WarningColor);
-        }
+        _problems.Set(errors.Count == 0 && warnings.Count == 0
+            ? new[]
+            {
+                new HudRow("ok", _model.Role == DesignRole.Ship
+                    ? "Valid ship: this design can fly."
+                    : $"Valid station{(s?.IsFixedStructure == true ? " (fixed structure: foundation)" : "")}: it can be built at a shipyard but can't fly.", Severity.Good),
+            }
+            : errors.Select(e => new HudRow("danger", $"{(_model.Role == DesignRole.Ship ? "Ship" : "Station")}: {e}", Severity.Bad))
+                .Concat(warnings.Select(w => new HudRow("warn", w, Severity.Warning))).ToArray());
+        _grid.Problems = _model.ToDesign().ProblemCells(_catalog, _model.Role);
         _grid.QueueRedraw();
-    }
-
-    /// <summary>Bill of materials in material-file order, e.g. "Metal 12.6 t".</summary>
-    private string BillText()
-    {
-        var bill = _model.BillOfMaterials;
-        if (bill.TotalKg == 0) return "";
-        var materials = _catalog.Materials;
-        var lines = bill.Kg.OrderBy(kv => materials.OrderOf(kv.Key))
-            .Select(kv => $"  {(materials.Contains(kv.Key) ? materials.Get(kv.Key).Name : kv.Key)}  {kv.Value / 1000:0.0##} t");
-        return "Bill of materials:\n" + string.Join("\n", lines);
     }
 
     private void SetStatus(string text, Color? color = null)

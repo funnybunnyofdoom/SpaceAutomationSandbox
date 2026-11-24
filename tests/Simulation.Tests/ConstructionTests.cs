@@ -22,6 +22,28 @@ public class ConstructionTests
     }
 
     [Fact]
+    public void Every_part_has_a_known_category_and_each_category_has_parts()
+    {
+        var names = PartFacts.Categories.Select(c => c.Name).ToList();
+        var used = TestData.Catalog().Parts.Select(PartFacts.Category).ToList();
+        Assert.All(used, c => Assert.Contains(c, names));
+        Assert.All(names, n => Assert.Contains(n, used));
+    }
+
+    [Fact]
+    public void Problem_cells_say_where_and_why()
+    {
+        var catalog = TestData.Catalog();
+        var good = TestData.StarterShip();
+        Assert.Empty(good.ProblemCells(catalog, DesignRole.Ship));
+        var bad = new ShipDesign("bad", "Bad", good.Cells.Append(new DesignCell(new GridPos(9, 9), "hull")).Append(new DesignCell(new GridPos(9, 8), "cockpit")));
+        var cells = bad.ProblemCells(catalog, DesignRole.Ship);
+        Assert.Contains("Not connected", cells[new GridPos(9, 9)]);
+        Assert.Contains("one control source", cells[new GridPos(9, 8)]);
+        Assert.Contains(cells, c => c.Key != new GridPos(9, 8) && c.Value.Contains("one control source")); // the other cockpit too
+    }
+
+    [Fact]
     public void PartCatalog_LoadsTheStarterParts()
     {
         var ids = TestData.Catalog().Parts.Select(p => p.Id).OrderBy(id => id);

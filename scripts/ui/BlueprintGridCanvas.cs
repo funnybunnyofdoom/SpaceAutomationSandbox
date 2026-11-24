@@ -13,9 +13,19 @@ namespace SpaceAutomationSandbox.UI;
 /// </summary>
 public partial class BlueprintGridCanvas : Control
 {
-    public const int CellPx = 26; // 21 cells fit beside the palette and the stats panel
+    /// <summary>The smallest cell: 21 fit beside the palette and the stats at 1280 x 720. Bigger windows get bigger cells (#102).</summary>
+    public const int MinCellPx = 25;
     private const int H = BlueprintEditor.HalfExtent;
-    private const int Side = (2 * H + 1) * CellPx;
+    private const int Count = 2 * H + 1;
+    private const int Top = 18; // room for the line above the grid
+
+    /// <summary>Pixels per cell now.</summary>
+    private int CellPx => Mathf.Max(MinCellPx, Mathf.FloorToInt(Mathf.Min(Size.X, Size.Y - Top) / Count));
+    private int Side => Count * CellPx;
+    private Vector2 Origin => new(Mathf.Floor(Mathf.Max(0, (Size.X - Side) / 2)), Top);
+
+    /// <summary>Cells with something wrong, and what (#102).</summary>
+    public IReadOnlyDictionary<GridPos, string> Problems { get; set; } = new Dictionary<GridPos, string>();
 
     private static readonly Color Background = new(0.06f, 0.07f, 0.10f);
     private static readonly Color GridLine = new(1f, 1f, 1f, 0.07f);
@@ -45,7 +55,10 @@ public partial class BlueprintGridCanvas : Control
         _colors = colors;
         _selectedPart = selectedPart;
         _rotation = rotation;
-        CustomMinimumSize = new Vector2(Side, Side);
+        CustomMinimumSize = new Vector2(Count * MinCellPx, Count * MinCellPx + Top);
+        SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        SizeFlagsVertical = SizeFlags.ExpandFill;
+        TextureFilter = TextureFilterEnum.Nearest;
         MouseFilter = MouseFilterEnum.Stop;
         MouseExited += () => { _hover = null; PartPointed?.Invoke(null, default); QueueRedraw(); };
     }
@@ -54,10 +67,16 @@ public partial class BlueprintGridCanvas : Control
     public BlueprintGridCanvas() : this(new BlueprintEditor(new PartCatalog(Array.Empty<PartDefinition>(), new MaterialCatalog(Array.Empty<MaterialDefinition>()))),
         new Dictionary<string, Color>(), () => null, () => 0) { }
 
-    private static GridPos ToCell(Vector2 local) =>
-        new(Mathf.FloorToInt(local.X / CellPx) - H, Mathf.FloorToInt(local.Y / CellPx) - H);
+    private GridPos ToCell(Vector2 local) =>
+        new(Mathf.FloorToInt((local.X - Origin.X) / CellPx) - H, Mathf.FloorToInt((local.Y - Origin.Y) / CellPx) - H);
 
-    private static Vector2 CellOrigin(GridPos pos) => new((pos.X + H) * CellPx, (pos.Y + H) * CellPx);
+    /// <summary>A cell's corner inside the grid (drawing is moved to the grid's corner).</summary>
+    private Vector2 CellOrigin(GridPos pos) => new((pos.X + H) * CellPx, (pos.Y + H) * CellPx);
+
+    /// <summary>What's wrong with the cell under the mouse, if anything.</summary>
+    public string? ProblemAtPointer => _hover is { } at && Problems.TryGetValue(at, out var why) ? why : null;
+
+    private Rect2 CellRect(GridPos pos) => new(Origin + CellOrigin(pos), new Vector2(CellPx, CellPx));
 
     public override void _GuiInput(InputEvent @event)
     {
@@ -84,7 +103,7 @@ public partial class BlueprintGridCanvas : Control
                 var cell = ToCell(motion.Position);
                 _hover = BlueprintEditor.InBounds(cell) ? cell : null;
                 if (_dragButton != MouseButton.None) Apply(cell);
-                else PartPointed?.Invoke(_model.Cells.TryGetValue(cell, out var under) ? under.PartId : null, new Rect2(CellOrigin(cell), new Vector2(CellPx, CellPx)));
+                else PartPointed?.Invoke(_model.Cells.TryGetValue(cell, out var under) ? under.PartId : null, CellRect(cell));
                 QueueRedraw();
                 break;
         }
@@ -100,6 +119,7 @@ public partial class BlueprintGridCanvas : Control
 
     public override void _Draw()
     {
+        DrawSetTransform(Origin);
         DrawRect(new Rect2(0, 0, Side, Side), Background);
         for (var i = 0; i <= 2 * H + 1; i++)
         {
@@ -109,7 +129,6 @@ public partial class BlueprintGridCanvas : Control
         }
 
         var font = ThemeDB.FallbackFont;
-        var loose = _model.Cells.Count > 0 ? new HashSet<GridPos>(_model.ToDesign().LooseCells()) : new HashSet<GridPos>();
         foreach (var (pos, cell) in _model.Cells)
         {
             var origin = CellOrigin(pos);
@@ -123,7 +142,7 @@ public partial class BlueprintGridCanvas : Control
                 DrawString(font, origin + new Vector2(5, CellPx - 9), tag, HorizontalAlignment.Left, -1, 11, new Color(0, 0, 0, 0.75f));
                 DrawFacing(origin, cell.Rotation, new Color(0, 0, 0, 0.6f));
             }
-            if (loose.Contains(pos)) // not connected (#35); the "!" says so without colour (#68)
+            if (Problems.ContainsKey(pos)) // not connected (#35), or not allowed; the "!" says so without colour (#68)
             {
                 DrawRect(new Rect2(origin, new Vector2(CellPx, CellPx)), LooseCell, false, 3);
                 DrawString(font, origin + new Vector2(CellPx - 11, 14), "!", HorizontalAlignment.Left, -1, 14, LooseCell);
@@ -163,9 +182,9 @@ public partial class BlueprintGridCanvas : Control
     private bool DrawPartSprite(string partId, int rotation, Vector2 origin, Color modulate)
     {
         if (PartSprites.Icon(partId) is not { } texture) return false;
-        DrawSetTransform(origin + new Vector2(CellPx, CellPx) / 2, rotation * Mathf.Pi / 2, Vector2.One);
+        DrawSetTransform(Origin + origin + new Vector2(CellPx, CellPx) / 2, rotation * Mathf.Pi / 2, Vector2.One);
         DrawTextureRect(texture, new Rect2(-new Vector2(CellPx, CellPx) / 2, new Vector2(CellPx, CellPx)), false, modulate);
-        DrawSetTransform(Vector2.Zero, 0, Vector2.One);
+        DrawSetTransform(Origin);
         return true;
     }
 

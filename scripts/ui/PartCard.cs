@@ -34,10 +34,10 @@ public partial class PartCard : PanelContainer
     }
 
     /// <summary>Shows a part beside an area (both in this control's parent), kept inside the parent.</summary>
-    public void Show(PartDefinition part, MaterialCatalog materials, string? lockedBy, Rect2 beside)
+    public void Show(PartDefinition part, MaterialCatalog materials, string? lockedBy, Rect2 beside, string? problem = null)
     {
         var scale = GetThemeDefaultFontSize() / 16f;
-        var key = $"{part.Id}|{lockedBy}|{scale}";
+        var key = $"{part.Id}|{lockedBy}|{scale}|{problem}";
         if (key != _key)
         {
             _key = key;
@@ -51,6 +51,7 @@ public partial class PartCard : PanelContainer
             var title = Text($"{part.Name}\n{part.MassKg / 1000:0.##} t", CardWidth * scale - 56);
             title.AddThemeColorOverride("font_color", UiTheme.Accent);
             top.AddChild(title);
+            if (problem is not null) Line("danger", problem, Severity.Bad, scale);
             if (lockedBy is not null) Line("research", $"Needs {lockedBy} researched before it can be built.", Severity.Warning, scale);
             foreach (var fact in PartFacts.Of(part, materials)) Line(fact.Icon, fact.Text, Severity.Normal, scale);
             if (part.MaterialsKg is { Count: > 0 } made)

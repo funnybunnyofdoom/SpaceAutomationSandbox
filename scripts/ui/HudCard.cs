@@ -23,7 +23,7 @@ public partial class HudCard : PanelContainer
     private readonly Button _header;
     private readonly DesignPicture _picture = new();
     private readonly TextureRect _icon = UiTheme.Icon("", 32);
-    private readonly List<RowView> _views = new();
+    private readonly List<InfoRow> _views = new();
     private HudCardData _data = HudCardData.None;
 
     public HudCardData Data => _data;
@@ -77,7 +77,7 @@ public partial class HudCard : PanelContainer
         if (closed) return;
         while (_views.Count < data.Rows.Count)
         {
-            var view = new RowView();
+            var view = new InfoRow();
             _views.Add(view);
             _rows.AddChild(view);
         }
@@ -97,42 +97,5 @@ public partial class HudCard : PanelContainer
         foreach (var row in _data.Rows)
             height += 3 + (row.Fraction is not null ? size + 6 : font.GetMultilineStringSize(row.Text, HorizontalAlignment.Left, width - 44, size).Y + 2);
         return height;
-    }
-
-    private sealed partial class RowView : HBoxContainer
-    {
-        private readonly TextureRect _icon = UiTheme.Icon("");
-        private readonly Label _label = new() { ThemeTypeVariation = "HudText", AutowrapMode = TextServer.AutowrapMode.WordSmart, SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
-        private readonly StatBar _bar = new();
-        private HudRow? _row;
-
-        public RowView()
-        {
-            MouseFilter = MouseFilterEnum.Pass; // for its tooltip
-            AddThemeConstantOverride("separation", 6);
-            _icon.SizeFlagsVertical = SizeFlags.ShrinkBegin;
-            GuiInput += e => { if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) _row?.Click?.Invoke(); };
-            AddChild(_icon);
-            AddChild(_label);
-            AddChild(_bar);
-        }
-
-        public void Set(HudRow? row)
-        {
-            Visible = row is not null;
-            if (row is null || row == _row) return;
-            if (row.Icon != _row?.Icon) _icon.Texture = UiIcons.Get(row.Icon);
-            if (row.Tip != _row?.Tip) TooltipText = row.Tip;
-            MouseDefaultCursorShape = row.Click is null ? CursorShape.Arrow : CursorShape.PointingHand;
-            _label.Visible = row.Fraction is null;
-            _bar.Visible = row.Fraction is not null;
-            if (row.Fraction is { } fraction) _bar.Set(fraction, row.Text, row.Severity, row.Marker);
-            else
-            {
-                if (_label.Text != row.Text) _label.Text = row.Text;
-                if (_row is null || row.Severity != _row.Severity) _label.Modulate = UiTheme.Of(row.Severity);
-            }
-            _row = row;
-        }
     }
 }
