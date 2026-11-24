@@ -41,6 +41,9 @@ public sealed class BuildOrder
     /// <summary>True while a finished kit waits for room in the yard's storage.</summary>
     public bool WaitingForRoom { get; internal set; }
 
+    /// <summary>The swarm the finished ship joins (#30), or None.</summary>
+    public SwarmId SwarmId { get; internal set; } = SwarmId.None;
+
     public OrderId Id { get; }
     public string ShipName { get; }
 

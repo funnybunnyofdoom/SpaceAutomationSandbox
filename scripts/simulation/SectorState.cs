@@ -238,6 +238,7 @@ public sealed partial class SectorState
         if (docked != null) UpdateDocked(docked);
         ResolveCraftCollisions(); // after everything moved (#34)
         StepMining();
+        StepSwarms(); // many ships as one flow (#30)
         StepBodiesGone(); // a body mined down to its remnant breaks up (#27)
         StepRefining();
         StepConverters(); // electrolysers on spare power (#78)

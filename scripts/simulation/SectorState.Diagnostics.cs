@@ -48,6 +48,11 @@ public sealed partial class SectorState
             if (craft.RefiningBatch is { } batch) foreach (var kg in batch.InputsKg.Values) refining += kg;
             craftKg += (long)Math.Round(craft.Stats.TotalMassKg);
         }
+        foreach (var swarm in _swarms) // their holds and the ships themselves (#30)
+        {
+            stock += swarm.Inventory.TotalKg;
+            craftKg += swarm.Count * (long)Math.Round(swarm.Stats.TotalMassKg);
+        }
         long ejected = 0;
         foreach (var kg in _ejectedKg.Values) ejected += kg;
         return new MassLedger(deposits, stock, kits, orders, refining, craftKg, ejected, DiscoveredKg);

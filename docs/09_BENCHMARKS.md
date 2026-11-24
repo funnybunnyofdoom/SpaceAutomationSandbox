@@ -11,6 +11,24 @@ dotnet run -c Release --project tools/Benchmarks -- 500   # any counts
 
 **Budget:** the simulation runs 20 ticks per second, so 50 ms per tick is everything. Rendering, UI and the rest of the frame need most of that.
 
+## 2026-11-24 — a swarm of 5,000 (#30)
+
+Debug build from the project folder (not a Release export), 10 s, one run: `-- --new-game --demo-swarm=5000 --fps-report=10 --zoom=0.08`. Mean frame 1.15 ms, worst 1% 2.24 ms, sim tick 0.07 ms mean. A swarm's cost doesn't depend on its ship count; at most 150 of its ships are drawn.
+
+## 2026-11-24 — in the game, with body art (#71–#74)
+
+Release export of 065e61a, dev PC, commands as in the next section with `--fps-report=20`, one run per view. Target: 16.7 ms per frame.
+
+| Ships | View | Mean frame | Worst 1% frame | Sim tick (mean) | Draw per frame |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 1,000 | normal | 3.10 ms (323 fps) | 8.66 ms (115 fps) | 5.19 ms | 2.20 ms |
+| 1,000 | 0.3 | 0.73 ms (1363 fps) | 6.08 ms (164 fps) | 5.15 ms | 0.18 ms |
+| 1,000 | 0.05 (all on screen) | 1.26 ms (792 fps) | 8.48 ms (118 fps) | 5.15 ms | 0.23 ms |
+| 1,000 | `--view-body=Home --view-bearing=-90 --zoom=1` | 1.16 ms (861 fps) | 6.65 ms (150 fps) | 5.15 ms | 0.22 ms |
+| 1,000 | `--view-body=Moon --survey-all --dig --zoom=0.5` | 0.65 ms (1530 fps) | 6.18 ms (162 fps) | 5.40 ms | 0.09 ms |
+
+**Reading it:** the target is met in every view; the worst frames are still mostly the simulation tick. At 0.05 the worst 1% is 1.7 ms above the 2026-11-23 run (its mean is lower); with single runs and possibly a different window size, that may be noise. The `--view-body` views have few ships on screen: they mainly test the body shader.
+
 ## 2026-11-23 — in the game, rendering included (#39)
 
 **Target (creator):** 1,000 active automated ships at 60 fps (16.7 ms per frame) on the dev PC.

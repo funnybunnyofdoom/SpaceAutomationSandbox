@@ -38,6 +38,7 @@ public static class SaveMigrations
         [17] = ("v18 added warp gates and further star systems: an older save has one system and no gates", (_, _) => { }),
         [18] = ("v19 added research: a game started before it keeps everything unlocked (it was all open then)",
             (root, _) => { if (root["sector"] is System.Text.Json.Nodes.JsonObject sector) sector["researchAllUnlocked"] = true; }),
+        [19] = ("v20 added swarms: an older save has none", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

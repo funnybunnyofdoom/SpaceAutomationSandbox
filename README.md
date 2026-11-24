@@ -71,6 +71,8 @@ Ship parts are 16×16 pixel art per 2 m cell (rotation 0 faces up). `python tool
 
 Celestial bodies (#71–#74): `python tools/art/make_body_art.py` draws their tiles and markers, drawn in the game by `assets/shaders/body.gdshader`. To look at one: `-- --new-game --view-body=Cinder --view-bearing=45 --zoom=0.5 --survey-all --dig` (test craters, nothing saved).
 
+Swarms (#30): Fleet panel (F), Swarms. To look at one: `-- --new-game --demo-swarm=5000 --open-swarms` (cheats; nothing saved).
+
 ## Rules for agents
 
 See `AGENTS.md` and `docs/06_DECISION_LOG_AND_OPEN_QUESTIONS.md`. Proposals in the docs aren't requirements until they're logged as decisions.

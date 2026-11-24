@@ -85,6 +85,7 @@ public sealed partial class SectorState
 
     private void StepFabrication(double endS)
     {
+        StepSwarmGrowth(); // standing orders for swarms (#30)
         List<(CraftState Yard, BuildOrder Order)>? finished = null;
         foreach (var yard in _crafts)
         {
@@ -113,6 +114,7 @@ public sealed partial class SectorState
                 continue;
             }
             yard.BuildQueueList.Remove(order);
+            if (JoinSwarm(order)) continue; // its mass is now the swarm's (#30)
             var craft = new CraftState(AllocateCraftId(), order.ShipName, order.Design, order.Stats, yard.Position, yard.HeadingRad);
             AddCraft(craft);
             PlaceNextTo(yard, craft, endS);

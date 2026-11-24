@@ -45,11 +45,12 @@ public static class SaveGameSerializer
     /// servicing) and survey jobs; v17 added refit/dismantle/pack orders and the craft id counter
     /// (removed craft's ids are never reused, and jobs may still name them); v18 added warp gates and
     /// further star systems (their bodies are ordinary bodies; gates record their link and queue); v19
-    /// added research (points, techs done; older saves have everything unlocked) and star types.
+    /// added research (points, techs done; older saves have everything unlocked) and star types; v20 added
+    /// swarms (#30) and the swarm a build order is for.
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 19;
+    public const int SchemaVersion = 20;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -89,6 +90,17 @@ public static class SaveGameSerializer
                     : null,
                 Laws = sector.ActiveLaws.Count > 0 ? sector.ActiveLaws.ToList() : null,
                 Events = sector.Events.Count > 0 ? sector.Events.Select(e => new EventDto { Tick = e.Tick, Text = e.Text }).ToList() : null,
+                NextSwarmId = sector.NextSwarmId > 1 ? sector.NextSwarmId : 0,
+                Swarms = sector.Swarms.Count > 0
+                    ? sector.Swarms.Select(s => new SwarmDto
+                    {
+                        Id = s.Id.Value, Name = s.Name, Design = DesignToDto(s.Design), Count = s.Count, SourceBodyId = s.SourceBodyId.Value,
+                        MaterialId = s.MaterialId, DestinationId = s.DestinationId.Value, ReturnFraction = s.ReturnFraction,
+                        InventoryKg = s.Inventory.Kg.Count > 0 ? new SortedDictionary<string, long>(s.Inventory.Kg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal) : null,
+                        StoredEnergyKJ = s.StoredEnergyKJ, MineRemainderKg = s.MineRemainderKg, DeliverRemainderKg = s.DeliverRemainderKg,
+                        DeliveredKg = s.DeliveredKg, GrowYardId = s.GrowYardId.Value, GrowRemaining = s.GrowRemaining,
+                    }).ToList()
+                    : null,
                 EjectedKg = sector.EjectedKg.Count > 0
                     ? new SortedDictionary<string, long>(sector.EjectedKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal)
                     : null,
@@ -240,6 +252,7 @@ public static class SaveGameSerializer
                             Design = DesignToDto(o.Design),
                             MaterialsKg = new SortedDictionary<string, long>(o.MaterialsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal),
                             ProgressKg = o.ProgressKg,
+                            SwarmId = o.SwarmId.Value,
                         }).ToList()
                         : null,
                 }).ToList(),
@@ -347,7 +360,7 @@ public static class SaveGameSerializer
                     if (materials.Any(kv => !catalog.Materials.Contains(kv.Key) || kv.Value < 0))
                         throw new FormatException($"Order {o.OrderId} holds unknown or negative materials.");
                     sector.RestoreOrder(craft.Id, new BuildOrder(new OrderId(o.OrderId), o.ShipName ?? "", orderDesign,
-                        orderDesign.ComputeStats(catalog), materials, o.ProgressKg, isKit: orderDesign.SuggestedRole(catalog) == DesignRole.Station));
+                        orderDesign.ComputeStats(catalog), materials, o.ProgressKg, isKit: orderDesign.SuggestedRole(catalog) == DesignRole.Station) { SwarmId = new SwarmId(o.SwarmId) });
                 }
                 foreach (var kitDto in c.Kits ?? new List<KitDto>())
                 {
@@ -393,6 +406,31 @@ public static class SaveGameSerializer
                 if (!catalog.Materials.Contains(material)) throw new FormatException($"Unknown ejected material '{material}'.");
                 sector.RestoreEjected(material, kg);
             }
+
+            foreach (var s in dto.Swarms ?? new List<SwarmDto>()) // #30; the source or destination may be gone since: it waits with that reason
+            {
+                var design = DesignFromDto(s.Design, $"Swarm {s.Id}");
+                var swarmErrors = design.Validate(catalog, DesignRole.Ship, requireConnected: false);
+                if (swarmErrors.Count > 0) throw new FormatException($"Swarm {s.Id} design is invalid: {string.Join("; ", swarmErrors)}");
+                if (!catalog.Materials.Contains(s.MaterialId ?? "")) throw new FormatException($"Swarm {s.Id} mines unknown material '{s.MaterialId}'.");
+                if (s.MineRemainderKg is < 0 or >= 1 || s.DeliverRemainderKg is < 0 or >= 1 || s.GrowRemaining < 0 || s.DeliveredKg < 0)
+                    throw new FormatException($"Swarm {s.Id} has invalid progress.");
+                var swarm = new SwarmState(new SwarmId(s.Id), s.Name ?? $"Swarm {s.Id}", design, design.ComputeStats(catalog), s.Count,
+                    new BodyId(s.SourceBodyId), s.MaterialId!, new CraftId(s.DestinationId), s.ReturnFraction)
+                {
+                    StoredEnergyKJ = s.StoredEnergyKJ, MineRemainderKg = s.MineRemainderKg, DeliverRemainderKg = s.DeliverRemainderKg,
+                    DeliveredKg = s.DeliveredKg, GrowYardId = new CraftId(s.GrowYardId), GrowRemaining = s.GrowRemaining,
+                };
+                if (!(s.StoredEnergyKJ >= 0) || s.StoredEnergyKJ > swarm.Count * swarm.Stats.EnergyCapacityKJ * (1 + 1e-9) + 1e-6)
+                    throw new FormatException($"Swarm {s.Id} holds {s.StoredEnergyKJ} kJ.");
+                foreach (var (material, kg) in s.InventoryKg ?? new SortedDictionary<string, long>())
+                {
+                    if (!catalog.Materials.Contains(material) || kg <= 0) throw new FormatException($"Swarm {s.Id} holds {kg} kg of '{material}'.");
+                    swarm.Inventory.Add(material, kg);
+                }
+                sector.RestoreSwarm(swarm);
+            }
+            sector.RestoreNextSwarmId(dto.NextSwarmId);
 
             // Links between crafts, after every craft exists.
             foreach (var c in dto.Crafts ?? new List<CraftDto>())
@@ -613,6 +651,14 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<EventDto>? Events { get; set; }
+
+        /// <summary>v20: swarms (#30) and the next swarm id.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<SwarmDto>? Swarms { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint NextSwarmId { get; set; }
+
         public SortedDictionary<string, long>? EjectedKg { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] // omitted while every multiplier is 1
         public TuningDto? Tuning { get; set; }
@@ -902,6 +948,26 @@ public static class SaveGameSerializer
         public double? SpotBearingRad { get; set; }
     }
 
+    private sealed class SwarmDto
+    {
+        public uint Id { get; set; }
+        public string? Name { get; set; }
+        public DesignDto? Design { get; set; }
+        public int Count { get; set; }
+        public uint SourceBodyId { get; set; }
+        public string? MaterialId { get; set; }
+        public uint DestinationId { get; set; }
+        public double ReturnFraction { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public SortedDictionary<string, long>? InventoryKg { get; set; }
+        public double StoredEnergyKJ { get; set; }
+        public double MineRemainderKg { get; set; }
+        public double DeliverRemainderKg { get; set; }
+        public long DeliveredKg { get; set; }
+        public uint GrowYardId { get; set; }
+        public int GrowRemaining { get; set; }
+    }
+
     private sealed class OrderDto
     {
         public long OrderId { get; set; }
@@ -909,6 +975,10 @@ public static class SaveGameSerializer
         public DesignDto? Design { get; set; }
         public SortedDictionary<string, long>? MaterialsKg { get; set; }
         public double ProgressKg { get; set; }
+
+        /// <summary>v20: the swarm this ship joins (#30).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint SwarmId { get; set; }
     }
 
     private sealed class DesignDto

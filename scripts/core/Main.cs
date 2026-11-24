@@ -92,6 +92,9 @@ public partial class Main : Node2D
     private BlueprintEditorView? _editor;
     private ShipyardPanel? _shipyardPanel;
     private FleetPanel? _fleetPanel;
+
+    /// <summary>Swarms (#30), opened from the Fleet panel.</summary>
+    private SwarmPanel? _swarmPanel;
     private CargoPanel? _cargoPanel;
     private JobPanel? _jobPanel;
     private DebugPanel? _debugPanel;
@@ -170,6 +173,9 @@ public partial class Main : Node2D
                 ShowStatus($"Target: {_sector.GetCraft(target).Name}.");
             };
             _uiRoot.AddChild(_fleetPanel);
+            _swarmPanel = new SwarmPanel(() => _sector, () => _changedSinceSave = true) { Visible = false }; // #30
+            _uiRoot.AddChild(_swarmPanel);
+            _fleetPanel.SwarmsChosen += () => Toggle(_swarmPanel, () => _swarmPanel.Open());
             _cargoPanel = new CargoPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
             _uiRoot.AddChild(_cargoPanel);
             _jobPanel = new JobPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false };
@@ -283,6 +289,8 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-shipyard") >= 0) _shipyardPanel?.Open();
         if (args.FirstOrDefault(a => a.StartsWith("--shipyard-design=")) is { } designArg && int.TryParse(designArg["--shipyard-design=".Length..], out var designIndex))
             _shipyardPanel?.SelectDesign(designIndex);
+        DemoSwarm(args); // #30
+        if (System.Array.IndexOf(args, "--open-swarms") >= 0) _swarmPanel?.Open();
         if (System.Array.IndexOf(args, "--open-fleet") >= 0) _fleetPanel?.Open();
         if (System.Array.IndexOf(args, "--open-diagnostics") >= 0) _diagnosticsPanel?.Open();
         if (System.Array.IndexOf(args, "--open-settings") >= 0) _settingsPanel?.Open();
@@ -685,7 +693,7 @@ public partial class Main : Node2D
             if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1); // settings open above the menu
         }
         _hud.Visible = false;
-        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel })
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel })
             if (panel != null) panel.Visible = false;
         _title.Open(SaveSummary());
     }
@@ -868,7 +876,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
-            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel };
+            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel };
             var anyOpen = _mapMode || _hud.HelpOpen || panels.Any(p => p is { Visible: true });
             if (!anyOpen) OpenPause();
             if (_mapMode) ToggleMap();
@@ -1198,6 +1206,7 @@ public partial class Main : Node2D
             if (view.Grow(radiusPx).HasPoint(at)) _visibleCrafts.Add((craft, at, radiusPx));
         }
         foreach (var (craft, _, _) in _visibleCrafts) DrawCraft(craft);
+        DrawSwarms(renderTimeS); // #30
         FlushBatch();
         // Name tags, not when zoomed far out; in a crowd only stations and the target get one, so the text stays readable and cheap.
         var crowd = _visibleCrafts.Count > MaxNameTags;

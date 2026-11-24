@@ -36,6 +36,9 @@ public partial class FleetPanel : PanelContainer
     /// <summary>Raised when the player picks a craft as the piloted ship's target.</summary>
     public event Action<CraftId>? CraftTargeted;
 
+    /// <summary>Raised by the Swarms button (#30).</summary>
+    public event Action? SwarmsChosen;
+
     public FleetPanel(Func<SectorState> sector, Func<CraftId?> piloted)
     {
         _sector = sector;
@@ -70,7 +73,13 @@ public partial class FleetPanel : PanelContainer
         AddChild(box);
         _title = new Label();
         _title.AddThemeFontSizeOverride("font_size", 18);
-        box.AddChild(_title);
+        var head = new HBoxContainer();
+        _title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        head.AddChild(_title);
+        var swarms = new Button { Text = "Swarms", FocusMode = FocusModeEnum.None, TooltipText = "Run many identical miners as one swarm" };
+        swarms.Pressed += () => SwarmsChosen?.Invoke();
+        head.AddChild(swarms);
+        box.AddChild(head);
         _summary = new Label { Modulate = new Color(1, 1, 1, 0.75f) };
         box.AddChild(_summary);
 
@@ -131,7 +140,8 @@ public partial class FleetPanel : PanelContainer
 
         _title.Text = $"FLEET ({crafts.Count})  ({InputActions.Key1(InputActions.Fleet)} to close)";
         _summary.Text = $"{crafts.Count(IsShip)} ships, {crafts.Count(c => !IsShip(c))} stations   "
-                        + $"{crafts.Count(c => c.IsAutomated)} automated, {crafts.Count(IsWaiting)} waiting";
+                        + $"{crafts.Count(c => c.IsAutomated)} automated, {crafts.Count(IsWaiting)} waiting"
+                        + (sector.Swarms.Count > 0 ? $"   {sector.Swarms.Count} swarms ({sector.Swarms.Sum(s => s.Count):N0} ships)" : "");
 
         double Distance(CraftState c) => pilot is null ? 0 : pilot.Position.DistanceTo(c.Position);
         var search = _search.Text.Trim();
