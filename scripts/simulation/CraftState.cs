@@ -207,6 +207,20 @@ public sealed class CraftState
     /// <summary>What the lab is doing this tick, for display. Not saved.</summary>
     public string? LabStatus { get; internal set; }
 
+    // --- Combat (#84, #85) ---
+
+    /// <summary>Whose craft this is: 0 the player's, else the civilization's id. Saved.</summary>
+    public int FactionId { get; internal set; }
+
+    /// <summary>Shot to pieces: it drifts with what it holds and does nothing. Saved.</summary>
+    public bool IsWreck { get; internal set; }
+
+    /// <summary>The player's order not to fire. Saved.</summary>
+    public bool HoldFire { get; set; }
+
+    /// <summary>When each weapon can fire again, by cell. Saved.</summary>
+    internal Dictionary<GridPos, long> WeaponReadyTicks { get; } = new();
+
     /// <summary>For a warp gate (#22): the gate it sends craft to (in another system); None until its first jump. Saved.</summary>
     public CraftId GateLinkId { get; internal set; }
 

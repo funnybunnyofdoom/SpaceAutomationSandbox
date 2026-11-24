@@ -309,6 +309,24 @@ def gate_defense(a):
     return b, d
 
 
+def autocannon(a):
+    b, d = panel(), Img()
+    d.rect(4, 7, 11, 13, shade(a, 0.7)); d.outline(4, 7, 11, 13, OUT)
+    for x in (5, 9):  # twin barrels face forward
+        d.rect(x, 0, x + 1, 8, DARK); d.vline(x, 1, 8, SHADOW); d.hline(x, x + 1, 0, OUT)
+    d.hline(5, 10, 9, a); d.hline(5, 10, 10, shade(a, 1.3)); d.set(7, 12, RIVET); d.set(8, 12, RIVET)
+    return b, d
+
+
+def laser(a):
+    b, d = panel(), Img()
+    d.disc(8, 9, 4.5, DARK); d.ring(8, 9, 3.2, 4.5, SHADOW)
+    d.rect(6, 2, 9, 8, PLATE_L); d.outline(6, 2, 9, 8, OUT)
+    d.rect(7, 1, 8, 4, a); d.set(7, 1, shade(a, 1.7)); d.set(8, 1, shade(a, 1.7))
+    d.disc(8, 9, 1.8, a); d.set(7, 8, shade(a, 1.6))
+    return b, d
+
+
 def research_lab(a):
     b, d = panel(), Img()
     for y in range(4, 10):  # a dish, open to the front
@@ -469,6 +487,7 @@ DRAW = {
     "solar_panel_mk2": lambda a: solar(a, 2), "solar_panel_mk3": lambda a: solar(a, 3),
     "battery_mk2": lambda a: battery(a, 2), "refinery_mk2": lambda a: refinery(a, 2),
     "fabricator_mk2": lambda a: fabricator(a, 2), "warp_gate": warp_gate, "gate_defense": gate_defense,
+    "autocannon": autocannon, "laser": laser,
     "research_lab": research_lab,
     "fuel_generator": fuel_generator,
     "electrolyser": electrolyser, "fuel_cell": fuel_cell,

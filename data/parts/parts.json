@@ -47,7 +47,7 @@
       "materialsKg": { "metal": 3500, "electronics": 1700, "composites": 800 } },
     { "id": "fabricator_mk2", "name": "Fabricator Mk2", "massKg": 7000, "placeholderColor": "#a98bf0", "fabricationRateKgPerS": 1000, "powerUseKW": 300,
       "materialsKg": { "metal": 4000, "electronics": 2200, "composites": 800 } },
-    { "id": "warp_gate", "name": "Warp gate", "massKg": 30000, "placeholderColor": "#c86bf0", "isWarpGate": true,
+    { "id": "warp_gate", "name": "Warp gate", "massKg": 30000, "placeholderColor": "#c86bf0", "isWarpGate": true,"toughness": 10, 
       "materialsKg": { "metal": 15000, "electronics": 10000, "composites": 5000 } },
     { "id": "fuel_generator", "name": "Fuel generator", "massKg": 3000, "placeholderColor": "#c8a040", "generatorKW": 400,
       "generatorBurnsKg": { "fuel": 1 }, "generatorKJPerBatch": 10000,
@@ -88,7 +88,7 @@
     { "id": "fusion_reactor", "name": "Fusion reactor", "massKg": 40000, "placeholderColor": "#c0a0ff", "generatorKW": 10000,
       "generatorBurnsKg": { "deuterium": 1 }, "generatorKJPerBatch": 50000000,
       "materialsKg": { "metal": 25000, "electronics": 10000, "composites": 3000, "superconductors": 2000 } },
-    { "id": "gate_defense", "name": "Gate defense battery", "massKg": 4000, "placeholderColor": "#d9534f", "isGateDefense": true,
+    { "id": "gate_defense", "name": "Gate defense battery", "massKg": 4000, "placeholderColor": "#d9534f", "isGateDefense": true,"weapon": { "kind": "laser", "rangeM": 1000, "damagePerShot": 0.05, "intervalS": 0.5, "energyKJPerShot": 25, "arcDeg": 360, "needsArmedGates": true }, "toughness": 3, 
       "materialsKg": { "metal": 2500, "electronics": 1000, "composites": 500 } },
     { "id": "research_lab", "name": "Research lab", "massKg": 4000, "placeholderColor": "#e0d27f", "researchRatePerS": 0.1, "powerUseKW": 80,
       "materialsKg": { "metal": 2000, "electronics": 1500, "composites": 500 } },
@@ -97,6 +97,8 @@
     { "id": "drill_mk3", "name": "Mining drill Mk3", "massKg": 3300, "placeholderColor": "#e4e9ef", "miningRateKgPerS": 300, "powerUseKW": 180,
       "materialsKg": { "metal": 2100, "electronics": 600, "superconductors": 400, "composites": 200 } },
     { "id": "solar_panel_mk3", "name": "Solar panel Mk3", "massKg": 800, "placeholderColor": "#7aa8ff", "powerGenerationKW": 350,
-      "materialsKg": { "metal": 200, "electronics": 250, "superconductors": 200, "composites": 150 } }
+      "materialsKg": { "metal": 200, "electronics": 250, "superconductors": 200, "composites": 150 } },
+    { "id": "autocannon", "name": "Autocannon", "massKg": 2000, "placeholderColor": "#b5823c", "cargoCapacityKg": 500, "toughness": 2, "weapon": { "kind": "gun", "rangeM": 900, "damagePerShot": 0.15, "intervalS": 1, "energyKJPerShot": 5, "ammoMaterial": "shells", "ammoKgPerShot": 2, "shotSpeedMps": 600, "arcDeg": 60 }, "materialsKg": { "metal": 1600, "electronics": 400 } },
+    { "id": "laser", "name": "Laser", "massKg": 1500, "placeholderColor": "#e0507a", "toughness": 2, "weapon": { "kind": "laser", "rangeM": 600, "damagePerShot": 0.03, "intervalS": 0.25, "energyKJPerShot": 30, "arcDeg": 180 }, "materialsKg": { "metal": 700, "electronics": 600, "composites": 200 } }
   ]
 }

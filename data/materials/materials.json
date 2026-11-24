@@ -22,6 +22,7 @@
     { "id": "spent_fuel",  "name": "Spent fuel",  "placeholderColor": "#5f6f3f" },
     { "id": "methane_ice", "name": "Methane ice", "placeholderColor": "#d8f0e0" },
     { "id": "methane",     "name": "Methane",     "placeholderColor": "#f0f0b0" },
-    { "id": "deuterium",   "name": "Deuterium",   "placeholderColor": "#c0b0ff" }
+    { "id": "deuterium",   "name": "Deuterium",   "placeholderColor": "#c0b0ff" },
+    { "id": "shells",      "name": "Shells",      "placeholderColor": "#a8783c" }
   ]
 }

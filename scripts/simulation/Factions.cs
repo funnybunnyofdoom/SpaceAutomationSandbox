@@ -20,7 +20,7 @@ public static class Laws
         new(RespectClaims, "Respect claimed systems", "Your craft don't mine bodies in a system a civilization claims."),
         new(NoDismantling, "No planet dismantling", "No bulk rock or ice mining anywhere: ore deposits only."),
         new(OrganicCrews, "Organic crews only", "Robot bays don't count as crew."),
-        new(ArmedGates, "Armed gates", "Gate defense batteries work: each one makes a raid on that gate less likely to succeed."),
+        new(ArmedGates, "Armed gates", "Gate defense batteries fire at raiders near their gate."),
     };
 
     public static LawDefinition Get(string id) => All.First(l => l.Id == id);
@@ -82,6 +82,10 @@ public sealed class Faction
 
     /// <summary>Tick of its next decision (raid, warning).</summary>
     public long NextEventTick { get; internal set; }
+
+    /// <summary>The gate its raiders are attacking now (#84), or None, and when they give up. Saved.</summary>
+    public CraftId RaidGateId { get; internal set; } = CraftId.None;
+    public long RaidEndTick { get; internal set; }
 
     public const double HostileBelow = -30, FriendlyFrom = 30;
     public const double PointsPerStance = 15;

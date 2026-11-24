@@ -66,6 +66,8 @@ public sealed partial class SectorState
     public string? SwarmBlocker(CraftState craft)
     {
         var s = craft.Stats;
+        if (!IsPlayers(craft) || craft.IsWreck) return "it isn't a working ship of yours";
+        if (s.WeaponList.Count > 0) return "its design is armed";
         if (craft.Id == PilotCraftId) return "you are flying it";
         if (craft.Job is not MiningJob { Active: true }) return "it has no mining job";
         if (s.DockingPorts.Count > 0) return "its design has docking ports";

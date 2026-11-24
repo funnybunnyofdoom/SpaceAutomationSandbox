@@ -186,15 +186,17 @@ public sealed class FactionTests
         Assert.Equal(Disposition.Hostile, faction.Disposition);
         var mass = sector.ComputeMassLedger().TotalKg;
 
-        Run(sector, () => !sector.Crafts.Contains(far), 90 * TicksPerMinute);
-        Assert.DoesNotContain(far, sector.Crafts);
+        Run(sector, () => far.IsWreck, 90 * TicksPerMinute);
+        Assert.True(far.IsWreck);
+        Assert.Contains(far, sector.Crafts); // what is left of it drifts there (#84)
         Assert.Equal(star.Id, near.GateLostStarId);
         Assert.Equal(mass, sector.ComputeMassLedger().TotalKg);
         Assert.Contains(sector.Events, e => e.Text.Contains($"{faction.Name} destroyed"));
         Assert.Contains(ship, sector.Crafts); // the ship that was docked there is left floating, not destroyed
         Assert.False(ship.IsDocked);
         // They never come through the gate: nothing of theirs appears at home.
-        Assert.All(sector.Crafts, c => Assert.DoesNotContain(faction.Name, c.Name));
+        var home = sector.StarAt(near.Position)!.Id;
+        Assert.All(sector.Crafts.Where(c => sector.StarAt(c.Position)!.Id == home), c => Assert.True(SectorState.IsPlayers(c)));
     }
 
     [Fact]
@@ -202,7 +204,7 @@ public sealed class FactionTests
     {
         var (sector, near, far, star, _) = OpenedSystem();
         sector.MeetCivilization(star, cultureId: "pacifist", baseline: -80);
-        Run(sector, () => !sector.Crafts.Contains(far), 90 * TicksPerMinute);
+        Run(sector, () => far.IsWreck, 90 * TicksPerMinute);
         var stars = sector.Stars.Count;
 
         // Without its bill in stock it waits and says so.
@@ -231,7 +233,7 @@ public sealed class FactionTests
         Assert.Equal(8, sector.GateDefenses(far));
 
         var faction = sector.MeetCivilization(star, cultureId: "militarist", baseline: -90); // likes armed gates, but starts far below
-        Run(sector, () => sector.Events.Any(e => e.Text.Contains("drove them off")) || !sector.Crafts.Contains(far), 4 * 60 * TicksPerMinute);
+        Run(sector, () => sector.Events.Any(e => e.Text.Contains("drove them off")) || far.IsWreck, 4 * 60 * TicksPerMinute);
         Assert.Contains(sector.Events, e => e.Text.Contains("drove them off"));
         Assert.True(faction.Attitude > -90); // drifting up towards what it thinks of armed gates
     }
@@ -242,7 +244,7 @@ public sealed class FactionTests
         var (sector, near, far, star, ship) = OpenedSystem();
         sector.MeetCivilization(star, cultureId: "pacifist", baseline: -80);
         sector.SetLaw(Laws.NoDismantling, true);
-        Run(sector, () => !sector.Crafts.Contains(far), 90 * TicksPerMinute);
+        Run(sector, () => far.IsWreck, 90 * TicksPerMinute);
 
         var player = sector.PilotCraftId;
         var json = SaveGameSerializer.ToJson(sector, player);
@@ -254,5 +256,27 @@ public sealed class FactionTests
 
         for (var i = 0; i < 10 * TicksPerMinute; i++) { sector.Step(); loaded.Step(); }
         Assert.Equal(SaveGameSerializer.ToJson(sector, player), SaveGameSerializer.ToJson(loaded, player));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Raiders_destroy_an_undefended_gate_whether_or_not_you_watch(bool watched)
+    {
+        var (sector, _, far, star, ship) = OpenedSystem();
+        var faction = sector.MeetCivilization(star, cultureId: "pacifist", baseline: -80);
+        sector.PilotCraftId = watched ? ship.Id : CraftId.None;
+        sector.StartRaid(faction, far, 3);
+        var mass = sector.ComputeMassLedger().TotalKg;
+        var log = new List<string>();
+        for (var i = 0; i < 10 * TicksPerMinute && !far.IsWreck; i++)
+        {
+            sector.Step();
+            if (i % 1200 == 0) log.Add(string.Join("; ", sector.Crafts.Where(c => !SectorState.IsPlayers(c)).Select(c => $"{c.Position.DistanceTo(far.Position):0}m v{(c.Velocity - far.Velocity).Length:0} {(c.IsWreck ? "wreck" : "")} {c.Inventory["shells"]}kg {c.StoredEnergyKJ:0}kJ shots{sector.Shots.Count}")) + $" gate {far.PartHealth.Count}/{far.PartsLost}");
+        }
+        Assert.True(far.IsWreck, string.Join(" | ", log));
+        for (var i = 0; i < 100; i++) sector.Step();
+        Assert.DoesNotContain(sector.Crafts, c => !SectorState.IsPlayers(c)); // they leave
+        Assert.Equal(mass, sector.ComputeMassLedger().TotalKg);
     }
 }

@@ -190,6 +190,7 @@ public sealed partial class SectorState
         // to "TimeS of the next tick" (matters for exact save/load equivalence).
         var midTickS = (Tick + 0.5) * FixedStepClock.TickSeconds;
         var endS = (Tick + 1) * FixedStepClock.TickSeconds;
+        SteerRaiders(); // a raid's ships (#84)
         StepJobs(); // automated craft set their controls first, from this tick's state
         BeginPowerTick();
         StepLifeSupport(); // crew first: a craft without its crew can't fly or work this tick (#11)
@@ -236,6 +237,7 @@ public sealed partial class SectorState
         }
 
         if (docked != null) UpdateDocked(docked);
+        StepCombat(endS); // weapons, shots and wrecks (#84, #85)
         ResolveCraftCollisions(); // after everything moved (#34)
         StepMining();
         StepSwarms(); // many ships as one flow (#30)

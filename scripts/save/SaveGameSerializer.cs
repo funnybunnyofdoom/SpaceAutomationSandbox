@@ -46,11 +46,11 @@ public static class SaveGameSerializer
     /// (removed craft's ids are never reused, and jobs may still name them); v18 added warp gates and
     /// further star systems (their bodies are ordinary bodies; gates record their link and queue); v19
     /// added research (points, techs done; older saves have everything unlocked) and star types; v20 added
-    /// swarms (#30) and the swarm a build order is for.
+    /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 20;
+    public const int SchemaVersion = 21;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -86,10 +86,14 @@ public static class SaveGameSerializer
                     {
                         Id = f.Id, Name = f.Name, Culture = f.Culture.Id, HomeStarId = f.HomeStarId.Value, Baseline = f.Baseline,
                         Attitude = f.Attitude, Grievance = f.Grievance, NextEventTick = f.NextEventTick, Warned = sector.FactionWarned(f.Id),
+                        RaidGateId = f.RaidGateId.Value, RaidEndTick = f.RaidGateId.IsNone ? 0 : f.RaidEndTick,
                     }).ToList()
                     : null,
                 Laws = sector.ActiveLaws.Count > 0 ? sector.ActiveLaws.ToList() : null,
                 Events = sector.Events.Count > 0 ? sector.Events.Select(e => new EventDto { Tick = e.Tick, Text = e.Text }).ToList() : null,
+                Shots = sector.Shots.Count > 0
+                    ? sector.Shots.Select(s => new ShotDto { Position = Vec(s.Position), Velocity = Vec(s.Velocity), ExpireTick = s.ExpireTick, Damage = s.Damage, FactionId = s.FactionId }).ToList()
+                    : null,
                 NextSwarmId = sector.NextSwarmId > 1 ? sector.NextSwarmId : 0,
                 Swarms = sector.Swarms.Count > 0
                     ? sector.Swarms.Select(s => new SwarmDto
@@ -174,6 +178,13 @@ public static class SaveGameSerializer
                     GateReadyTick = c.GateReadyTick,
                     JumpRequestTick = c.JumpRequestTick,
                     Jumps = c.Jumps,
+                    FactionId = c.FactionId,
+                    IsWreck = c.IsWreck,
+                    HoldFire = c.HoldFire,
+                    WeaponReady = c.WeaponReadyTicks.Any(w => w.Value > sector.Tick)
+                        ? c.WeaponReadyTicks.Where(w => w.Value > sector.Tick).OrderBy(w => w.Key.Y).ThenBy(w => w.Key.X)
+                            .Select(w => new WeaponReadyDto { X = w.Key.X, Y = w.Key.Y, Tick = w.Value }).ToList()
+                        : null,
                     LabRemainderKg = c.LabRemainderKg,
                     Crew = c.Crew,
                     DockClaimStationId = c.DockClaimStation.Value,
@@ -337,6 +348,10 @@ public static class SaveGameSerializer
                 sector.RestoreCrew(craft.Id, c.Crew, c.FoodRemainderKg, c.WaterRemainderKg, c.FarmRemainderKg, c.CrewGrowthS, c.LegacyNoCrew);
                 sector.RestoreHealth(craft.Id,
                     (c.PartHealth ?? new List<HealthDto>()).ToDictionary(h => new GridPos(h.X, h.Y), h => h.Health), c.PartsLost);
+                craft.FactionId = c.FactionId; // #84
+                craft.IsWreck = c.IsWreck;
+                craft.HoldFire = c.HoldFire;
+                foreach (var w in c.WeaponReady ?? new List<WeaponReadyDto>()) craft.WeaponReadyTicks[new GridPos(w.X, w.Y)] = w.Tick;
                 craft.CruiseFuelRemainderKg = c.CruiseFuelRemainderKg;
                 foreach (var (m, kg) in c.PropellantDebtKg ?? new SortedDictionary<string, double>()) // #80
                 {
@@ -397,7 +412,7 @@ public static class SaveGameSerializer
             {
                 if (sector.Bodies.All(b => b.Id.Value != f.HomeStarId)) throw new FormatException($"Civilization {f.Id} claims a missing system.");
                 if (!double.IsFinite(f.Attitude) || !(f.Grievance >= 0)) throw new FormatException($"Civilization {f.Id} has invalid attitude.");
-                sector.RestoreFaction(f.Id, f.Name ?? $"Civilization {f.Id}", f.Culture ?? "", new BodyId(f.HomeStarId), f.Baseline, f.Attitude, f.Grievance, f.NextEventTick, f.Warned);
+                sector.RestoreFaction(f.Id, f.Name ?? $"Civilization {f.Id}", f.Culture ?? "", new BodyId(f.HomeStarId), f.Baseline, f.Attitude, f.Grievance, f.NextEventTick, f.Warned, new CraftId(f.RaidGateId), f.RaidEndTick);
             }
             sector.RestoreLaws(dto.Laws ?? new List<string>());
             sector.RestoreEvents((dto.Events ?? new List<EventDto>()).Select(e => new SectorEvent(e.Tick, e.Text ?? "")));
@@ -431,6 +446,11 @@ public static class SaveGameSerializer
                 sector.RestoreSwarm(swarm);
             }
             sector.RestoreNextSwarmId(dto.NextSwarmId);
+            foreach (var s in dto.Shots ?? new List<ShotDto>())
+            {
+                if (!(s.Damage >= 0)) throw new FormatException("A shot has invalid damage.");
+                sector.RestoreShot(new Shot { Position = ToVec(s.Position, "shot position"), Velocity = ToVec(s.Velocity, "shot velocity"), ExpireTick = s.ExpireTick, Damage = s.Damage, FactionId = s.FactionId });
+            }
 
             // Links between crafts, after every craft exists.
             foreach (var c in dto.Crafts ?? new List<CraftDto>())
@@ -652,6 +672,10 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<EventDto>? Events { get; set; }
 
+        /// <summary>v21: shots in flight (#85).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<ShotDto>? Shots { get; set; }
+
         /// <summary>v20: swarms (#30) and the next swarm id.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<SwarmDto>? Swarms { get; set; }
@@ -677,6 +701,13 @@ public static class SaveGameSerializer
         public double Grievance { get; set; }
         public long NextEventTick { get; set; }
         public bool Warned { get; set; }
+
+        /// <summary>v21: the gate it's raiding.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint RaidGateId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public long RaidEndTick { get; set; }
     }
 
     private sealed class EventDto
@@ -796,6 +827,19 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int Jumps { get; set; }
+
+        /// <summary>v21: combat (#84).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int FactionId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsWreck { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool HoldFire { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<WeaponReadyDto>? WeaponReady { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double LabRemainderKg { get; set; }
@@ -946,6 +990,22 @@ public static class SaveGameSerializer
         /// <summary>Mining: this trip's landing spot bearing (v14+, #55); null when not picked yet.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public double? SpotBearingRad { get; set; }
+    }
+
+    private sealed class ShotDto
+    {
+        public VecDto? Position { get; set; }
+        public VecDto? Velocity { get; set; }
+        public long ExpireTick { get; set; }
+        public double Damage { get; set; }
+        public int FactionId { get; set; }
+    }
+
+    private sealed class WeaponReadyDto
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+        public long Tick { get; set; }
     }
 
     private sealed class SwarmDto

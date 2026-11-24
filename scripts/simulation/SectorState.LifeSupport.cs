@@ -40,7 +40,7 @@ public sealed partial class SectorState
     public const double CrewGrowthS = 600;
 
     /// <summary>True if the craft can fly and work this tick (crew-wise).</summary>
-    public static bool Operational(CraftState craft) => craft.CrewShortReason is null;
+    public static bool Operational(CraftState craft) => craft.CrewShortReason is null && !craft.IsWreck;
 
     /// <summary>Hours the craft's food and water last for its crew at the current rate (∞ without crew).</summary>
     public static double SuppliesLastHours(CraftState craft)

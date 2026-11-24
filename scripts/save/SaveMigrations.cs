@@ -39,6 +39,7 @@ public static class SaveMigrations
         [18] = ("v19 added research: a game started before it keeps everything unlocked (it was all open then)",
             (root, _) => { if (root["sector"] is System.Text.Json.Nodes.JsonObject sector) sector["researchAllUnlocked"] = true; }),
         [19] = ("v20 added swarms: an older save has none", (_, _) => { }),
+        [20] = ("v21 added combat: every craft in an older save is the player's and whole, and no raid is on", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

@@ -182,7 +182,7 @@ public sealed partial class SectorState
                 var bestDistance = double.PositiveInfinity;
                 foreach (var source in _crafts)
                 {
-                    if (ReferenceEquals(source, ship) || ReferenceEquals(source, station) || source.Stats.DockingPorts.Count == 0) continue;
+                    if (ReferenceEquals(source, ship) || ReferenceEquals(source, station) || source.Stats.DockingPorts.Count == 0 || source.IsWreck) continue;
                     var spare = source.Inventory[material] - WantedKg(source, material)
                                 - outgoing.GetValueOrDefault((source.Id, material));
                     var amount = Math.Min(Math.Min(need, spare), ship.FreeCargoKg);

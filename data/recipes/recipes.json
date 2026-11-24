@@ -8,6 +8,7 @@
     { "id": "process_ice", "name": "Process ice", "inputsKg": { "ice": 1000 }, "outputsKg": { "water": 600, "fuel": 300, "slag": 100 } },
     { "id": "melt_methane_ice", "name": "Melt methane ice", "inputsKg": { "methane_ice": 1000 }, "outputsKg": { "methane": 950, "slag": 50 } },
     { "id": "make_fuel_rods", "name": "Make fuel rods", "inputsKg": { "uranium_ore": 1000 }, "outputsKg": { "fuel_rods": 50, "slag": 950 } },
-    { "id": "make_superconductors", "name": "Make superconductors", "inputsKg": { "exotic_ore": 1000 }, "outputsKg": { "superconductors": 300, "slag": 700 } }
+    { "id": "make_superconductors", "name": "Make superconductors", "inputsKg": { "exotic_ore": 1000 }, "outputsKg": { "superconductors": 300, "slag": 700 } },
+    { "id": "make_shells", "name": "Make shells", "onRequest": true, "inputsKg": { "metal": 100 }, "outputsKg": { "shells": 100 } }
   ]
 }

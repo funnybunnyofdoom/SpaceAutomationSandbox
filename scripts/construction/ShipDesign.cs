@@ -120,8 +120,12 @@ public sealed record ShipStats(
     IReadOnlyList<ConverterStats>? Converters = null,
     double GeothermalKW = 0,
     IReadOnlyList<PropellantDrive>? Drives = null,
-    double StellarHeatKW = 0)
+    double StellarHeatKW = 0,
+    IReadOnlyList<WeaponMount>? Weapons = null)
 {
+    /// <summary>Weapons, in cell order (#85); empty if none.</summary>
+    public IReadOnlyList<WeaponMount> WeaponList => Weapons ?? Array.Empty<WeaponMount>();
+
     /// <summary>Drives that burn propellant (#80), by part type and facing; empty if none.</summary>
     public IReadOnlyList<PropellantDrive> DriveList => Drives ?? Array.Empty<PropellantDrive>();
 
@@ -294,6 +298,7 @@ public sealed class ShipDesign
         double food = 0, habitatPower = 0, farmPower = 0, robots = 0, robotPower = 0;
         var gates = 0;
         var defenses = 0;
+        List<WeaponMount>? weapons = null;
         var generatorKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         var converterKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         double geothermal = 0, stellarHeat = 0;
@@ -350,6 +355,7 @@ public sealed class ShipDesign
             else if (part.ResearchRatePerS > 0) labPower += part.PowerUseKW;
             if (part.IsWarpGate) gates++;
             if (part.IsGateDefense) defenses++;
+            if (part.Weapon is { } weapon) (weapons ??= new()).Add(new WeaponMount(cell.Pos, cell.Rotation, weapon, h)); // #85
             if (part.GeneratorKW > 0) generatorKW[part.Id] = generatorKW.GetValueOrDefault(part.Id) + part.GeneratorKW * h; // #75
             if (part.ConverterKW > 0) converterKW[part.Id] = converterKW.GetValueOrDefault(part.Id) + part.ConverterKW * h; // #78
             geothermal += part.GeothermalKW * h; // #77
@@ -382,7 +388,7 @@ public sealed class ShipDesign
             converterKW.Count == 0 ? null : converterKW.Select(c => ConverterStats.From(catalog.Get(c.Key), c.Value)).ToList(),
             geothermal,
             drives.Count == 0 ? null : drives.Select(d => PropellantDrive.From(catalog.Get(d.Key.Item1), d.Key.Item2, d.Value)).ToList(),
-            stellarHeat);
+            stellarHeat, weapons);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

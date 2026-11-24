@@ -5,11 +5,10 @@ using System.Linq;
 namespace SpaceAutomationSandbox.Simulation;
 
 /// <summary>
-/// Other civilizations and the player's laws (#36). No shooting: civilizations act through attitude-driven
-/// events. One may claim a system a warp gate opens (about one in four, never the home system). Its
+/// Other civilizations and the player's laws (#36). Civilizations act through attitude-driven
+/// events; a raid is a real fight (#84, SectorState.Combat). One may claim a system a warp gate opens (about one in four, never the home system). Its
 /// attitude drifts towards what its culture thinks of your laws, minus grievances for mining in its system.
-/// A hostile one raids your gate in its system now and then; working gate defenses (with the Armed gates
-/// law) make a raid less likely to succeed. A destroyed far gate leaves the near gate tied to that system:
+/// A hostile one raids your gate in its system now and then; gate defense batteries fire with the Armed gates law. A destroyed far gate leaves the near gate tied to that system:
 /// its next jump sends a new far gate through, built from its stock as when it first opened the system.
 /// Civilizations never follow you through gates. Deterministic: every roll comes from the seed and the tick.
 /// </summary>
@@ -167,11 +166,10 @@ public sealed partial class SectorState
         var rng = new DeterministicRandom(Seed ^ ((ulong)faction.Id * 0x9E3779B97F4A7C15UL) ^ (ulong)Tick);
         if (faction.Disposition == Disposition.Hostile)
         {
-            var gate = _crafts.Where(c => IsGate(c) && StarAt(c.Position)?.Id == faction.HomeStarId).OrderBy(c => c.Id.Value).FirstOrDefault();
+            if (RaidOn(faction)) return;
+            var gate = _crafts.Where(c => IsGate(c) && !c.IsWreck && StarAt(c.Position)?.Id == faction.HomeStarId).OrderBy(c => c.Id.Value).FirstOrDefault();
             if (gate is null || rng.NextDouble() >= RaidChance) return;
-            var defenses = GateDefenses(gate);
-            if (rng.NextDouble() < 1.0 / (1 + defenses)) DestroyGate(gate, faction);
-            else AddEvent($"The {faction.Name} raided {gate.Name}; its {defenses} defense batter{(defenses == 1 ? "y" : "ies")} drove them off.");
+            StartRaid(faction, gate, 2 + (int)(rng.NextUInt64() % 3)); // real raiders (#84)
         }
         else if (faction.Disposition == Disposition.Wary && faction.Grievance >= 5 && !_warned.GetValueOrDefault(faction.Id))
         {
@@ -189,32 +187,6 @@ public sealed partial class SectorState
     {
         if (kg <= 0 || _factions.Count == 0 || ClaimantOf(body.Id) is not { } owner) return;
         owner.Grievance = Math.Min(100, owner.Grievance + kg / 1000.0 * GrievancePerTonne);
-    }
-
-    /// <summary>
-    /// A raid destroys a gate: its parts, stock, kits and work in progress become wreckage (ejected mass,
-    /// so the ledger stays exact); docked craft are left floating there. Its twin is left tied to this system.
-    /// </summary>
-    private void DestroyGate(CraftState gate, Faction faction)
-    {
-        void Eject(IEnumerable<KeyValuePair<string, long>> kgs)
-        {
-            foreach (var (material, kg) in kgs) if (kg > 0) _ejectedKg[material] = _ejectedKg.GetValueOrDefault(material) + kg;
-        }
-        foreach (var cell in gate.Design.Cells)
-            if (Parts!.TryGet(cell.PartId, out var part)) Eject(part.Bill.ToWholeKg());
-        Eject(gate.Inventory.Kg.ToList());
-        foreach (var kit in gate.Kits) Eject(kit.MaterialsKg);
-        foreach (var order in gate.BuildQueueList) Eject(order.MaterialsKg);
-        if (gate.RefiningBatch is { } batch) Eject(batch.InputsKg);
-
-        var star = GetBody(faction.HomeStarId);
-        foreach (var near in _crafts.Where(c => c.GateLinkId == gate.Id))
-        {
-            near.GateLostStarId = star.Id;
-            AddEvent($"The {faction.Name} destroyed {gate.Name}. {near.Name} can send a new gate through to {star.Name} on its next jump, from its own stock.");
-        }
-        RemoveCraft(gate);
     }
 
     /// <summary>
@@ -245,9 +217,10 @@ public sealed partial class SectorState
     // --- Saves ---
 
     /// <summary>Restores a saved civilization exactly.</summary>
-    public Faction RestoreFaction(int id, string name, string cultureId, BodyId homeStarId, double baseline, double attitude, double grievance, long nextEventTick, bool warned)
+    public Faction RestoreFaction(int id, string name, string cultureId, BodyId homeStarId, double baseline, double attitude, double grievance, long nextEventTick, bool warned,
+        CraftId raidGateId = default, long raidEndTick = 0)
     {
-        var faction = new Faction(id, name, cultureId, homeStarId, baseline) { Attitude = attitude, Grievance = grievance, NextEventTick = nextEventTick };
+        var faction = new Faction(id, name, cultureId, homeStarId, baseline) { Attitude = attitude, Grievance = grievance, NextEventTick = nextEventTick, RaidGateId = raidGateId, RaidEndTick = raidEndTick };
         _factions.Add(faction);
         _lastDisposition[id] = faction.Disposition;
         _warned[id] = warned;

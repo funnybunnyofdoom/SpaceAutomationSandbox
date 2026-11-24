@@ -80,8 +80,14 @@ public sealed record PartDefinition
     /// <summary>Energy one batch takes (kJ).</summary>
     public double ConverterKJPerBatch { get; init; }
 
-    /// <summary>A gate defense battery (#36): with the Armed gates law, each makes a raid on its gate less likely to succeed.</summary>
+    /// <summary>A gate defense battery (#36): fires at raiders with the Armed gates law.</summary>
     public bool IsGateDefense { get; init; }
+
+    /// <summary>What it fires (#85); null for parts that aren't weapons.</summary>
+    public WeaponDefinition? Weapon { get; init; }
+
+    /// <summary>How many ordinary parts' worth of weapon damage it takes (#84); 1 for an ordinary part.</summary>
+    public double Toughness { get; init; } = 1;
 
     /// <summary>Robots this part holds (robot bay, #13): they count as crew for running a craft, using power instead of food.</summary>
     public int RobotCount { get; init; }
@@ -139,6 +145,8 @@ public sealed class PartCatalog
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
             ValidateMaterials(part, materials);
             ValidateGenerator(part, materials);
+            part.Weapon?.Validate(part.Id, materials);
+            if (!(part.Toughness >= 1)) throw new FormatException($"Part '{part.Id}' needs toughness of at least 1.");
             ValidateConverter(part, materials);
             foreach (var (id, kg) in part.PropellantKgPerS ?? new Dictionary<string, double>()) // #80
             {

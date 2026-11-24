@@ -28,6 +28,7 @@ public static class InputActions
     public const string Dock = "ship_dock";
     public const string Deploy = "ship_deploy_kit";
     public const string Cruise = "ship_cruise";
+    public const string HoldFire = "ship_hold_fire";
     public const string Map = "open_map";
     public const string TimeFaster = "time_faster";
     public const string TimeSlower = "time_slower";
@@ -61,7 +62,7 @@ public static class InputActions
         (Thrust, "Thrust", "Flying"), (Reverse, "Reverse thrust", "Flying"), (TurnLeft, "Turn left", "Flying"), (TurnRight, "Turn right", "Flying"),
         (StrafeLeft, "Strafe left", "Flying"), (StrafeRight, "Strafe right", "Flying"), (Brake, "Brake (match the target)", "Flying"),
         (Cruise, "Cruise drive", "Flying"), (Dock, "Dock / undock", "Flying"), (Anchor, "Anchor / release (galaxy view in the map)", "Flying"),
-        (Deploy, "Deploy a kit", "Flying"), (Jump, "Warp jump (docked at a gate)", "Flying"),
+        (Deploy, "Deploy a kit", "Flying"), (Jump, "Warp jump (docked at a gate)", "Flying"), (HoldFire, "Hold fire / weapons free", "Flying"),
         (TargetCycle, "Cycle target", "Targets and view"), (TargetNearest, "Target the nearest body", "Targets and view"),
         (ZoomIn, "Zoom in", "Targets and view"), (ZoomOut, "Zoom out", "Targets and view"), (Map, "Map", "Targets and view"),
         (Editor, "Blueprint editor", "Panels"), (Shipyard, "Shipyard", "Panels"), (Fleet, "Fleet", "Panels"), (Cargo, "Cargo", "Panels"),
@@ -87,6 +88,7 @@ public static class InputActions
         Add(Dock, 0.5f, Keys(Key.K), Pad(JoyButton.Y));
         Add(Deploy, 0.5f, Keys(Key.U));
         Add(Cruise, 0.5f, Keys(Key.V));
+        Add(HoldFire, 0.5f, Keys(Key.Z)); // #85
         Add(Map, 0.5f, Keys(Key.M));
         Add(TimeFaster, 0.5f, Keys(Key.Bracketright));
         Add(TimeSlower, 0.5f, Keys(Key.Bracketleft));

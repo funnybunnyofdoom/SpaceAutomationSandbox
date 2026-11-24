@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using SpaceAutomationSandbox.Construction;
 
 namespace SpaceAutomationSandbox.Simulation;
@@ -45,6 +46,7 @@ public sealed partial class SectorState
             {
                 foreach (var recipe in Recipes.Recipes)
                 {
+                    if (recipe.OnRequest && !recipe.OutputsKg!.Keys.Any(m => craft.RequestsList.TryGetValue(m, out var keep) && craft.Inventory[m] < keep)) continue; // #85
                     if (craft.Inventory.Shortfall(recipe.InputsKg!).Count > 0) continue;
                     craft.Inventory.TryRemove(recipe.InputsKg!);
                     craft.RefiningBatch = new RefiningBatch(recipe.Id, recipe.InputsKg!);

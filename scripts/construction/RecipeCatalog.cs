@@ -17,6 +17,9 @@ public sealed record RecipeDefinition
     public Dictionary<string, long>? InputsKg { get; init; }
     public Dictionary<string, long>? OutputsKg { get; init; }
 
+    /// <summary>Only made for a station request (#85): while less of an output is in stock than the station asks to keep.</summary>
+    public bool OnRequest { get; init; }
+
     public long BatchKg => InputsKg?.Values.Sum() ?? 0;
 }
 

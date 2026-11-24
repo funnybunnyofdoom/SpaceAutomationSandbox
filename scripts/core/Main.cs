@@ -312,6 +312,7 @@ public partial class Main : Node2D
             ApplyTheme();
         }
         if (System.Array.IndexOf(args, "--colorblind") >= 0) { _settings.ColorblindSafe = true; ApplyTheme(); }
+        DemoRaid(args); // #84 check
         SetUpBodyView(args); // #71-#74 check
         SetUpStress(args); // #39 performance check
         if (System.Array.IndexOf(args, "--goals") >= 0) { _goalsOn = true; _goalsDone.Add("survey"); } // #65 check: one goal done
@@ -374,6 +375,7 @@ public partial class Main : Node2D
     /// <summary>Hands the flight controls to another craft. The old one keeps its last controls cleared.</summary>
     private void Pilot(CraftId id)
     {
+        if (!SectorState.IsPlayers(_sector.GetCraft(id)) || _sector.GetCraft(id).IsWreck) { ShowStatus($"{_sector.GetCraft(id).Name} can't be flown."); return; } // #84
         if (_player != null) _player.Controls = ShipControls.Idle;
         _player = _sector.GetCraft(id);
         _sector.PilotCraftId = id; // the craft you fly is the one that surveys
@@ -885,6 +887,7 @@ public partial class Main : Node2D
                 if (panel != null) panel.Visible = false;
         }
         else if (_player == null) return;
+        else if (Pressed(InputActions.HoldFire)) ToggleHoldFire(); // #85
         else if (Pressed(InputActions.Jump)) { ShowStatus(_sector.RequestJump(_player.Id).Message); _changedSinceSave = true; }
         else if (_mapMode && Pressed(InputActions.Anchor)) _galaxyView = !_galaxyView; // in the map, G is the galaxy view (#21)
         else if (Pressed(InputActions.Dock) && (_changedSinceSave = true))
@@ -1027,6 +1030,7 @@ public partial class Main : Node2D
                          + (_sector.DeployBlocker(p.Id) is { } blocked ? blocked : $"{InputActions.Key1(InputActions.Deploy)} to deploy here") + "\n"
                        : "")
                    + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
+                   + WeaponsLine(p) // #85
                    + (SectorState.PropellantStatus(p) is { Length: > 0 } drives ? drives + "\n" : "") // #80
                    + (SectorState.CrewStatus(p) is { Length: > 0 } crew ? crew + "\n" : "")
                    + (SectorState.NeedsRepair(p)
@@ -1208,13 +1212,14 @@ public partial class Main : Node2D
         foreach (var (craft, _, _) in _visibleCrafts) DrawCraft(craft);
         DrawSwarms(renderTimeS); // #30
         FlushBatch();
+        DrawCombat(); // #84
         // Name tags, not when zoomed far out; in a crowd only stations and the target get one, so the text stays readable and cheap.
         var crowd = _visibleCrafts.Count > MaxNameTags;
         foreach (var (craft, at, radius) in _visibleCrafts)
         {
             if (craft == _player || _pixelsPerMetre <= 0.02f) continue;
             if (crowd && craft.Stats.TotalThrustN > 0 && _player?.TargetCraftId != craft.Id) continue;
-            DrawString(ThemeDB.FallbackFont, at + new Vector2(Mathf.Max(8f, radius) + 4, 4), craft.Name,
+            DrawString(ThemeDB.FallbackFont, at + new Vector2(Mathf.Max(8f, radius) + 4, 4), CraftTag(craft),
                 HorizontalAlignment.Left, -1, 11, CraftLabelColor);
         }
     }
@@ -1256,7 +1261,7 @@ public partial class Main : Node2D
         {
             var (sin, cos) = Mathf.SinCos(heading);
             Vector2 Rotate(float x, float y) => centre + new Vector2(x * cos - y * sin, x * sin + y * cos);
-            BatchTriangle(Rotate(0, -8), Rotate(5, 6), Rotate(-5, 6), MarkerColor);
+            BatchTriangle(Rotate(0, -8), Rotate(5, 6), Rotate(-5, 6), CraftTint(craft));
             return;
         }
 

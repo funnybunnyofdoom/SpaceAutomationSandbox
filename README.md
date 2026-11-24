@@ -73,6 +73,7 @@ Celestial bodies (#71–#74): `python tools/art/make_body_art.py` draws their ti
 
 Swarms (#30): Fleet panel (F), Swarms. To look at one: `-- --new-game --demo-swarm=5000 --open-swarms` (cheats; nothing saved).
 
+Combat (#84): `-- --new-game --demo-raid --zoom=1.2` puts you in a gunship facing a raid (cheats; nothing saved).
 ## Rules for agents
 
 See `AGENTS.md` and `docs/06_DECISION_LOG_AND_OPEN_QUESTIONS.md`. Proposals in the docs aren't requirements until they're logged as decisions.

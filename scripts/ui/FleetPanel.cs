@@ -135,7 +135,7 @@ public partial class FleetPanel : PanelContainer
     {
         _sinceRefresh = 0;
         var sector = _sector();
-        var crafts = sector.Crafts;
+        var crafts = sector.Crafts.Where(SectorState.IsPlayers).ToList(); // not raiders (#84)
         var pilot = _piloted() is { } id && crafts.Any(c => c.Id == id) ? sector.GetCraft(id) : null;
 
         _title.Text = $"FLEET ({crafts.Count})  ({InputActions.Key1(InputActions.Fleet)} to close)";
@@ -207,6 +207,7 @@ public partial class FleetPanel : PanelContainer
         var role = craft.IsShipyard ? "shipyard" : IsShip(craft) ? "ship" : "station";
         var distance = pilot is null || pilot == craft ? "" : $", {FormatDistance(pilot.Position.DistanceTo(craft.Position))} away";
         var second = Where(sector, craft);
+        if (craft.IsWreck) return $"{craft.Name}  ({craft.Id}, wreck{distance})\n   {second}   adrift with {craft.CargoKg / 1000.0:0.0} t aboard";
         if (craft.BuildQueue.Count > 0) second += $"   building {craft.BuildQueue[0].Fraction * 100:0}%";
         if (craft.PowerShort && !craft.LegacyFreePower) second += "   NO POWER";
         if (craft.CrewShortReason is { } why) second += $"   STOPPED: {why}";
