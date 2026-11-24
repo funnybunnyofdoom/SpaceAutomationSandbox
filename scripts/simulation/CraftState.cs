@@ -182,7 +182,37 @@ public sealed class CraftState
     public ShipDesign Design { get; internal set; }
 
     /// <summary>Stats of the current design and its part health.</summary>
-    public ShipStats Stats { get; internal set; }
+    public ShipStats Stats
+    {
+        get
+        {
+            if (_healthChanged is not { } parts) return _stats;
+            _healthChanged = null;
+            return _stats = Design.ComputeStats(parts, HealthList);
+        }
+        internal set
+        {
+            _stats = value;
+            _healthChanged = null;
+            LookVersion++;
+        }
+    }
+
+    private ShipStats _stats = null!;
+    private PartCatalog? _healthChanged;
+
+    /// <summary>What depends on the design only (centre of mass, size, ports, mass): right even before <see cref="Stats"/> catches up with damage (#114).</summary>
+    internal ShipStats Shape => _stats;
+
+    /// <summary>A part's health changed: the stats are worked out again when next read, so many hits in a tick cost it once (#114).</summary>
+    internal void HealthChanged(PartCatalog parts)
+    {
+        _healthChanged = parts;
+        LookVersion++;
+    }
+
+    /// <summary>Goes up when parts or their damage change: a view knows to draw it anew (#114). Not saved.</summary>
+    internal int LookVersion { get; private set; }
 
     internal Dictionary<GridPos, double> HealthList { get; } = new();
 
@@ -416,7 +446,7 @@ public sealed class CraftState
     public bool IsShipyard => Stats.FabricationRateKgPerS > 0;
 
     /// <summary>Collision radius in metres (bounding circle of the grid).</summary>
-    public double CollisionRadiusM => Stats.BoundingRadiusM;
+    public double CollisionRadiusM => Shape.BoundingRadiusM;
 
     public double SpeedMps => Velocity.Length;
 

@@ -316,6 +316,7 @@ public partial class Main : Node2D
         if (args.FirstOrDefault(a => a.StartsWith("--shipyard-design=")) is { } designArg && int.TryParse(designArg["--shipyard-design=".Length..], out var designIndex))
             _shipyardPanel?.SelectDesign(designIndex);
         DemoSwarm(args); // #30
+        DemoHuge(args); // #114
         if (args.FirstOrDefault(x => x.StartsWith("--window=")) is { } size && size["--window=".Length..].Split('x') is [var w, var h]) // dev: test small windows (#96)
             GetWindow().Size = new Vector2I(int.Parse(w), int.Parse(h));
         if (System.Array.IndexOf(args, "--open-log") >= 0) _logPanel?.Open(); // #100
@@ -1311,6 +1312,7 @@ public partial class Main : Node2D
         var cellPx = (float)ShipDesign.CellSizeM * _pixelsPerMetre;
 
         // Too small to see the grid: a heading marker instead, batched into one draw call for all craft (#39).
+        if (DrawBig(craft, centre, heading, cellPx)) return; // #114
         if (cellPx < 1.5f)
         {
             var (sin, cos) = Mathf.SinCos(heading);

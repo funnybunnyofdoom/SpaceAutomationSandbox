@@ -213,12 +213,99 @@ public sealed class ShipDesign
             list.Add(cell);
         }
         // Deterministic order (row, then column) for stats sums and drawing.
-        Cells = list.OrderBy(c => c.Pos.Y).ThenBy(c => c.Pos.X).ToList();
+        _cells = InOrder(list) ? list.ToArray() : list.OrderBy(c => c.Pos.Y).ThenBy(c => c.Pos.X).ToArray();
+    }
+
+    /// <summary>Some of another design's cells, already checked and in order (#114).</summary>
+    private ShipDesign(string id, string name, DesignCell[] cells)
+    {
+        Id = id;
+        Name = name;
+        _cells = cells;
+    }
+
+    private static bool InOrder(List<DesignCell> cells)
+    {
+        for (var i = 1; i < cells.Count; i++)
+            if (cells[i - 1].Pos.Y > cells[i].Pos.Y || (cells[i - 1].Pos.Y == cells[i].Pos.Y && cells[i - 1].Pos.X > cells[i].Pos.X)) return false;
+        return true;
+    }
+
+    // --- Worked out once, when first needed (#114): a design never changes ---
+
+    private readonly DesignCell[] _cells;
+    private Dictionary<GridPos, int>? _index;
+    private int[]? _edge;
+    private IReadOnlyList<GridPos>? _loose;
+    private (PartCatalog Catalog, double MassKg)? _mass;
+
+    /// <summary>The cells without the interface in between: for code that runs over all of them often.</summary>
+    internal DesignCell[] CellArray => _cells;
+
+    /// <summary>Where a cell is in <see cref="Cells"/>, or -1.</summary>
+    public int IndexOf(GridPos pos)
+    {
+        if (_index is null)
+        {
+            var index = new Dictionary<GridPos, int>(_cells.Length);
+            for (var i = 0; i < _cells.Length; i++) index[_cells[i].Pos] = i;
+            _index = index;
+        }
+        return _index.TryGetValue(pos, out var at) ? at : -1;
+    }
+
+    /// <summary>Indices of the cells with a free side, in order: from outside the craft, one of these is always the nearest.</summary>
+    internal int[] EdgeCells
+    {
+        get
+        {
+            if (_edge is not null) return _edge;
+            var edge = new List<int>();
+            for (var i = 0; i < _cells.Length; i++)
+            {
+                var p = _cells[i].Pos;
+                if (IndexOf(new GridPos(p.X + 1, p.Y)) < 0 || IndexOf(new GridPos(p.X - 1, p.Y)) < 0 || IndexOf(new GridPos(p.X, p.Y + 1)) < 0 || IndexOf(new GridPos(p.X, p.Y - 1)) < 0)
+                    edge.Add(i);
+            }
+            return _edge = edge.ToArray();
+        }
+    }
+
+    private (int MinX, int MinY, int MaxX, int MaxY)? _bounds;
+
+    /// <summary>The outermost rows and columns used.</summary>
+    internal (int MinX, int MinY, int MaxX, int MaxY) Bounds
+    {
+        get
+        {
+            if (_bounds is { } known) return known;
+            int x0 = int.MaxValue, y0 = int.MaxValue, x1 = int.MinValue, y1 = int.MinValue;
+            foreach (var cell in _cells)
+            {
+                (x0, x1) = (Math.Min(x0, cell.Pos.X), Math.Max(x1, cell.Pos.X));
+                (y0, y1) = (Math.Min(y0, cell.Pos.Y), Math.Max(y1, cell.Pos.Y));
+            }
+            _bounds = (x0, y0, x1, y1);
+            return (x0, y0, x1, y1);
+        }
+    }
+
+    /// <summary>This design with only some of its cells (same id and name).</summary>
+    public ShipDesign Keep(Func<DesignCell, bool> keep) => new(Id, Name, Array.FindAll(_cells, c => keep(c)));
+
+    /// <summary>The mass of all its parts, the same sum as in <see cref="ComputeStats"/>.</summary>
+    internal double MassKg(PartCatalog catalog)
+    {
+        if (_mass is { } known && ReferenceEquals(known.Catalog, catalog)) return known.MassKg;
+        double mass = 0;
+        foreach (var cell in _cells) mass += catalog.Get(cell.PartId).MassKg;
+        _mass = (catalog, mass);
+        return mass;
     }
 
     public string Id { get; }
     public string Name { get; }
-    public IReadOnlyList<DesignCell> Cells { get; }
+    public IReadOnlyList<DesignCell> Cells => _cells;
 
     /// <summary>Ship if it has a cockpit or any thruster (or nothing that makes a station); otherwise Station.</summary>
     public DesignRole SuggestedRole(PartCatalog catalog)
@@ -305,22 +392,35 @@ public sealed class ShipDesign
     /// </summary>
     public IReadOnlyList<GridPos> LooseCells()
     {
-        var remaining = new HashSet<GridPos>(Cells.Select(c => c.Pos));
-        List<GridPos>? main = null;
-        foreach (var start in Cells.Select(c => c.Pos))
+        if (_loose is not null) return _loose;
+        var seen = new bool[_cells.Length];
+        List<int>? main = null;
+        for (var start = 0; start < _cells.Length; start++)
         {
-            if (!remaining.Remove(start)) continue;
-            var group = new List<GridPos> { start };
+            if (seen[start]) continue;
+            seen[start] = true;
+            var group = new List<int> { start };
             for (var i = 0; i < group.Count; i++)
             {
-                var p = group[i];
-                foreach (var n in new[] { new GridPos(p.X + 1, p.Y), new GridPos(p.X - 1, p.Y), new GridPos(p.X, p.Y + 1), new GridPos(p.X, p.Y - 1) })
-                    if (remaining.Remove(n)) group.Add(n);
+                var p = _cells[group[i]].Pos;
+                Visit(p.X + 1, p.Y);
+                Visit(p.X - 1, p.Y);
+                Visit(p.X, p.Y + 1);
+                Visit(p.X, p.Y - 1);
             }
             if (main is null || group.Count > main.Count) main = group;
+
+            void Visit(int x, int y)
+            {
+                var at = IndexOf(new GridPos(x, y));
+                if (at < 0 || seen[at]) return;
+                seen[at] = true;
+                group.Add(at);
+            }
         }
-        var inMain = new HashSet<GridPos>(main ?? new List<GridPos>());
-        return Cells.Select(c => c.Pos).Where(p => !inMain.Contains(p)).ToList();
+        var inMain = new bool[_cells.Length];
+        foreach (var i in main ?? new List<int>()) inMain[i] = true;
+        return _loose = _cells.Where((_, i) => !inMain[i]).Select(c => c.Pos).ToList();
     }
 
     /// <summary>Totals and centre of mass (in cell units). Call only on a design whose parts are all known.</summary>
@@ -352,7 +452,7 @@ public sealed class ShipDesign
         var crew = 0;
         int clamps = 0, foundations = 0;
         var ports = new List<DockingPortInfo>();
-        foreach (var cell in Cells)
+        foreach (var cell in _cells)
         {
             var part = catalog.Get(cell.PartId);
             var h = health is not null && health.TryGetValue(cell.Pos, out var cellHealth) ? Math.Clamp(cellHealth, 0, 1) : 1;
@@ -457,13 +557,16 @@ public sealed class ShipDesign
             stellarHeat, weapons, salvage, salvagePower, repair, repairPower, shield, shieldRecharge, shieldPower, armour, harvest, harvestPower, repellers, repelPower, ranch, ranchPower, pens, antimatter, containmentPower, quantum, nano, nanoPower, locks);
     }
 
+    private static readonly Dictionary<string, double> NoMaterials = new();
+
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>
     public MaterialBill ComputeBillOfMaterials(PartCatalog catalog)
     {
-        var total = MaterialBill.Empty;
-        foreach (var cell in Cells)
-            if (catalog.TryGet(cell.PartId, out var part)) total = total.Plus(part.Bill);
-        return total;
+        var total = new Dictionary<string, double>();
+        foreach (var cell in _cells)
+            if (catalog.TryGet(cell.PartId, out var part))
+                foreach (var (material, kg) in part!.MaterialsKg ?? NoMaterials) total[material] = total.GetValueOrDefault(material) + kg;
+        return new MaterialBill(total);
     }
 
     public static ShipDesign FromJson(string json)

@@ -71,4 +71,10 @@ public sealed partial class SectorState
         if (health < 1) craft.HealthList[pos] = health; else craft.HealthList.Remove(pos);
         craft.Stats = craft.Design.ComputeStats(Parts, craft.HealthList);
     }
+
+    /// <summary>Benchmarks and tests (#114): a weapon hit on a part, as combat does it.</summary>
+    public void DebugHit(CraftId craftId, int cellIndex, double damage) => HitCell(GetCraft(craftId), cellIndex, damage);
+
+    /// <summary>Benchmarks and tests (#114): a shot in flight from an enemy, harmful to the player's craft.</summary>
+    public void DebugShoot(Vector2D position, Vector2D velocity, double lifeS, double damage = 0.01) => _shots.Add(new Shot { Position = position, Velocity = velocity, ExpireTick = Tick + (long)(lifeS * FixedStepClock.TicksPerSecond), Damage = damage, FactionId = -1 });
 }

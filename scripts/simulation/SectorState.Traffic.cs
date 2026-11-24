@@ -53,6 +53,7 @@ public sealed partial class SectorState
     private double _trafficCell = 64;
     private readonly Dictionary<long, int> _fastHead = new();
     private int[] _fastNext = Array.Empty<int>();
+    private readonly List<CraftState> _bigTraffic = new();
     private readonly Dictionary<(CraftId Station, int Port), CraftId> _portClaims = new();
 
     private static long GridKey(long x, long y) => (x << 32) ^ (y & 0xFFFFFFFF);
@@ -61,7 +62,13 @@ public sealed partial class SectorState
     private void BuildTrafficGrid()
     {
         double maxRadius = 0;
-        foreach (var c in _crafts) if (Collides(c) && Movable(c)) maxRadius = Math.Max(maxRadius, c.CollisionRadiusM);
+        _bigTraffic.Clear(); // looked at by everyone instead of through the grid (#114)
+        foreach (var c in _crafts)
+        {
+            if (!Collides(c) || !Movable(c)) continue;
+            if (c.CollisionRadiusM > BigRadiusM) _bigTraffic.Add(c);
+            else maxRadius = Math.Max(maxRadius, c.CollisionRadiusM);
+        }
         _trafficCell = Math.Max(64, 2 * maxRadius + 2 * TrafficMarginM + 1);
         if (_trafficNext.Length < _crafts.Count) _trafficNext = new int[Math.Max(_crafts.Count, 2 * _trafficNext.Length)];
         if (_fastNext.Length < _crafts.Count) _fastNext = new int[_trafficNext.Length];
@@ -79,7 +86,7 @@ public sealed partial class SectorState
                 c.DockClaimPort = 0;
             }
             if (!c.DockClaimStation.IsNone) _portClaims[(c.DockClaimStation, c.DockClaimPort)] = c.Id;
-            if (!Collides(c) || !Movable(c)) continue;
+            if (!Collides(c) || !Movable(c) || c.CollisionRadiusM > BigRadiusM) continue;
             var key = GridKey((long)Math.Floor(c.Position.X / _trafficCell), (long)Math.Floor(c.Position.Y / _trafficCell));
             _trafficNext[i] = _trafficHead.TryGetValue(key, out var head) ? head : -1;
             _trafficHead[key] = i;
@@ -124,7 +131,7 @@ public sealed partial class SectorState
     private ShipControls? GiveWay(CraftState craft, CraftId ignore, BodyId nearBody = default)
     {
         craft.GivingWayTo = CraftId.None;
-        if (_trafficHead.Count == 0) return null;
+        if (_trafficHead.Count == 0 && _bigTraffic.Count == 0) return null;
         var accel = craft.Stats.TotalThrustN / craft.MassKg;
         CraftState? worst = null;
         var worstTime = double.PositiveInfinity;
@@ -161,14 +168,17 @@ public sealed partial class SectorState
         {
             var cx = (long)Math.Floor(craft.Position.X / cell);
             var cy = (long)Math.Floor(craft.Position.Y / cell);
-            for (var dx = -1; dx <= 1; dx++)
-            for (var dy = -1; dy <= 1; dy++)
+            // A big craft looks as far as its own size reaches.
+            var far = craft.CollisionRadiusM > BigRadiusM ? 1 + (int)Math.Ceiling(craft.CollisionRadiusM / cell) : 1;
+            for (var dx = -far; dx <= far; dx++)
+            for (var dy = -far; dy <= far; dy++)
             {
                 if (!head.TryGetValue(GridKey(cx + dx, cy + dy), out var j)) continue;
                 for (var n = 0; j >= 0 && n < MaxPerCell; j = next[j], n++) Check(_crafts[j]);
             }
         }
 
+        foreach (var big in _bigTraffic) Check(big);
         Scan(_trafficHead, _trafficNext, _trafficCell);
         if (_fastHead.Count > 0) Scan(_fastHead, _fastNext, CoarseCellM);
         if (worst is null) return null;

@@ -68,7 +68,7 @@ public sealed partial class SectorState
         }
         if (!changed) return;
         if (broken is not null) BreakOff(craft, broken);
-        else craft.Stats = craft.Design.ComputeStats(Parts, craft.HealthList);
+        else craft.HealthChanged(Parts);
     }
 
     /// <summary>
@@ -103,8 +103,8 @@ public sealed partial class SectorState
         // The design keeps its id and name; the craft is now a damaged copy of it.
         var brokenSet = broken.Select(c => c.Pos).ToHashSet();
         var heading = craft.HeadingRad;
-        var oldStats = craft.Stats;
-        var design = new ShipDesign(craft.Design.Id, craft.Design.Name, craft.Design.Cells.Where(c => !brokenSet.Contains(c.Pos)));
+        var oldStats = craft.Shape; // where things were: the design's part of the stats
+        var design = craft.Design.Keep(c => !brokenSet.Contains(c.Pos));
         craft.Design = design;
         craft.Stats = design.ComputeStats(parts, craft.HealthList);
         // The centre of mass moved inside the craft: keep the remaining parts where they were in the world.
@@ -128,7 +128,7 @@ public sealed partial class SectorState
         foreach (var (pos, h) in health)
         {
             if (!(h > 0 && h <= 1)) throw new ArgumentOutOfRangeException(nameof(health), $"Part health {h} at ({pos.X},{pos.Y}).");
-            if (craft.Design.Cells.All(c => c.Pos != pos)) throw new ArgumentException($"No part at ({pos.X},{pos.Y}) to have health.");
+            if (craft.Design.IndexOf(pos) < 0) throw new ArgumentException($"No part at ({pos.X},{pos.Y}) to have health.");
             if (h < 1) craft.HealthList[pos] = h;
         }
         craft.PartsLost = Math.Max(0, partsLost);
@@ -151,8 +151,15 @@ public sealed partial class SectorState
     private void ResolveCraftCollisions()
     {
         if (_crafts.Count < 2) return;
+        // Craft too big for the grid are compared with everyone: one huge ship mustn't make every grid cell huge (#114).
         double maxRadius = 0;
-        foreach (var c in _crafts) if (Collides(c)) maxRadius = Math.Max(maxRadius, c.CollisionRadiusM);
+        _bigColliders.Clear();
+        for (var i = 0; i < _crafts.Count; i++)
+        {
+            if (!Collides(_crafts[i])) continue;
+            if (_crafts[i].CollisionRadiusM > BigRadiusM) _bigColliders.Add(i);
+            else maxRadius = Math.Max(maxRadius, _crafts[i].CollisionRadiusM);
+        }
         var cellSize = Math.Max(50, 2 * maxRadius + 1);
 
         if (_gridNext.Length < _crafts.Count) _gridNext = new int[Math.Max(_crafts.Count, 2 * _gridNext.Length)];
@@ -160,7 +167,7 @@ public sealed partial class SectorState
         for (var i = 0; i < _crafts.Count; i++)
         {
             var c = _crafts[i];
-            if (!Collides(c)) continue;
+            if (!Collides(c) || c.CollisionRadiusM > BigRadiusM) continue;
             var key = GridKey((long)Math.Floor(c.Position.X / cellSize), (long)Math.Floor(c.Position.Y / cellSize));
             _gridNext[i] = _gridHead.TryGetValue(key, out var head) ? head : -1;
             _gridHead[key] = i;
@@ -170,6 +177,12 @@ public sealed partial class SectorState
         {
             var a = _crafts[i];
             if (!Collides(a)) continue;
+            if (a.CollisionRadiusM > BigRadiusM)
+            {
+                for (var j = i + 1; j < _crafts.Count; j++) if (Collides(_crafts[j])) ComparePair(a, _crafts[j]);
+                continue;
+            }
+            foreach (var j in _bigColliders) if (j > i) ComparePair(a, _crafts[j]);
             var cx = (long)Math.Floor(a.Position.X / cellSize);
             var cy = (long)Math.Floor(a.Position.Y / cellSize);
             for (var dx = -1; dx <= 1; dx++)
@@ -179,13 +192,22 @@ public sealed partial class SectorState
                 for (; j >= 0; j = _gridNext[j])
                 {
                     if (j <= i) continue; // each pair once, in id order
-                    var b = _crafts[j];
-                    if (!Movable(a) && !Movable(b)) continue;
-                    if (a.Position.DistanceTo(b.Position) >= a.CollisionRadiusM + b.CollisionRadiusM) continue;
-                    ResolvePair(a, b);
+                    ComparePair(a, _crafts[j]);
                 }
             }
         }
+    }
+
+    /// <summary>Bigger than any craft from the 21 x 21 grid can be: kept out of the collision and traffic grids.</summary>
+    private const double BigRadiusM = 64;
+
+    private readonly List<int> _bigColliders = new();
+
+    private void ComparePair(CraftState a, CraftState b)
+    {
+        if (!Movable(a) && !Movable(b)) return;
+        if (a.Position.DistanceTo(b.Position) >= a.CollisionRadiusM + b.CollisionRadiusM) return;
+        ResolvePair(a, b);
     }
 
     private Vector2D[] _cellsA = new Vector2D[32], _cellsB = new Vector2D[32];
@@ -193,28 +215,35 @@ public sealed partial class SectorState
     /// <summary>World positions of a craft's cell centres into a reused buffer; returns how many.</summary>
     private static int FillCellPositions(CraftState craft, ref Vector2D[] buffer)
     {
-        var cells = craft.Design.Cells;
-        if (buffer.Length < cells.Count) buffer = new Vector2D[Math.Max(cells.Count, 2 * buffer.Length)];
+        var cells = craft.Design.CellArray;
+        if (buffer.Length < cells.Length) buffer = new Vector2D[Math.Max(cells.Length, 2 * buffer.Length)];
         var (sin, cos) = Math.SinCos(craft.HeadingRad);
-        var comX = craft.Stats.CenterOfMassX;
-        var comY = craft.Stats.CenterOfMassY;
-        for (var i = 0; i < cells.Count; i++)
+        var comX = craft.Shape.CenterOfMassX;
+        var comY = craft.Shape.CenterOfMassY;
+        for (var i = 0; i < cells.Length; i++)
         {
             var x = (cells[i].Pos.X - comX) * ShipDesign.CellSizeM;
             var y = (cells[i].Pos.Y - comY) * ShipDesign.CellSizeM;
             buffer[i] = craft.Position + new Vector2D(x * cos - y * sin, x * sin + y * cos);
         }
-        return cells.Count;
+        return cells.Length;
     }
 
     private void ResolvePair(CraftState a, CraftState b)
     {
         // Deepest overlapping cell pair (cell positions into reused buffers: this runs for every close pair).
         var minDistance = 2 * CellContactRadiusM * 0.9; // cells touching face to face don't count (docked neighbours)
-        var countA = FillCellPositions(a, ref _cellsA);
-        var countB = FillCellPositions(b, ref _cellsB);
         var deepestSq = minDistance * minDistance;
         int bestA = -1, bestB = -1;
+        if (!CheckEveryCell && (long)a.Design.CellArray.Length * b.Design.CellArray.Length > SmallCraftCells * SmallCraftCells)
+        {
+            ResolveBigPair(a, b, minDistance, out bestA, out bestB, out deepestSq);
+            if (bestA < 0) return;
+            PushApart(a, b, new CellPlace(a).Of(bestA), new CellPlace(b).Of(bestB), minDistance - Math.Sqrt(deepestSq));
+            return;
+        }
+        var countA = FillCellPositions(a, ref _cellsA);
+        var countB = FillCellPositions(b, ref _cellsB);
         for (var i = 0; i < countA; i++)
         {
             var ca = _cellsA[i];
@@ -227,10 +256,45 @@ public sealed partial class SectorState
             }
         }
         if (bestA < 0) return;
-        var pa = _cellsA[bestA];
-        var pb = _cellsB[bestB];
-        var deepest = minDistance - Math.Sqrt(deepestSq);
+        PushApart(a, b, _cellsA[bestA], _cellsB[bestB], minDistance - Math.Sqrt(deepestSq));
+    }
 
+    /// <summary>
+    /// The deepest pair of two craft, one of them big (#114): each cell of the smaller one looks only at the cells of the other round it.
+    /// The same pair as trying them all: the closest, and of equals the first in order.
+    /// </summary>
+    private static void ResolveBigPair(CraftState a, CraftState b, double minDistance, out int bestA, out int bestB, out double deepestSq)
+    {
+        deepestSq = minDistance * minDistance;
+        bestA = bestB = -1;
+        var swap = a.Design.CellArray.Length > b.Design.CellArray.Length;
+        var (small, large) = swap ? (b, a) : (a, b);
+        var (placeSmall, placeLarge) = (new CellPlace(small), new CellPlace(large));
+        var reach = minDistance / ShipDesign.CellSizeM + 0.01; // a hair more: rounding must not lose a pair
+        var (minX, minY, maxX, maxY) = large.Design.Bounds;
+        for (var i = 0; i < small.Design.CellArray.Length; i++)
+        {
+            var at = placeSmall.Of(i);
+            var (x, y) = placeLarge.Local(at);
+            if (x < minX - reach || x > maxX + reach || y < minY - reach || y > maxY + reach) continue;
+            for (var gx = (int)Math.Ceiling(x - reach); gx <= x + reach; gx++)
+            for (var gy = (int)Math.Ceiling(y - reach); gy <= y + reach; gy++)
+            {
+                var j = large.Design.IndexOf(new GridPos(gx, gy));
+                if (j < 0) continue;
+                var other = placeLarge.Of(j);
+                var (ca, cb, ia, ib) = swap ? (other, at, j, i) : (at, other, i, j);
+                var dx = ca.X - cb.X;
+                var dy = ca.Y - cb.Y;
+                var dSq = dx * dx + dy * dy;
+                if (dSq < deepestSq || (dSq == deepestSq && bestA >= 0 && (ia < bestA || (ia == bestA && ib < bestB)))) (deepestSq, bestA, bestB) = (dSq, ia, ib);
+            }
+        }
+    }
+
+    /// <summary>Moves two touching craft apart along their contact and takes away their closing speed.</summary>
+    private void PushApart(CraftState a, CraftState b, Vector2D pa, Vector2D pb, double deepest)
+    {
         var between = pb - pa;
         var normal = between.Length > 1e-9 ? between * (1 / between.Length) : (b.Position - a.Position) * (1 / Math.Max((b.Position - a.Position).Length, 1e-9));
         var closing = -((b.Velocity.X - a.Velocity.X) * normal.X + (b.Velocity.Y - a.Velocity.Y) * normal.Y); // > 0: approaching

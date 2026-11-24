@@ -21,16 +21,89 @@ public sealed partial class SectorState
         var (sin, cos) = Math.SinCos(headingRad);
         foreach (var cell in craft.Design.Cells)
         {
-            var x = (cell.Pos.X - craft.Stats.CenterOfMassX) * ShipDesign.CellSizeM;
-            var y = (cell.Pos.Y - craft.Stats.CenterOfMassY) * ShipDesign.CellSizeM;
+            var x = (cell.Pos.X - craft.Shape.CenterOfMassX) * ShipDesign.CellSizeM;
+            var y = (cell.Pos.Y - craft.Shape.CenterOfMassY) * ShipDesign.CellSizeM;
             yield return (cell, position + new Vector2D(x * cos - y * sin, x * sin + y * cos));
         }
+    }
+
+    /// <summary>Craft up to this many cells are simply checked cell by cell.</summary>
+    private const int SmallCraftCells = 64;
+
+    /// <summary>For tests (#114): try every cell, as before the shortcuts. The results must be exactly the same.</summary>
+    internal bool CheckEveryCell { get; set; }
+
+    /// <summary>Where a craft's cells are, one at a time: the same sums as for all of them.</summary>
+    private readonly struct CellPlace
+    {
+        private readonly DesignCell[] _cells;
+        private readonly Vector2D _position;
+        private readonly double _sin, _cos, _comX, _comY;
+
+        public CellPlace(CraftState craft)
+        {
+            _cells = craft.Design.CellArray;
+            _position = craft.Position;
+            (_sin, _cos) = Math.SinCos(craft.HeadingRad);
+            _comX = craft.Shape.CenterOfMassX;
+            _comY = craft.Shape.CenterOfMassY;
+        }
+
+        public Vector2D Of(int i)
+        {
+            var x = (_cells[i].Pos.X - _comX) * ShipDesign.CellSizeM;
+            var y = (_cells[i].Pos.Y - _comY) * ShipDesign.CellSizeM;
+            return _position + new Vector2D(x * _cos - y * _sin, x * _sin + y * _cos);
+        }
+
+        /// <summary>A world position in the craft's own grid, in cells.</summary>
+        public (double X, double Y) Local(Vector2D world)
+        {
+            var dx = world.X - _position.X;
+            var dy = world.Y - _position.Y;
+            return ((dx * _cos + dy * _sin) / ShipDesign.CellSizeM + _comX, (dy * _cos - dx * _sin) / ShipDesign.CellSizeM + _comY);
+        }
+    }
+
+    private readonly SortedSet<int> _along = new();
+
+    /// <summary>The cells a segment could touch, in order (some it doesn't): found through the grid, not by trying them all (#114).</summary>
+    private SortedSet<int> CellsAlong(CraftState craft, Vector2D a, Vector2D b)
+    {
+        _along.Clear();
+        var place = new CellPlace(craft);
+        var (ax, ay) = place.Local(a);
+        var (bx, by) = place.Local(b);
+        var steps = Math.Max(1, (int)Math.Ceiling(Math.Sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay)) * 2)); // half a cell at a time
+        for (var s = 0; s <= steps; s++)
+        {
+            var x = (int)Math.Round(ax + (bx - ax) * s / steps);
+            var y = (int)Math.Round(ay + (by - ay) * s / steps);
+            for (var dx = -1; dx <= 1; dx++)
+            for (var dy = -1; dy <= 1; dy++)
+                if (craft.Design.IndexOf(new GridPos(x + dx, y + dy)) is var at and >= 0) _along.Add(at);
+        }
+        return _along;
     }
 
     /// <summary>Gap between the craft's closest cell and the body's surface (negative = overlapping).</summary>
     public static double SurfaceGap(CraftState craft, Vector2D position, double headingRad, Vector2D bodyCentre, double bodyRadiusM)
     {
         var gap = double.PositiveInfinity;
+        if (craft.Design.CellArray.Length > SmallCraftCells && position.DistanceTo(bodyCentre) > craft.CollisionRadiusM)
+        {
+            // From outside the craft the closest cell is one on its edge (#114).
+            var (sin, cos) = Math.SinCos(headingRad);
+            var cells = craft.Design.CellArray;
+            foreach (var i in craft.Design.EdgeCells)
+            {
+                var x = (cells[i].Pos.X - craft.Shape.CenterOfMassX) * ShipDesign.CellSizeM;
+                var y = (cells[i].Pos.Y - craft.Shape.CenterOfMassY) * ShipDesign.CellSizeM;
+                var p = position + new Vector2D(x * cos - y * sin, x * sin + y * cos);
+                gap = Math.Min(gap, p.DistanceTo(bodyCentre) - bodyRadiusM - CellContactRadiusM);
+            }
+            return gap;
+        }
         foreach (var (_, p) in CellPositions(craft, position, headingRad))
             gap = Math.Min(gap, p.DistanceTo(bodyCentre) - bodyRadiusM - CellContactRadiusM);
         return gap;

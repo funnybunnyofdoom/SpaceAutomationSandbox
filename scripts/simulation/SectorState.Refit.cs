@@ -373,7 +373,7 @@ public sealed partial class SectorState
             craft.YardProgressKg = 0;
             if (craft.Design.Cells.Count == 1) { (removed ??= new()).Add(craft); return true; } // the last part: the craft is gone
             craft.HealthList.Remove(off.Pos);
-            ReplaceDesign(craft, new ShipDesign(craft.Design.Id, craft.Design.Name, craft.Design.Cells.Where(c => c.Pos != off.Pos)));
+            ReplaceDesign(craft, craft.Design.Keep(c => c.Pos != off.Pos));
             return true;
         }
         if (addCell is { } on)
@@ -435,7 +435,7 @@ public sealed partial class SectorState
     /// </summary>
     private void ReplaceDesign(CraftState craft, ShipDesign design)
     {
-        var oldStats = craft.Stats;
+        var oldStats = craft.Shape;
         craft.Design = design;
         craft.Stats = design.ComputeStats(Parts!, craft.HealthList);
         var shift = new Vector2D((craft.Stats.CenterOfMassX - oldStats.CenterOfMassX) * ShipDesign.CellSizeM,

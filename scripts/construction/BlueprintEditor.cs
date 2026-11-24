@@ -19,7 +19,8 @@ public sealed class BlueprintEditor
 
     private readonly PartCatalog _catalog;
     private Dictionary<GridPos, DesignCell> _cells = new();
-    private readonly List<Dictionary<GridPos, DesignCell>> _undo = new();
+    private readonly List<List<(GridPos Pos, DesignCell? Before)>> _undo = new(); // what each step changed, not a copy of everything (#114)
+    private ShipDesign? _design;
     private bool _inStroke;
     private bool _strokeChanged;
     private string _name = "New design";
@@ -34,6 +35,7 @@ public sealed class BlueprintEditor
             var trimmed = (value ?? "").Trim();
             if (trimmed == _name) return;
             _name = trimmed;
+            _design = null;
             IsDirty = true;
         }
     }
@@ -54,6 +56,7 @@ public sealed class BlueprintEditor
     public void Load(ShipDesign design)
     {
         _cells = design.Cells.ToDictionary(c => c.Pos);
+        _design = null;
         _name = design.Name.Length > 0 ? design.Name : design.Id;
         _undo.Clear();
         IsDirty = false;
@@ -62,6 +65,7 @@ public sealed class BlueprintEditor
     public void New()
     {
         _cells = new Dictionary<GridPos, DesignCell>();
+        _design = null;
         _name = "New design";
         _undo.Clear();
         IsDirty = false;
@@ -94,28 +98,34 @@ public sealed class BlueprintEditor
         if (!InBounds(pos) || !_catalog.TryGet(partId, out _) || rotation is < 0 or > 3) return false;
         var cell = new DesignCell(pos, partId, rotation);
         if (_cells.TryGetValue(pos, out var existing) && existing == cell) return false;
-        Change(() => _cells[pos] = cell);
+        Change(pos, () => _cells[pos] = cell);
         return true;
     }
 
     public bool Remove(GridPos pos)
     {
         if (!_cells.ContainsKey(pos)) return false;
-        Change(() => _cells.Remove(pos));
+        Change(pos, () => _cells.Remove(pos));
         return true;
     }
 
     public bool Undo()
     {
         if (_inStroke || _undo.Count == 0) return false;
-        _cells = _undo[^1];
+        var step = _undo[^1];
+        for (var i = step.Count - 1; i >= 0; i--) // the last change first
+        {
+            if (step[i].Before is { } before) _cells[step[i].Pos] = before;
+            else _cells.Remove(step[i].Pos);
+        }
+        _design = null;
         _undo.RemoveAt(_undo.Count - 1);
         IsDirty = true;
         return true;
     }
 
-    public ShipDesign ToDesign() =>
-        new(Id, Name, _cells.Values);
+    /// <summary>The layout as a design: the same one until something changes, so what it works out is worked out once (#114).</summary>
+    public ShipDesign ToDesign() => _design ??= new ShipDesign(Id, Name, _cells.Values);
 
     /// <summary>Stats of the known parts (unknown ones are listed in <see cref="Errors"/>); null when empty.</summary>
     public ShipStats? Stats
@@ -123,7 +133,8 @@ public sealed class BlueprintEditor
         get
         {
             var known = _cells.Values.Where(c => _catalog.TryGet(c.PartId, out _)).ToList();
-            return known.Count == 0 ? null : new ShipDesign(Id, Name, known).ComputeStats(_catalog);
+            if (known.Count == 0) return null;
+            return (known.Count == _cells.Count ? ToDesign() : new ShipDesign(Id, Name, known)).ComputeStats(_catalog);
         }
     }
 
@@ -200,9 +211,11 @@ public sealed class BlueprintEditor
         return sb.ToString();
     }
 
-    private void Change(Action apply)
+    private void Change(GridPos pos, Action apply)
     {
         if (!_inStroke) PushUndo();
+        _undo[^1].Add((pos, _cells.TryGetValue(pos, out var before) ? before : null));
+        _design = null;
         apply();
         _strokeChanged = true;
         IsDirty = true;
@@ -210,7 +223,7 @@ public sealed class BlueprintEditor
 
     private void PushUndo()
     {
-        _undo.Add(new Dictionary<GridPos, DesignCell>(_cells));
+        _undo.Add(new List<(GridPos, DesignCell?)>());
         if (_undo.Count > MaxUndo) _undo.RemoveAt(0);
     }
 }

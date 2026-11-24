@@ -47,15 +47,15 @@ public sealed partial class SectorState
     private static (DesignCell Cell, bool Missing)? NextRepair(CraftState craft)
     {
         DesignCell? damaged = null;
-        foreach (var cell in craft.Design.Cells)
+        foreach (var pos in craft.HealthList.Keys)
         {
-            if (!craft.HealthList.ContainsKey(cell.Pos)) continue;
+            if (craft.Design.IndexOf(pos) is var at && at < 0) continue;
+            var cell = craft.Design.CellArray[at];
             if (damaged is not { } d || cell.Pos.Y < d.Pos.Y || (cell.Pos.Y == d.Pos.Y && cell.Pos.X < d.Pos.X)) damaged = cell;
         }
         if (damaged is { } found) return (found, false);
         if (craft.IntactDesign is not { } intact) return null;
-        var present = new HashSet<GridPos>(craft.Design.Cells.Select(c => c.Pos));
-        foreach (var cell in intact.Cells) if (!present.Contains(cell.Pos)) return (cell, true);
+        foreach (var cell in intact.CellArray) if (craft.Design.IndexOf(cell.Pos) < 0) return (cell, true);
         return null;
     }
 
@@ -149,9 +149,9 @@ public sealed partial class SectorState
     private void Rebuild(CraftState craft, DesignCell cell)
     {
         var intact = craft.IntactDesign!;
-        var present = new HashSet<GridPos>(craft.Design.Cells.Select(c => c.Pos)) { cell.Pos };
-        var complete = present.Count == intact.Cells.Count;
-        var design = complete ? intact : new ShipDesign(intact.Id, intact.Name, intact.Cells.Where(c => present.Contains(c.Pos)));
+        var had = craft.Design;
+        var complete = had.CellArray.Length + (had.IndexOf(cell.Pos) < 0 ? 1 : 0) == intact.CellArray.Length;
+        var design = complete ? intact : intact.Keep(c => c.Pos == cell.Pos || had.IndexOf(c.Pos) >= 0);
         if (complete) craft.IntactDesign = null;
         ReplaceDesign(craft, design);
     }

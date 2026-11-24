@@ -158,7 +158,7 @@ public sealed partial class SectorState
         var worn = Math.Max(Math.Min(health, 0.1), health - amount);
         if (worn >= health) return;
         craft.HealthList[cell.Pos] = worn;
-        craft.Stats = craft.Design.ComputeStats(Parts!, craft.HealthList);
+        craft.HealthChanged(Parts!);
     }
 
     /// <summary>Takes animals off a site (kg, whole): off the density, and out of the body's mass.</summary>

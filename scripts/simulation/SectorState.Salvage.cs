@@ -39,7 +39,7 @@ public sealed partial class SectorState
 
     /// <summary>The order a wreck is cut up in: heaviest parts first, so the lightest is left for last.</summary>
     private DesignCell NextCut(CraftState wreck) =>
-        wreck.Design.Cells.OrderByDescending(c => Parts!.Get(c.PartId).MassKg).ThenBy(c => c.Pos.Y).ThenBy(c => c.Pos.X).First();
+        wreck.Design.CellArray.MaxBy(c => Parts!.Get(c.PartId).MassKg); // the first of the heaviest: cells are in row order
 
     /// <summary>Mass of the lightest part: the last one, which must fit a hold whole.</summary>
     private double LastPartKg(CraftState wreck) => wreck.Design.Cells.Min(c => Parts!.Get(c.PartId).MassKg);

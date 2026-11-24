@@ -11,6 +11,35 @@ dotnet run -c Release --project tools/Benchmarks -- 500   # any counts
 
 **Budget:** the simulation runs 20 ticks per second, so 50 ms per tick is everything. Rendering, UI and the rest of the frame need most of that.
 
+## 2026-11-24 — huge craft (#114)
+
+```powershell
+dotnet run -c Release --project tools/Benchmarks -- --huge              # 100, 500, 2,000, 10,000 parts; or give sizes
+SpaceAutomationSandbox.exe -- --new-game --huge=10000x5 --zoom=0.4 --fps-report=8   # in the game; --no-meshes draws cell by cell
+```
+
+Simulation, dev PC, Release, ms (mean), b1806a2 before → after, one run each, with `DOTNET_TieredCompilation=0`. Without it some small rows look slower after: the old code ran hot loops long enough to be fully compiled, the new code doesn't. (The two versions end in identical states.)
+
+| What | 100 parts | 500 | 2,000 | 10,000 |
+| --- | ---: | ---: | ---: | ---: |
+| tick: one flying | 0.008 → 0.008 | 0.008 → 0.008 | 0.010 → 0.009 | 0.008 → 0.011 |
+| tick: one landed, one coming down | 0.021 → 0.022 | 0.019 → 0.009 | 0.079 → 0.021 | 0.45 → 0.016 |
+| tick: two side by side | 0.022 → 0.010 | 0.27 → 0.011 | 4.0 → 0.019 | **102 → 0.06** |
+| tick: two in contact | 0.027 → 0.018 | 0.27 → 0.012 | 4.0 → 0.022 | **98 → 0.07** |
+| tick: 50 small ships close to it | 0.26 → 0.17 | 0.85 → 0.12 | 3.1 → 0.08 | 15 → 0.06 |
+| tick: 20 small ships docked or docking | 0.013 → 0.011 | 0.32 → 0.06 | 0.63 → 0.04 | 0.022 → 0.022 |
+| tick: under fire, 20 hits a tick | 0.35 → 0.18 | 0.88 → 0.05 | 3.6 → 0.16 | 18 → 0.8 |
+| tick: losing 5 parts a tick | 0.14 → 0.06 | 0.69 → 0.22 | 2.9 → 0.9 | 18 → 5.7 |
+| tick: 30 shots crossing it | 0.62 → 0.20 | 2.7 → 0.14 | 11 → 0.12 | 52 → 0.14 |
+| editor: one part placed, all shown | 0.31 → 0.10 | 1.4 → 0.5 | 5.6 → 1.8 | 31 → 10 |
+| editor: 200 undo steps kept, MB | 1 → 0 | 4.6 → 0 | 21 → 0 | 89 → 0 |
+
+In the game (Release export, 8 s, vsync off): five craft of 10,000 parts on screen, 0.99 ms a frame (1,005 fps) as meshes, 10.7 ms (94 fps) cell by cell. 1,000 miners: 3.66 ms mean, 10.6 ms worst 1%, tick 4.9 ms; with a 10,000-part craft added: 3.76, 10.0, 5.0. The target (#39) is still met. 10,000 small ships (simulation only): 70 ms a tick before, 68 after; over the 50 ms budget either way (47 ms on 2026-11-22: features since then, not #114).
+
+A 10,000-part station (283 m in radius, 11 ports) took deliveries from six automated miners over an hour of game time with no parts lost. Saving a game with it: 11 ms and 1.2 MB; loading: 88 ms (one run).
+
+**Recommended largest size: 10,000 parts** (a grid of about 101 x 101), with everyday big ships of up to 2,000. What grows with size and isn't fixed: losing parts (about 1.1 ms each at 10,000), since the whole craft is worked out anew each time.
+
 ## 2026-11-24 — a swarm of 5,000 (#30)
 
 Debug build from the project folder (not a Release export), 10 s, one run: `-- --new-game --demo-swarm=5000 --fps-report=10 --zoom=0.08`. Mean frame 1.15 ms, worst 1% 2.24 ms, sim tick 0.07 ms mean. A swarm's cost doesn't depend on its ship count; at most 150 of its ships are drawn.

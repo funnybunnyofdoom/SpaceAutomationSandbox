@@ -18,6 +18,13 @@ var catalog = PartCatalog.FromJson(File.ReadAllText(Path.Combine(root, "data/par
 var ship = ShipDesign.FromJson(File.ReadAllText(Path.Combine(root, "data/blueprints/starter_ship.json")));
 var yardDesign = ShipDesign.FromJson(File.ReadAllText(Path.Combine(root, "data/blueprints/starter_shipyard.json")));
 
+if (args.Contains("--huge")) // #114
+{
+    var sizes = args.Where(a => a != "--huge").Select(int.Parse).ToArray();
+    HugeCraft.Run(catalog, ship, yardDesign, sizes.Length > 0 ? sizes : new[] { 100, 500, 2_000, 10_000 });
+    return;
+}
+
 var far = args.Contains("--far");
 var numbers = args.Where(a => a != "--far").ToArray();
 var counts = numbers.Length > 0 ? numbers.Select(int.Parse).ToArray() : new[] { 10, 100, 1_000, 10_000 };

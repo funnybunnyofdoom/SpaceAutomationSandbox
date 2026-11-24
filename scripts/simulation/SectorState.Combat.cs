@@ -389,6 +389,16 @@ public sealed partial class SectorState
 
     private (int Cell, Vector2D At) NearestCell(CraftState craft, Vector2D from)
     {
+        // From outside, the nearest is always a cell on the edge (#114); ties keep the first, as over all of them.
+        var place = new CellPlace(craft);
+        if (!CheckEveryCell && craft.Design.CellArray.Length > SmallCraftCells && from.DistanceTo(craft.Position) > craft.CollisionRadiusM)
+        {
+            var edge = craft.Design.EdgeCells;
+            var (at, nearest) = (edge[0], place.Of(edge[0]).DistanceTo(from));
+            for (var i = 1; i < edge.Length; i++)
+                if (place.Of(edge[i]).DistanceTo(from) is var distance && distance < nearest) (at, nearest) = (edge[i], distance);
+            return (at, place.Of(at));
+        }
         var count = FillCellPositions(craft, ref _cellsA);
         var best = 0;
         for (var i = 1; i < count; i++)
@@ -416,6 +426,17 @@ public sealed partial class SectorState
                 // The craft moved this tick too: sweep against its motion.
                 var a = from + (craft.Position - craft.PreviousPosition);
                 if (SegmentClears(a, to, craft.Position, craft.CollisionRadiusM + CellContactRadiusM)) continue;
+                if (!CheckEveryCell && craft.Design.CellArray.Length > SmallCraftCells)
+                {
+                    foreach (var i in CellsAlong(craft, a, to))
+                    {
+                        var at = new CellPlace(craft).Of(i);
+                        if (SegmentClears(a, to, at, CellContactRadiusM)) continue;
+                        var d = a.DistanceTo(at);
+                        if (d < along) { along = d; hit = craft; hitCell = i; }
+                    }
+                    continue;
+                }
                 var count = FillCellPositions(craft, ref _cellsA);
                 for (var i = 0; i < count; i++)
                 {
@@ -458,19 +479,19 @@ public sealed partial class SectorState
         if (health > 0)
         {
             craft.HealthList[cell.Pos] = health;
-            craft.Stats = craft.Design.ComputeStats(Parts, craft.HealthList);
+            craft.HealthChanged(Parts);
             return;
         }
         BreakOff(craft, new List<DesignCell> { cell });
-        var intact = (craft.IntactDesign ?? craft.Design).ComputeStats(Parts).TotalMassKg;
+        var intact = (craft.IntactDesign ?? craft.Design).MassKg(Parts);
         if ((controlled && !HasControl(craft)) || (wasGate && !IsGate(craft))
-            || craft.Design.Cells.Count == 1 || (!controlled && craft.Stats.TotalMassKg < WreckMassShare * intact))
+            || craft.Design.Cells.Count == 1 || (!controlled && craft.Shape.TotalMassKg < WreckMassShare * intact))
             MakeWreck(craft, wasGate);
     }
 
     private bool HasControl(CraftState craft)
     {
-        foreach (var cell in craft.Design.Cells) if (Parts!.Get(cell.PartId).IsControlSource) return true;
+        foreach (var cell in craft.Design.CellArray) if (Parts!.Get(cell.PartId).IsControlSource) return true;
         return false;
     }
 

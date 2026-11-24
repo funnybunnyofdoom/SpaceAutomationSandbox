@@ -67,7 +67,7 @@ public sealed partial class SectorState
     }
 
     /// <summary>Is the craft a warp gate station?</summary>
-    public static bool IsGate(CraftState craft) => craft.Stats.WarpGateCount > 0 && craft.Stats.DockingPorts.Count > 0;
+    public static bool IsGate(CraftState craft) => craft.Shape.WarpGateCount > 0 && craft.Shape.DockingPorts.Count > 0;
 
     // --- Asking to jump ---
 
