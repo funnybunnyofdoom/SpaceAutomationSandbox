@@ -25,7 +25,7 @@ What the agent actually found and decided while bootstrapping. PC-side checks we
 - `Godot.NET.Sdk/4.7.2`, `net8.0`, Compatibility renderer, nearest texture filter, 1280×720 viewport with `canvas_items` stretch (changed 2026-11-21 by #52: stretch disabled, the interface scales on its own; see docs/06).
 - The `.csproj` was written by hand from the installed SDK version and runtime config, because the editor couldn't be run remotely. If Godot regenerates it or creates a `.sln`, keep the editor's version.
 - Selected `.vscode/` files are tracked (tasks, launch, settings, extensions), and everything else in `.vscode/` is ignored. Tool paths come from `GODOT4` / `PIXELORAMA` environment variables.
-- Pixelorama batch export is deferred until its command-line export is verified on this PC. Manual export plus `tools/art/Check-ArtPairs.ps1` for now.
+- Pixelorama batch export is deferred until its command-line export is verified on this PC. Manual export plus `tools/art/Check-ArtPairs.ps1` for now. *(2026-11-23, #46: verified; `tools/art/export_art.py` exports with Pixelorama 1.2.3's command line and checks each PNG against its source.)*
 
 ## Verification results (2026-11-20)
 
@@ -45,5 +45,5 @@ What the agent actually found and decided while bootstrapping. PC-side checks we
 
 ## Still open
 
-- [ ] Pixelorama round trip: create `art_source/pixelorama/test/test_tile.pxo` (16×16), export `assets/art/test/test_tile.png`, confirm that Godot imports it. Not tested yet, because it needs the GUI. It doesn't block Phase 1, since no art is needed before the first sprites.
+- [x] Pixelorama round trip: create `art_source/pixelorama/test/test_tile.pxo` (16×16), export `assets/art/test/test_tile.png`, confirm that Godot imports it. Not tested yet, because it needs the GUI. It doesn't block Phase 1, since no art is needed before the first sprites. *(Done 2026-11-23, #46: 29 ship-part sources exported through Pixelorama's command line, checked pixel by pixel, imported by Godot and drawn in the game and the exported build.)*
 - [ ] Optional: add a `global.json` to pin the .NET SDK, if builds should not drift when newer SDKs are installed. Not done, because nothing currently needs it.

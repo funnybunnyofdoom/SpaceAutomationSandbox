@@ -2,7 +2,7 @@
 
 Every file under `assets/` that ships in the game gets a row. Original art made in Pixelorama lists its `.pxo` source; third-party placeholders list their license and attribution. Nothing is imported from Agrigeddon.
 
-Module cell size is **not decided yet** (16×16 or 32×32 proposed; choose after a visual test).
+Module cell size: **16×16 pixels per 2 m cell** (decided 2026-11-23, #46).
 
 | Exported file | Source | Cell size / pivot | Author / license | Notes |
 | --- | --- | --- | --- | --- |
@@ -10,6 +10,35 @@ Module cell size is **not decided yet** (16×16 or 32×32 proposed; choose after
 | `assets/art/ui/app_icon.png`, `assets/art/ui/app_icon.ico` | `tools/art/make_placeholder_art.py` | 16×16 drawing, scaled ×1–×16 | original, project-owned | Placeholder app/window/.exe icon (#67); replace with Pixelorama art (#46) |
 | `assets/art/ui/boot_splash.png` | `tools/art/make_placeholder_art.py` | 320×180 drawing, scaled ×4 | original, project-owned | Placeholder boot splash (#67) |
 | `assets/art/test/test_tile.png` | `art_source/pixelorama/test/test_tile.pxo` | 16×16, top-left | original, project-owned | Phase 0 pipeline check only (to be created) |
+| `assets/art/ship_parts/hull.png` | `art_source/pixelorama/ship_parts/hull.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Hull plate (#46) |
+| `assets/art/ship_parts/cockpit.png` | `art_source/pixelorama/ship_parts/cockpit.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Cockpit (#46) |
+| `assets/art/ship_parts/thruster.png` | `art_source/pixelorama/ship_parts/thruster.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Thruster (#46) |
+| `assets/art/ship_parts/battery.png` | `art_source/pixelorama/ship_parts/battery.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Battery (#46) |
+| `assets/art/ship_parts/solar_panel.png` | `art_source/pixelorama/ship_parts/solar_panel.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Solar panel (#46) |
+| `assets/art/ship_parts/cargo.png` | `art_source/pixelorama/ship_parts/cargo.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Cargo bay (#46) |
+| `assets/art/ship_parts/drill.png` | `art_source/pixelorama/ship_parts/drill.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Mining drill (#46) |
+| `assets/art/ship_parts/fabricator.png` | `art_source/pixelorama/ship_parts/fabricator.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Fabricator (#46) |
+| `assets/art/ship_parts/anchor_clamp.png` | `art_source/pixelorama/ship_parts/anchor_clamp.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Anchor clamp (#46) |
+| `assets/art/ship_parts/foundation.png` | `art_source/pixelorama/ship_parts/foundation.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Foundation (#46) |
+| `assets/art/ship_parts/docking_port.png` | `art_source/pixelorama/ship_parts/docking_port.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Docking port (#46) |
+| `assets/art/ship_parts/storage_silo.png` | `art_source/pixelorama/ship_parts/storage_silo.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Storage silo (#46) |
+| `assets/art/ship_parts/refinery.png` | `art_source/pixelorama/ship_parts/refinery.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Refinery (#46) |
+| `assets/art/ship_parts/slag_ejector.png` | `art_source/pixelorama/ship_parts/slag_ejector.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Slag ejector (#46) |
+| `assets/art/ship_parts/habitat.png` | `art_source/pixelorama/ship_parts/habitat.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Habitat (#46) |
+| `assets/art/ship_parts/farm.png` | `art_source/pixelorama/ship_parts/farm.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Farm (#46) |
+| `assets/art/ship_parts/robot_bay.png` | `art_source/pixelorama/ship_parts/robot_bay.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Robot bay (#46) |
+| `assets/art/ship_parts/thruster_mk2.png` | `art_source/pixelorama/ship_parts/thruster_mk2.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Thruster Mk2 (#46) |
+| `assets/art/ship_parts/drill_mk2.png` | `art_source/pixelorama/ship_parts/drill_mk2.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Mining drill Mk2 (#46) |
+| `assets/art/ship_parts/solar_panel_mk2.png` | `art_source/pixelorama/ship_parts/solar_panel_mk2.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Solar panel Mk2 (#46) |
+| `assets/art/ship_parts/battery_mk2.png` | `art_source/pixelorama/ship_parts/battery_mk2.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Battery Mk2 (#46) |
+| `assets/art/ship_parts/refinery_mk2.png` | `art_source/pixelorama/ship_parts/refinery_mk2.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Refinery Mk2 (#46) |
+| `assets/art/ship_parts/fabricator_mk2.png` | `art_source/pixelorama/ship_parts/fabricator_mk2.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Fabricator Mk2 (#46) |
+| `assets/art/ship_parts/warp_gate.png` | `art_source/pixelorama/ship_parts/warp_gate.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Warp gate (#46) |
+| `assets/art/ship_parts/gate_defense.png` | `art_source/pixelorama/ship_parts/gate_defense.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Gate defense battery (#46) |
+| `assets/art/ship_parts/research_lab.png` | `art_source/pixelorama/ship_parts/research_lab.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Research lab (#46) |
+| `assets/art/ship_parts/thruster_mk3.png` | `art_source/pixelorama/ship_parts/thruster_mk3.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Thruster Mk3 (#46) |
+| `assets/art/ship_parts/drill_mk3.png` | `art_source/pixelorama/ship_parts/drill_mk3.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Mining drill Mk3 (#46) |
+| `assets/art/ship_parts/solar_panel_mk3.png` | `art_source/pixelorama/ship_parts/solar_panel_mk3.pxo` (drawn by `tools/art/make_part_art.py`) | 16×16, centre; rotation 0 faces up | original, project-owned | Solar panel Mk3 (#46) |
 | `assets/audio/sfx/thrust_loop.ogg` | `thrusterFire_000.ogg` from [https://opengameart.org/content/sci-fi-sounds](https://opengameart.org/content/sci-fi-sounds) | — | Kenney (www.kenney.nl), "Sci-Fi Sounds" 1.0, CC0 1.0 (licence text: `assets/audio/sfx/LICENSE_kenney_sci-fi_sounds.txt`) | Thrust loop |
 | `assets/audio/sfx/drill_loop.ogg` | `engineCircular_000.ogg` from [https://opengameart.org/content/sci-fi-sounds](https://opengameart.org/content/sci-fi-sounds) | — | Kenney (www.kenney.nl), "Sci-Fi Sounds" 1.0, CC0 1.0 (licence text: `assets/audio/sfx/LICENSE_kenney_sci-fi_sounds.txt`) | Drill loop |
 | `assets/audio/sfx/cruise_loop.ogg` | `spaceEngineLow_000.ogg` from [https://opengameart.org/content/sci-fi-sounds](https://opengameart.org/content/sci-fi-sounds) | — | Kenney (www.kenney.nl), "Sci-Fi Sounds" 1.0, CC0 1.0 (licence text: `assets/audio/sfx/LICENSE_kenney_sci-fi_sounds.txt`) | Cruise drive hum |

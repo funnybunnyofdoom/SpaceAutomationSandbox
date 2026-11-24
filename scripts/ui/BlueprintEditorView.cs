@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Construction;
 
 namespace SpaceAutomationSandbox.UI;
@@ -130,6 +131,7 @@ public partial class BlueprintEditorView : Control
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 FocusMode = FocusModeEnum.None,
                 TooltipText = PartTooltip(part), // #65
+                Icon = PartSprites.Icon(part.Id), // its pixel art (#46)
             };
             var id = part.Id;
             button.Pressed += () => _selectedPart = id;

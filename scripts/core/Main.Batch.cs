@@ -14,6 +14,20 @@ public partial class Main
     private readonly List<Color> _batchColors = new();
     private readonly List<(Vector2 From, Vector2 To, float Width)> _crackLines = new();
 
+    // Part sprites (#46): textured triangles from the part atlas, drawn under the flat ones (flames go on top).
+    private readonly List<Vector2> _spritePoints = new();
+    private readonly List<Vector2> _spriteUvs = new();
+    private readonly List<Color> _spriteColors = new();
+
+    private void BatchSprite((Vector2 A, Vector2 B, Vector2 C, Vector2 D) corners, (Vector2 A, Vector2 B, Vector2 C, Vector2 D) uv, Color modulate)
+    {
+        _spritePoints.Add(corners.A); _spritePoints.Add(corners.B); _spritePoints.Add(corners.C);
+        _spritePoints.Add(corners.A); _spritePoints.Add(corners.C); _spritePoints.Add(corners.D);
+        _spriteUvs.Add(uv.A); _spriteUvs.Add(uv.B); _spriteUvs.Add(uv.C);
+        _spriteUvs.Add(uv.A); _spriteUvs.Add(uv.C); _spriteUvs.Add(uv.D);
+        for (var i = 0; i < 6; i++) _spriteColors.Add(modulate);
+    }
+
     private Vector2[]? _starPoints;
     private Color[]? _starColors;
     private int[]? _starIndices;
@@ -38,6 +52,16 @@ public partial class Main
     /// <summary>Sends the collected triangles, then the crack lines that go on top of them.</summary>
     private void FlushBatch()
     {
+        if (_spritePoints.Count > 0 && PartSprites.Atlas is { } atlas)
+        {
+            var spriteIndices = new int[_spritePoints.Count];
+            for (var i = 0; i < spriteIndices.Length; i++) spriteIndices[i] = i;
+            RenderingServer.CanvasItemAddTriangleArray(GetCanvasItem(), spriteIndices, _spritePoints.ToArray(), _spriteColors.ToArray(),
+                _spriteUvs.ToArray(), null, null, atlas.GetRid());
+        }
+        _spritePoints.Clear();
+        _spriteUvs.Clear();
+        _spriteColors.Clear();
         if (_batchPoints.Count > 0)
         {
             var indices = new int[_batchPoints.Count];

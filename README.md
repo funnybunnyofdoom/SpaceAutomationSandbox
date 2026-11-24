@@ -67,6 +67,8 @@ docs/          vision, architecture, setup, phases, decision log
 
 Draw in Pixelorama, save the `.pxo` under `art_source/pixelorama/<group>/`, export the PNG with the same name to `assets/art/<group>/`, and record it in `assets/ASSET_MANIFEST.md`. `tools/art/Check-ArtPairs.ps1` reports missing or stale exports.
 
+Ship parts are 16×16 pixel art per 2 m cell (rotation 0 faces up). `python tools/art/make_part_art.py` regenerates their sources; `python tools/art/export_art.py` exports changed sources with Pixelorama's command line (`--all` for everything) and checks each PNG against its source. Godot imports the PNGs the next time the editor or `--import` runs.
+
 ## Rules for agents
 
 See `AGENTS.md` and `docs/06_DECISION_LOG_AND_OPEN_QUESTIONS.md`. Proposals in the docs aren't requirements until they're logged as decisions.

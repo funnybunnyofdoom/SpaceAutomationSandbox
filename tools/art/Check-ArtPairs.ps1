@@ -6,8 +6,8 @@
     Convention: art_source/pixelorama/<group>/<name>.pxo  ->  assets/art/<group>/<name>.png
     Reports missing exports, orphan PNGs, and exports older than their source.
     Read-only; it does not launch Pixelorama or change files.
-    (Automated batch export is deferred until Pixelorama's command-line export is verified
-    on this PC; export manually via File > Export for now.)
+    Export with tools/art/export_art.py (Pixelorama's command line, verified 2026-11-23, #46),
+    or by hand via File > Export.
 #>
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $SourceRoot = Join-Path $ProjectRoot 'art_source\pixelorama'

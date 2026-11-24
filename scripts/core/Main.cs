@@ -634,6 +634,7 @@ public partial class Main : Node2D
 
             foreach (var part in catalog.Parts)
                 _partColors[part.Id] = part.PlaceholderColor is { } hex ? Color.FromHtml(hex) : Colors.Magenta;
+            PartSprites.Load(catalog.Parts.Select(p => p.Id)); // pixel-art parts (#46)
             _catalog = catalog;
             _starterDesign = design;
             _starterShipyard = shipyard;
@@ -1304,7 +1305,9 @@ public partial class Main : Node2D
             return;
         }
 
-        var gap = cellPx >= 6f ? 1f : 0f;
+        // Sprites (#46) from 3 px a cell; below that the part colours read better. Sprites have their own outline: no gap.
+        var sprites = cellPx >= 3f && PartSprites.Atlas is not null;
+        var gap = !sprites && cellPx >= 6f ? 1f : 0f;
         var stats = craft.Stats;
         // Cells go into the frame's triangle batch, already rotated and placed (#39).
         var (hs, hc) = Mathf.SinCos(heading);
@@ -1314,15 +1317,19 @@ public partial class Main : Node2D
             var local = new Vector2((float)(cell.Pos.X - stats.CenterOfMassX), (float)(cell.Pos.Y - stats.CenterOfMassY)) * cellPx;
             var rect = new Rect2(local - new Vector2(cellPx, cellPx) / 2 + new Vector2(gap, gap) / 2,
                 new Vector2(cellPx - gap, cellPx - gap));
-            var colour = _partColors.GetValueOrDefault(cell.PartId, Colors.Magenta);
-            // Damaged parts (#34) darken towards black-red as they lose health.
-            if (craft.PartHealth.TryGetValue(cell.Pos, out var health)) colour = colour.Lerp(new Color(0.25f, 0.05f, 0.05f), (float)(1 - health) * 0.8f);
-            BatchQuad(World(rect.Position), World(rect.Position + new Vector2(rect.Size.X, 0)), World(rect.End), World(rect.Position + new Vector2(0, rect.Size.Y)), colour);
+            var damaged = craft.PartHealth.TryGetValue(cell.Pos, out var health) ? (float)(1 - health) * 0.8f : 0f;
+            var corners = (World(rect.Position), World(rect.Position + new Vector2(rect.Size.X, 0)), World(rect.End), World(rect.Position + new Vector2(0, rect.Size.Y)));
+            if (sprites && PartSprites.TryCorners(cell.PartId, cell.Rotation, out var uv0, out var uv1, out var uv2, out var uv3))
+                // Damaged parts (#34) darken towards black-red as they lose health (the sprite is tinted).
+                BatchSprite(corners, (uv0, uv1, uv2, uv3), Colors.White.Lerp(new Color(0.35f, 0.12f, 0.12f), damaged));
+            else
+                BatchQuad(corners.Item1, corners.Item2, corners.Item3, corners.Item4,
+                    _partColors.GetValueOrDefault(cell.PartId, Colors.Magenta).Lerp(new Color(0.25f, 0.05f, 0.05f), damaged));
             if (craft.PartHealth.TryGetValue(cell.Pos, out var cracked) && cracked < 0.75 && cellPx >= 4f) // a crack marks damage beyond the darker colour (#68)
                 _crackLines.Add((World(rect.Position + rect.Size * new Vector2(0.2f, 0.15f)), World(rect.Position + rect.Size * new Vector2(0.75f, 0.85f)), Mathf.Max(1f, cellPx / 8)));
 
             // Only rear-facing thrusters fire on throttle (docs/06); others stay dark for now.
-            if (cell.PartId == "thruster" && cell.Rotation == 0 && craft.Controls.Throttle > 0 && !craft.Controls.Brake)
+            if (cell.PartId.StartsWith("thruster") && cell.Rotation == 0 && craft.Controls.Throttle > 0 && !craft.Controls.Brake) // Mk2/Mk3 too
             {
                 var flameTop = local + new Vector2(0, cellPx / 2);
                 BatchTriangle(World(flameTop + new Vector2(-cellPx * 0.3f, 0)), World(flameTop + new Vector2(cellPx * 0.3f, 0)),

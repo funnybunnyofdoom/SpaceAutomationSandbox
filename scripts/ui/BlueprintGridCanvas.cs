@@ -108,13 +108,16 @@ public partial class BlueprintGridCanvas : Control
         foreach (var (pos, cell) in _model.Cells)
         {
             var origin = CellOrigin(pos);
-            DrawRect(new Rect2(origin + new Vector2(2, 2), new Vector2(CellPx - 4, CellPx - 4)),
-                _colors.TryGetValue(cell.PartId, out var c) ? c : UnknownPart);
-            // Two-letter tag so parts with similar colours stay distinguishable.
-            var id = cell.PartId;
-            var tag = id.Length >= 2 ? id[..2].ToUpperInvariant() : id.ToUpperInvariant();
-            DrawString(font, origin + new Vector2(5, CellPx - 9), tag, HorizontalAlignment.Left, -1, 11, new Color(0, 0, 0, 0.75f));
-            DrawFacing(origin, cell.Rotation, new Color(0, 0, 0, 0.6f));
+            if (!DrawPartSprite(cell.PartId, cell.Rotation, origin, Colors.White)) // the part's pixel art (#46)
+            {
+                DrawRect(new Rect2(origin + new Vector2(2, 2), new Vector2(CellPx - 4, CellPx - 4)),
+                    _colors.TryGetValue(cell.PartId, out var c) ? c : UnknownPart);
+                // Two-letter tag so parts with similar colours stay distinguishable.
+                var id = cell.PartId;
+                var tag = id.Length >= 2 ? id[..2].ToUpperInvariant() : id.ToUpperInvariant();
+                DrawString(font, origin + new Vector2(5, CellPx - 9), tag, HorizontalAlignment.Left, -1, 11, new Color(0, 0, 0, 0.75f));
+                DrawFacing(origin, cell.Rotation, new Color(0, 0, 0, 0.6f));
+            }
             if (loose.Contains(pos)) // not connected (#35); the "!" says so without colour (#68)
             {
                 DrawRect(new Rect2(origin, new Vector2(CellPx, CellPx)), LooseCell, false, 3);
@@ -132,6 +135,9 @@ public partial class BlueprintGridCanvas : Control
         if (_hover is { } hover)
         {
             var erase = _dragButton == MouseButton.Right;
+            // A faint copy of the part to place, turned as it will be (#46).
+            if (!erase && _selectedPart() is { } placing && !_model.Cells.ContainsKey(hover))
+                DrawPartSprite(placing, _rotation(), CellOrigin(hover), new Color(1, 1, 1, 0.45f));
             DrawRect(new Rect2(CellOrigin(hover), new Vector2(CellPx, CellPx)), erase ? HoverErase : HoverPlace, false, 2);
             if (!erase) DrawFacing(CellOrigin(hover), _rotation(), HoverPlace); // shows the rotation that will be placed
             else // an × marks erasing, not just the colour (#68)
@@ -148,6 +154,16 @@ public partial class BlueprintGridCanvas : Control
     }
 
     /// <summary>Small triangle near the cell edge the part faces (thrusters push that way; ports open that way).</summary>
+    /// <summary>Draws a part's sprite in a cell, turned by its rotation; false if the part has none.</summary>
+    private bool DrawPartSprite(string partId, int rotation, Vector2 origin, Color modulate)
+    {
+        if (PartSprites.Icon(partId) is not { } texture) return false;
+        DrawSetTransform(origin + new Vector2(CellPx, CellPx) / 2, rotation * Mathf.Pi / 2, Vector2.One);
+        DrawTextureRect(texture, new Rect2(-new Vector2(CellPx, CellPx) / 2, new Vector2(CellPx, CellPx)), false, modulate);
+        DrawSetTransform(Vector2.Zero, 0, Vector2.One);
+        return true;
+    }
+
     private void DrawFacing(Vector2 origin, int rotation, Color color)
     {
         var (fx, fy) = DesignCell.Facing(rotation);
