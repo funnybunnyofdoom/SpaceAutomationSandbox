@@ -38,6 +38,10 @@ public static class InputActions
     public const string Settings = "open_settings";
     public const string Fullscreen = "toggle_fullscreen";
     public const string TargetCycle = "target_cycle";
+    public const string TargetPrevious = "target_previous";
+    public const string TargetKindNext = "target_kind_next";
+    public const string TargetClear = "target_clear";
+    public const string TargetAhead = "target_ahead";
     public const string TargetNearest = "target_nearest";
     public const string ZoomIn = "view_zoom_in";
     public const string ZoomOut = "view_zoom_out";
@@ -67,7 +71,8 @@ public static class InputActions
         (StrafeLeft, "Strafe left", "Flying"), (StrafeRight, "Strafe right", "Flying"), (Brake, "Brake (match the target)", "Flying"),
         (Cruise, "Cruise drive", "Flying"), (Dock, "Dock / undock", "Flying"), (Anchor, "Anchor / release (galaxy view in the map)", "Flying"),
         (Deploy, "Deploy a kit", "Flying"), (Jump, "Warp jump (docked at a gate)", "Flying"), (HoldFire, "Hold fire / weapons free", "Flying"), (Quantum, "Quantum jump to the target", "Flying"),
-        (TargetCycle, "Cycle target", "Targets and view"), (TargetNearest, "Target the nearest body", "Targets and view"),
+        (TargetCycle, "Next target of the kind", "Targets and view"), (TargetPrevious, "Previous target of the kind", "Targets and view"), (TargetKindNext, "Next kind of target", "Targets and view"),
+        (TargetAhead, "Target what's ahead", "Targets and view"), (TargetClear, "Clear target", "Targets and view"), (TargetNearest, "Target the nearest body", "Targets and view"),
         (ZoomIn, "Zoom in", "Targets and view"), (ZoomOut, "Zoom out", "Targets and view"), (Map, "Map", "Targets and view"),
         (Editor, "Blueprint editor", "Panels"), (Shipyard, "Shipyard", "Panels"), (Fleet, "Fleet", "Panels"), (Cargo, "Cargo", "Panels"),
         (Job, "Job", "Panels"), (Research, "Research", "Panels"), (Laws, "Laws and civilizations", "Panels"), (Power, "Power", "Panels"), (Life, "Native life", "Panels"), (Milestones, "Milestones", "Panels"), (Settings, "Settings", "Panels"), (Debug, "Debug menu", "Panels"),
@@ -103,6 +108,10 @@ public static class InputActions
         Add(Settings, 0.5f, Keys(Key.F2));
         Add(Fullscreen, 0.5f, Keys(Key.F11));
         Add(TargetCycle, 0.5f, Keys(Key.Tab), Pad(JoyButton.RightShoulder));
+        Add(TargetPrevious, 0.5f, new InputEventKey { PhysicalKeycode = Key.Tab, ShiftPressed = true }, Pad(JoyButton.DpadLeft)); // #107
+        Add(TargetKindNext, 0.5f, new InputEventKey { PhysicalKeycode = Key.Tab, CtrlPressed = true }, Pad(JoyButton.DpadRight));
+        Add(TargetClear, 0.5f, Keys(Key.Delete));
+        Add(TargetAhead, 0.5f, Keys(Key.Semicolon), Pad(JoyButton.RightStick)); // #108
         Add(TargetNearest, 0.5f, Keys(Key.T), Pad(JoyButton.LeftShoulder));
         Add(ZoomIn, 0.5f, new InputEventMouseButton { ButtonIndex = MouseButton.WheelUp }, Pad(JoyButton.DpadUp));
         Add(ZoomOut, 0.5f, new InputEventMouseButton { ButtonIndex = MouseButton.WheelDown }, Pad(JoyButton.DpadDown));
@@ -206,9 +215,16 @@ public static class InputActions
     public static IEnumerable<string> ActionsUsing(InputEvent input, string except) =>
         All.Where(a => a.Action != except && Events(a.Action).Any(e => Same(e, input))).Select(a => a.Name);
 
+    /// <summary>Shift 1, Ctrl 2, Alt 4 (#107).</summary>
+    public static int Modifiers(InputEventKey k) => (k.ShiftPressed ? 1 : 0) + (k.CtrlPressed ? 2 : 0) + (k.AltPressed ? 4 : 0);
+
+    /// <summary>A key with modifiers.</summary>
+    public static InputEventKey WithModifiers(Key key, int modifiers) =>
+        new() { PhysicalKeycode = key, ShiftPressed = (modifiers & 1) != 0, CtrlPressed = (modifiers & 2) != 0, AltPressed = (modifiers & 4) != 0 };
+
     private static bool Same(InputEvent a, InputEvent b) => a switch
     {
-        InputEventKey k when b is InputEventKey l => k.PhysicalKeycode == l.PhysicalKeycode && k.Keycode == l.Keycode,
+        InputEventKey k when b is InputEventKey l => k.PhysicalKeycode == l.PhysicalKeycode && k.Keycode == l.Keycode && Modifiers(k) == Modifiers(l),
         InputEventMouseButton m when b is InputEventMouseButton n => m.ButtonIndex == n.ButtonIndex,
         InputEventJoypadButton j when b is InputEventJoypadButton k2 => j.ButtonIndex == k2.ButtonIndex,
         InputEventJoypadMotion j when b is InputEventJoypadMotion k2 => j.Axis == k2.Axis && Math.Sign(j.AxisValue) == Math.Sign(k2.AxisValue),
@@ -218,6 +234,7 @@ public static class InputActions
     /// <summary>A short, readable name for one input ("W", "Wheel up", "Pad A", "Left stick right").</summary>
     public static string Describe(InputEvent e) => e switch
     {
+        InputEventKey k when Modifiers(k) != 0 => (k.CtrlPressed ? "Ctrl+" : "") + (k.ShiftPressed ? "Shift+" : "") + (k.AltPressed ? "Alt+" : "") + Describe(new InputEventKey { PhysicalKeycode = k.PhysicalKeycode, Keycode = k.Keycode }),
         InputEventKey k => OS.GetKeycodeString(k.PhysicalKeycode != Key.None ? k.PhysicalKeycode : k.Keycode) is { Length: > 0 } s ? s : "?",
         InputEventMouseButton m => m.ButtonIndex switch
         {
@@ -270,7 +287,7 @@ public static class InputActions
     /// <summary>An action's bindings as text: "key:87;mouse:4;pad:0;axis:5:1".</summary>
     public static string Serialize(IEnumerable<InputEvent> events) => string.Join(";", events.Select(e => e switch
     {
-        InputEventKey k => $"key:{(long)(k.PhysicalKeycode != Key.None ? k.PhysicalKeycode : k.Keycode)}",
+        InputEventKey k => $"key:{(long)(k.PhysicalKeycode != Key.None ? k.PhysicalKeycode : k.Keycode)}" + (Modifiers(k) is > 0 and var held ? $":{held}" : ""),
         InputEventMouseButton m => $"mouse:{(int)m.ButtonIndex}",
         InputEventJoypadButton j => $"pad:{(int)j.ButtonIndex}",
         InputEventJoypadMotion j => $"axis:{(int)j.Axis}:{Math.Sign(j.AxisValue)}",
@@ -292,7 +309,7 @@ public static class InputActions
                 if (bits.Length < 2 || !long.TryParse(bits[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)) continue;
                 InputEvent? e = bits[0] switch
                 {
-                    "key" => new InputEventKey { PhysicalKeycode = (Key)value },
+                    "key" => WithModifiers((Key)value, bits.Length >= 3 && int.TryParse(bits[2], out var held) ? held : 0),
                     "mouse" => new InputEventMouseButton { ButtonIndex = (MouseButton)value },
                     "pad" => new InputEventJoypadButton { ButtonIndex = (JoyButton)value },
                     "axis" when bits.Length >= 3 && int.TryParse(bits[2], out var sign) => new InputEventJoypadMotion { Axis = (JoyAxis)value, AxisValue = sign },

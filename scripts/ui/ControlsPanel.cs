@@ -154,8 +154,13 @@ public partial class ControlsPanel : Control
                 InputActions.Clear(waiting.Action, waiting.Controller);
                 Finish(null, $"{waiting.Name}: {(waiting.Controller ? "controller" : "keyboard")} binding cleared.", changed: true);
                 break;
+            case InputEventKey { Pressed: true } held when IsModifier(held):
+                break; // a combination may follow; let go alone, it's bound by itself
+            case InputEventKey { Pressed: false } alone when IsModifier(alone) && !waiting.Controller:
+                bound = new InputEventKey { PhysicalKeycode = alone.PhysicalKeycode != Key.None ? alone.PhysicalKeycode : alone.Keycode };
+                break;
             case InputEventKey { Pressed: true, Echo: false } key when !waiting.Controller:
-                bound = new InputEventKey { PhysicalKeycode = key.PhysicalKeycode != Key.None ? key.PhysicalKeycode : key.Keycode };
+                bound = InputActions.WithModifiers(key.PhysicalKeycode != Key.None ? key.PhysicalKeycode : key.Keycode, InputActions.Modifiers(key));
                 break;
             case InputEventMouseButton { Pressed: true } mouse when mouse.ButtonIndex == MouseButton.Left:
                 Finish(null, "Cancelled."); // a click elsewhere; left click stays for the interface
@@ -181,6 +186,8 @@ public partial class ControlsPanel : Control
             ? $"{waiting.Name}: {InputActions.Describe(bound)}. Warning: {InputActions.Describe(bound)} is also used by {string.Join(", ", others)}."
             : $"{waiting.Name}: {InputActions.Describe(bound)}.", changed: true, warn: others.Count > 0);
     }
+
+    private static bool IsModifier(InputEventKey key) => (key.PhysicalKeycode != Key.None ? key.PhysicalKeycode : key.Keycode) is Key.Shift or Key.Ctrl or Key.Alt or Key.Meta;
 
     private void Finish(InputEvent? bound, string message, bool changed = false, bool warn = false)
     {

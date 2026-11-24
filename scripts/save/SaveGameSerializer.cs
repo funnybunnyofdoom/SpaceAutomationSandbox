@@ -49,11 +49,12 @@ public static class SaveGameSerializer
     /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids); v22 added salvage jobs (#86); v23 added missiles (#87) and shields (#90); v24 added guard, escort and patrol jobs (#88) and civilization patrols (#89);
     /// v25 added trade stations, trade routes and diplomacy (#89); v26 added native life (#91, #92); v27 added
     /// native animals (#93); v28 added antimatter and quantum drives (#81, #82); v29 added milestones (#38)
-    /// and closable gates (#95).
+    /// and closable gates (#95); v30 added
+    /// flying to a target (#108).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 29;
+    public const int SchemaVersion = 30;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -200,6 +201,7 @@ public static class SaveGameSerializer
                     PatrolStop = c.PatrolStop,
                     IsTradeStation = c.IsTradeStation,
                     PenKg = c.PenKg,
+                    FlyToPhase = c.FlyToPhase,
                     GateClosed = c.GateClosed,
                     ContainmentFailS = c.ContainmentFailS,
                     QuantumChargeKJ = c.QuantumChargeKJ,
@@ -534,7 +536,9 @@ public static class SaveGameSerializer
             // Links between crafts, after every craft exists.
             foreach (var c in dto.Crafts ?? new List<CraftDto>())
             {
-                if (c.TargetCraftId != 0) sector.SetTargetCraft(new CraftId(c.Id), new CraftId(c.TargetCraftId));
+                var flyTo = c.FlyToPhase;
+                if (flyTo is < 0 or > 2) throw new FormatException($"Craft {c.Id} has an invalid fly-to phase.");
+                if (c.TargetCraftId != 0) sector.SetTargetCraft(new CraftId(c.Id), new CraftId(c.TargetCraftId)); sector.GetCraft(new CraftId(c.Id)).FlyToPhase = flyTo;
                 if (c.DockedToCraftId != 0) sector.RestoreDock(new CraftId(c.Id), new CraftId(c.DockedToCraftId), c.DockPort);
                 if (c.DockClaimStationId != 0) sector.RestoreDockClaim(new CraftId(c.Id), new CraftId(c.DockClaimStationId), c.DockClaimPort);
                 if (c.Transit is { } leg)
@@ -1045,6 +1049,10 @@ public static class SaveGameSerializer
         /// <summary>v29: a closed warp gate (#95).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool GateClosed { get; set; }
+
+        /// <summary>v30: flying itself to its target (#108).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public int FlyToPhase { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double QuantumChargeKJ { get; set; }

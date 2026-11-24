@@ -868,6 +868,7 @@ public partial class Main : Node2D
             }
             return;
         }
+        if (@event is InputEventMouseButton click && WorldClick(click)) { GetViewport().SetInputAsHandled(); return; } // #108
         // The side panels don't take keyboard focus, so flying continues while they're open.
 
         if (Pressed(InputActions.ZoomIn) || Pressed(InputActions.ZoomOut))
@@ -927,7 +928,11 @@ public partial class Main : Node2D
             ShowStatus(_player.Kits.FirstOrDefault() is { } kit ? _sector.TryDeployKit(_player.Id, kit.Id).Message : "No construction kit on board.");
         else if (Pressed(InputActions.Anchor) && (_changedSinceSave = true))
             ShowStatus((_player.IsAnchored ? _sector.TryRelease(_player.Id) : _sector.TryAnchor(_player.Id)).Message);
-        else if (Pressed(InputActions.TargetCycle)) CycleTarget();
+        else if (Pressed(InputActions.TargetKindNext)) NextTargetKind(); // before the plain key: they share Tab (#107)
+        else if (Pressed(InputActions.TargetPrevious)) CycleTarget(-1);
+        else if (Pressed(InputActions.TargetCycle)) CycleTarget(1);
+        else if (Pressed(InputActions.TargetAhead)) TargetAhead();
+        else if (Pressed(InputActions.TargetClear)) ClearTarget();
         else if (Pressed(InputActions.TargetNearest)) _sector.SetTarget(_player.Id, _sector.NearestBody(_player.Position).Body.Id);
         else return;
         GetViewport().SetInputAsHandled();
@@ -940,33 +945,13 @@ public partial class Main : Node2D
         else open();
     }
 
-    /// <summary>
-    /// Tab order: each body by id, then every other craft by id, then "no target" (brake stops
-    /// relative to the sector). Fine for a few craft; a fleet-scale picker comes with the fleet UI.
-    /// </summary>
-    private void CycleTarget()
-    {
-        var p = _player!;
-        var options = _sector.Bodies.Select(b => (Body: b.Id, Craft: CraftId.None))
-            .Concat(_sector.Crafts.Where(c => c.Id != p.Id).Select(c => (Body: BodyId.None, Craft: c.Id)))
-            .Append((Body: BodyId.None, Craft: CraftId.None))
-            .ToList();
-        var current = options.FindIndex(o => o.Body == p.TargetBodyId && o.Craft == p.TargetCraftId);
-        var (body, craft) = options[(current + 1) % options.Count];
-        if (!craft.IsNone) _sector.SetTargetCraft(p.Id, craft);
-        else
-        {
-            _sector.SetTargetCraft(p.Id, CraftId.None);
-            _sector.SetTarget(p.Id, body);
-        }
-    }
-
     public override void _Process(double delta)
     {
         var audioStart = System.Diagnostics.Stopwatch.GetTimestamp();
         _audio.Watch(InMenu ? null : _sector, InMenu ? null : _player, delta); // ship sounds; music plays throughout (#64)
         _audioCost.Add(System.Diagnostics.Stopwatch.GetElapsedTime(audioStart).TotalMilliseconds);
         ArrangePanels(); // #96
+        UpdateHover(); // #108
         UpdatePanelNav();
         ShowNewEvents(); // civilizations, laws (#36)
         StressFrame(delta);
@@ -1026,7 +1011,19 @@ public partial class Main : Node2D
     /// </summary>
     private void DevScreenshot()
     {
-        if (++_framesShown != 20) return;
+        _framesShown++;
+        // Dev hooks (#108): --click=x,y, --right-click=x,y or --point=x,y (window pixels), and --press=action, through the real input path.
+        foreach (var arg0 in OS.GetCmdlineUserArgs())
+        {
+            var parts = arg0.Split('=');
+            if (parts.Length == 2 && parts[0] == "--press" && _framesShown == 10) Input.ParseInputEvent(new InputEventAction { Action = parts[1], Pressed = true });
+            if (parts.Length != 2 || parts[0] is not ("--click" or "--right-click" or "--point") || parts[1].Split(',') is not [var px, var py]) continue;
+            var at = new Vector2(float.Parse(px), float.Parse(py));
+            if (parts[0] == "--point") _devPointer = at;
+            if (_framesShown is 11 or 12 && parts[0] != "--point")
+                Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, Pressed = _framesShown == 11, ButtonIndex = parts[0] == "--click" ? MouseButton.Left : MouseButton.Right });
+        }
+        if (_framesShown != 20) return;
         if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot=")) is not { } arg) return;
         GetViewport().GetTexture().GetImage().SavePng(arg["--screenshot=".Length..]);
         GetTree().Quit();
@@ -1082,6 +1079,7 @@ public partial class Main : Node2D
                    + (!p.IsLanded && !p.IsDocked && !p.IsOnRails && !p.Cruising && _sector.GravitySource(p.Position) is { } pull
                        ? $"gravity {_sector.GravityAt(p.Position, _sector.TimeS).Length:0.00} m/s² from {pull.Name} - land under {SectorState.SafeImpactSpeedMps:0} m/s\n"
                        : "")
+                   + (p.FlyToPhase > 0 ? $"FLYING TO {(CurrentTarget.IsNone ? "its target" : TargetName(CurrentTarget))}: {(p.FlyToPhase == 1 ? "turning" : "cruising")} - any flight control stops it\n" : "") // #108
                    + (p.Cruising
                        ? $"CRUISE {SectorState.CruiseSpeedMps:0} m/s - fuel {p.Inventory[SectorState.FuelMaterial] / 1000.0:0.00} t "
                          + $"({p.Inventory[SectorState.FuelMaterial] / System.Math.Max(SectorState.CruiseFuelKgPerS(p), 1e-9) / 60:0} min left), V or brake to drop out\n"
@@ -1218,6 +1216,9 @@ public partial class Main : Node2D
     private void DrawWorld()
     {
         if (InMenu || (_mapMode && _galaxyView)) HideBodies();
+        _arrowHits.Clear();
+        _starHits.Clear();
+        _swarmHits.Clear();
         if (InMenu) return; // the title screen: no game to draw
         if (_mapMode && _galaxyView) { DrawGalaxy(); return; }
 
@@ -1245,6 +1246,7 @@ public partial class Main : Node2D
         FlushBatch();
         DrawCombat(); // #84
         DrawEdgeArrows(renderTimeS); // #101
+        DrawHover(renderTimeS); // #108
         // Name tags, not when zoomed far out; in a crowd only stations and the target get one, so the text stays readable and cheap.
         var crowd = _visibleCrafts.Count > MaxNameTags;
         foreach (var (craft, at, radius) in _visibleCrafts)
@@ -1414,6 +1416,7 @@ public partial class Main : Node2D
         foreach (var star in stars)
         {
             var at = At(star);
+            _starHits.Add((star.Id, at));
             DrawGalaxyStar(star, at, (star.Id == here ? 12 : 9) * ui);
             if (star.Id == here) DrawArc(at, 18 * ui, 0, Mathf.Tau, 48, Colors.White, 1.5f * ui);
             var bodies = _sector.Bodies.Where(b => b.Id != star.Id && _sector.StarOf(b.Id)?.Id == star.Id).ToList();
@@ -1431,7 +1434,7 @@ public partial class Main : Node2D
         }
         // The legend along the top, between the HUD on the left and the panel on the right.
         DrawString(ThemeDB.FallbackFont, new Vector2(-size.X / 2 + 560 * ui, -size.Y / 2 + 30 * ui),
-            "GALAXY  (G: back to the system)   Purple: warp gate links.  Pick a system in the panel to see its map.",
+            "GALAXY  (G: back to the system)   Purple: warp gate links.  Click a system to see its map.",
             HorizontalAlignment.Left, -1, font, NameColor);
     }
 

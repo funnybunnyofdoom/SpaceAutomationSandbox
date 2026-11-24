@@ -17,7 +17,7 @@ public partial class Main
     private static readonly (string Start, string Icon)[] LineIcons =
     {
         ("KIT", "kit"), ("DAMAGE", "hull"), ("SHIPYARD WORK", "shipyard"), ("TUGS", "docked"), ("WARP", "gate"), ("system:", "star"), ("gravity", "gravity"),
-        ("CRUISE", "speed"), ("cruise", "speed"), ("AUTOPILOT (mining", "mining"), ("AUTOPILOT (freight", "freight"), ("AUTOPILOT (survey", "survey"),
+        ("FLYING TO", "target"), ("CRUISE", "speed"), ("cruise", "speed"), ("AUTOPILOT (mining", "mining"), ("AUTOPILOT (freight", "freight"), ("AUTOPILOT (survey", "survey"),
         ("AUTOPILOT (salvage", "salvage"), ("AUTOPILOT (trade", "trade"), ("AUTOPILOT", "job"), ("MINING", "mining"), ("ANCHORED", "landed"), ("LANDED", "landed"),
         ("DOCKED", "docked"), ("PARKED", "orbit"), ("On a fixed orbit", "orbit"), ("weapons", "weapon"), ("shield", "shield"), ("antimatter", "mat_antimatter"),
         ("quantum", "speed"), ("salvage", "salvage"), ("drives", "mat_fuel"), ("crew", "crew"), ("power", "power"), ("Research", "research"),
@@ -149,6 +149,7 @@ public partial class Main
             rows.Add(new HudRow("target", parts[0]));
             rows.Add(new HudRow("speed", string.Join("   ", parts.Skip(1)), line.Contains("MATCHED") ? Severity.Good : Severity.Normal));
         }
+        rows.Add(CycleRow()); // #107
         return new HudCardData(heading, rows, craft?.Design, craft is not null ? null : body is null ? "target" : BodyIcon(body));
     }
 
@@ -183,11 +184,11 @@ public partial class Main
         var drawn = new List<Vector2>();
 
         if (!p.TargetCraftId.IsNone) Arrow(ToPixels(InterpolatedPosition(_sector.GetCraft(p.TargetCraftId))), 0, MarkerColor, _sector.GetCraft(p.TargetCraftId).Name,
-            _sector.GetRelativeMotionToCraft(p.Id, p.TargetCraftId).SurfaceDistanceM);
+            _sector.GetRelativeMotionToCraft(p.Id, p.TargetCraftId).SurfaceDistanceM, TargetRef.Of(_sector.GetCraft(p.TargetCraftId)));
         else if (!p.TargetBodyId.IsNone)
         {
             var body = _sector.GetBody(p.TargetBodyId);
-            Arrow(ToPixels(_sector.GetPositionAt(body.Id, renderTimeS)), (float)body.RadiusM * _pixelsPerMetre, MarkerColor, body.Name, _sector.GetRelativeMotion(p.Id, body.Id).SurfaceDistanceM);
+            Arrow(ToPixels(_sector.GetPositionAt(body.Id, renderTimeS)), (float)body.RadiusM * _pixelsPerMetre, MarkerColor, body.Name, _sector.GetRelativeMotion(p.Id, body.Id).SurfaceDistanceM, TargetRef.Of(body));
         }
         var here = _sector.StarAt(p.Position)?.Id;
         CraftState? yard = null;
@@ -197,13 +198,13 @@ public partial class Main
                 && (yard is null || craft.Position.DistanceTo(p.Position) < yard.Position.DistanceTo(p.Position))) yard = craft;
         }
         if (yard is not null && yard.Id != p.Id && yard.Id != p.TargetCraftId)
-            Arrow(ToPixels(InterpolatedPosition(yard)), 0, StationArrow, yard.Name, yard.Position.DistanceTo(p.Position));
+            Arrow(ToPixels(InterpolatedPosition(yard)), 0, StationArrow, yard.Name, yard.Position.DistanceTo(p.Position), TargetRef.Of(yard));
         if (_sector.Factions.Count == 0) return;
         foreach (var enemy in _sector.Crafts.Where(c => !SectorState.IsPlayers(c) && !c.IsWreck && c.Id != p.TargetCraftId && _sector.IsEnemy(c) && _sector.StarAt(c.Position)?.Id == here)
                      .OrderBy(c => c.Position.DistanceTo(p.Position)).Take(4).ToList())
-            Arrow(ToPixels(InterpolatedPosition(enemy)), 0, Palette.Bad, "! " + enemy.Name, enemy.Position.DistanceTo(p.Position));
+            Arrow(ToPixels(InterpolatedPosition(enemy)), 0, Palette.Bad, "! " + enemy.Name, enemy.Position.DistanceTo(p.Position), TargetRef.Of(enemy));
 
-        void Arrow(Vector2 at, float radius, Color color, string name, double distance)
+        void Arrow(Vector2 at, float radius, Color color, string name, double distance, TargetRef target)
         {
             if (view.Grow(radius).HasPoint(at)) return;
             var from = free.GetCenter();
@@ -213,6 +214,7 @@ public partial class Main
             var tip = from + direction * reach;
             if (drawn.Any(d => d.DistanceTo(tip) < 60 * scale)) return; // a group: the nearest (or the target) speaks for it
             drawn.Add(tip);
+            _arrowHits.Add((target, tip));
             var side = new Vector2(-direction.Y, direction.X) * 7 * scale;
             var back = tip - direction * 16 * scale;
             DrawColoredPolygon(new[] { tip, back + side, back - side }, color);

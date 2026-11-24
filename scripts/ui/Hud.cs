@@ -106,6 +106,7 @@ public partial class Hud : Control
         _help.GrowHorizontal = GrowDirection.Both;
         _help.GrowVertical = GrowDirection.Both;
         _help.Visible = false;
+        _help.MouseFilter = MouseFilterEnum.Stop;
         AddChild(_help);
     }
 
@@ -178,7 +179,8 @@ public partial class Hud : Control
                brake (matches the target's motion): {K(InputActions.Brake)}
                cruise drive: {K(InputActions.Cruise)}      anchor / release: {K(InputActions.Anchor)}      dock / undock: {K(InputActions.Dock)}      deploy a kit: {K(InputActions.Deploy)}
                warp jump (docked at a gate): {K(InputActions.Jump)}
-               cycle target: {K(InputActions.TargetCycle)}      target nearest body: {K(InputActions.TargetNearest)}      zoom: {K(InputActions.ZoomIn)} / {K(InputActions.ZoomOut)}
+               next target: {K(InputActions.TargetCycle)}      previous: {K(InputActions.TargetPrevious)}      other kind: {K(InputActions.TargetKindNext)}      ahead: {K(InputActions.TargetAhead)}      clear: {K(InputActions.TargetClear)}
+               click: target      right click: target, fly to      target nearest body: {K(InputActions.TargetNearest)}      zoom: {K(InputActions.ZoomIn)} / {K(InputActions.ZoomOut)}
 
             Panels  (they open on the right; {K(InputActions.ClosePanels)} closes them)
                blueprint editor: {K(InputActions.Editor)}      shipyard: {K(InputActions.Shipyard)}      fleet: {K(InputActions.Fleet)}      cargo: {K(InputActions.Cargo)}      job: {K(InputActions.Job)}      map: {K(InputActions.Map)}

@@ -225,6 +225,9 @@ public sealed class CraftState
     /// <summary>The player's order not to fire. Saved.</summary>
     public bool HoldFire { get; set; }
 
+    /// <summary>Flying itself to its target (#108): 0 no, 1 turning to it, 2 cruising. Saved.</summary>
+    public int FlyToPhase { get; internal set; }
+
     /// <summary>A warp gate the player has closed with its gate lock (#95). Saved.</summary>
     public bool GateClosed { get; internal set; }
 

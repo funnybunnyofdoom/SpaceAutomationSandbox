@@ -33,6 +33,7 @@ public sealed partial class SectorState
             craft.TargetBodyId = BodyId.None;
         }
         craft.TargetCraftId = target;
+        craft.FlyToPhase = 0; // #108
     }
 
     /// <summary>

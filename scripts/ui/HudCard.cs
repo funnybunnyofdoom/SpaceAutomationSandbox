@@ -6,7 +6,7 @@ using SpaceAutomationSandbox.Construction;
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>A line of a HUD card: an icon and either text, or (with a fraction) a bar with the text on it.</summary>
-public sealed record HudRow(string Icon, string Text, Severity Severity = Severity.Normal, double? Fraction = null, double? Marker = null, string Tip = "");
+public sealed record HudRow(string Icon, string Text, Severity Severity = Severity.Normal, double? Fraction = null, double? Marker = null, string Tip = "", Action? Click = null);
 
 /// <summary>What a HUD card shows: a heading, a picture (a design or an icon) and its rows. No rows and no heading: hidden.</summary>
 public sealed record HudCardData(string Heading, IReadOnlyList<HudRow> Rows, ShipDesign? Design = null, string? Icon = null)
@@ -35,7 +35,7 @@ public partial class HudCard : PanelContainer
     {
         _title = title;
         _isCollapsed = isCollapsed;
-        MouseFilter = MouseFilterEnum.Pass;
+        MouseFilter = MouseFilterEnum.Stop; // a click on a card isn't one in the world (#108)
         var box = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
         box.AddThemeConstantOverride("separation", 3);
         AddChild(box);
@@ -111,6 +111,7 @@ public partial class HudCard : PanelContainer
             MouseFilter = MouseFilterEnum.Pass; // for its tooltip
             AddThemeConstantOverride("separation", 6);
             _icon.SizeFlagsVertical = SizeFlags.ShrinkBegin;
+            GuiInput += e => { if (e is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) _row?.Click?.Invoke(); };
             AddChild(_icon);
             AddChild(_label);
             AddChild(_bar);
@@ -122,6 +123,7 @@ public partial class HudCard : PanelContainer
             if (row is null || row == _row) return;
             if (row.Icon != _row?.Icon) _icon.Texture = UiIcons.Get(row.Icon);
             if (row.Tip != _row?.Tip) TooltipText = row.Tip;
+            MouseDefaultCursorShape = row.Click is null ? CursorShape.Arrow : CursorShape.PointingHand;
             _label.Visible = row.Fraction is null;
             _bar.Visible = row.Fraction is not null;
             if (row.Fraction is { } fraction) _bar.Set(fraction, row.Text, row.Severity, row.Marker);

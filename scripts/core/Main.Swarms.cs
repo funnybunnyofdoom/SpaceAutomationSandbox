@@ -77,6 +77,7 @@ public partial class Main
                     BatchTriangle(px + f * size, px - f * size * 0.8f + s * size * 0.6f, px - f * size * 0.8f - s * size * 0.6f, loaded ? SwarmLoadedColor : SwarmColor);
                 }
             var label = ToPixels(home + route * 0.5);
+            if (view.HasPoint(label) && routePx > 60) _swarmHits.Add((swarm, new Rect2(label + new Vector2(8, -28), 160, 24))); // #108
             if (view.HasPoint(label) && routePx > 60)
                 DrawString(ThemeDB.FallbackFont, label + new Vector2(12, -12), $"{swarm.Name} ({swarm.Count:N0}){(swarm.LimitReason is null ? "" : "  !")}",
                     HorizontalAlignment.Left, -1, 12, CraftLabelColor);

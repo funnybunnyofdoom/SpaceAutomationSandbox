@@ -190,6 +190,7 @@ public sealed partial class SectorState
         // to "TimeS of the next tick" (matters for exact save/load equivalence).
         var midTickS = (Tick + 0.5) * FixedStepClock.TickSeconds;
         var endS = (Tick + 1) * FixedStepClock.TickSeconds;
+        StepFlyTo(); // #108
         StepJobs(); // automated craft set their controls first, from this tick's state
         BeginPowerTick();
         StepLifeSupport(); // crew first: a craft without its crew can't fly or work this tick (#11)
@@ -235,6 +236,7 @@ public sealed partial class SectorState
             else ResolveContact(craft, endS);
         }
 
+        EndFlyTo();
         if (docked != null) UpdateDocked(docked);
         StepCombat(endS); // weapons, shots and wrecks (#84, #85)
         ResolveCraftCollisions(); // after everything moved (#34)
@@ -313,6 +315,7 @@ public sealed partial class SectorState
         if (!target.IsNone) GetBody(target); // throws for unknown ids
         var craft = GetCraft(craftId);
         craft.TargetBodyId = target;
+        craft.FlyToPhase = 0; // #108
         if (!target.IsNone) craft.TargetCraftId = CraftId.None;
     }
 
