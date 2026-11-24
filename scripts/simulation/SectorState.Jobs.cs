@@ -85,6 +85,7 @@ public sealed partial class SectorState
         foreach (var craft in _crafts) if (craft.Transit is not null) StepTransit(craft);
         MarkDormant();
         BuildTrafficGrid(); // traffic rules (#55)
+        SteerRaiders(); // civilizations' ships (#84, #89): after the grid, which they look craft up in
         foreach (var craft in _crafts)
         {
             if (craft.Transit is not null || TryStartTransit(craft)) { craft.Job?.NoteTick(Tick); continue; }
@@ -93,6 +94,7 @@ public sealed partial class SectorState
             if (craft.Job is { Active: true } routed && StepGateRoute(craft, routed)) { routed.NoteTick(Tick); continue; } // via warp gates (#23)
             switch (craft.Job)
             {
+                case DefendJob { Active: true } defend: StepDefendJob(craft, defend); break;
                 case SalvageJob { Active: true } salvage: StepSalvageJob(craft, salvage); break;
                 case SurveyJob { Active: true } survey: StepSurveyJob(craft, survey); break;
                 case MiningJob { Active: true } mining: StepJob(craft, mining, allowResume: true); break;

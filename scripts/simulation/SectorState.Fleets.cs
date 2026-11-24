@@ -1,0 +1,130 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace SpaceAutomationSandbox.Simulation;
+
+/// <summary>
+/// Civilization fleets (#89; the creator's choices). Every civilization keeps a small patrol in its own system, going round its
+/// planets. Hostile ones attack what of yours they meet there; others leave you alone, and your weapons never fire at them unless you
+/// order an attack (which makes them hostile). Friendly ones also fight civilizations that are their enemies. Their ships
+/// never go through your gates. Lost ships are replaced after a while, from outside the sector (the mass ledger stays balanced).
+/// </summary>
+public sealed partial class SectorState
+{
+    /// <summary>Ships a civilization keeps on patrol, and how long it takes to replace one.</summary>
+    public const int FleetPatrolShips = 3;
+    public const double FleetReplaceS = 600;
+
+    /// <summary>Grievance from an unprovoked attack: they stay hostile for hours.</summary>
+    public const double AttackGrievance = 100;
+
+    private readonly List<CraftState> _foreign = new();
+
+    public Faction? FactionById(int id)
+    {
+        foreach (var faction in _factions) if (faction.Id == id) return faction;
+        return null;
+    }
+
+    /// <summary>Does this craft and the player's side fire on each other? Raiders always; patrols only of hostile civilizations.</summary>
+    public bool IsEnemy(CraftState craft) =>
+        !IsPlayers(craft) && (!craft.IsPatrol || FactionById(craft.FactionId) is { Disposition: Disposition.Hostile });
+
+    /// <summary>Two civilizations are enemies when their cultures want opposite laws.</summary>
+    public static bool AreEnemies(Faction a, Faction b) =>
+        a.Id != b.Id && Laws.All.Sum(l => a.Culture.StanceOn(l.Id) * b.Culture.StanceOn(l.Id)) < 0;
+
+    /// <summary>Whether two craft fire on each other.</summary>
+    private bool AreHostile(CraftState a, CraftState b)
+    {
+        if (a.FactionId == b.FactionId) return false;
+        if (IsPlayers(a)) return IsEnemy(b);
+        if (IsPlayers(b)) return IsEnemy(a);
+        return FactionsFight(a.FactionId, b.FactionId);
+    }
+
+    /// <summary>Civilizations only fight each other when one that is friendly to you meets an enemy of its own.</summary>
+    private bool FactionsFight(int a, int b) =>
+        FactionById(a) is { } one && FactionById(b) is { } two && AreEnemies(one, two)
+        && (one.Disposition == Disposition.Friendly || two.Disposition == Disposition.Friendly);
+
+    /// <summary>Whether a shot from one side hits a craft (neutral ships aren't hit by accident).</summary>
+    private bool ShotHits(Shot shot, CraftState craft) =>
+        shot.FactionId != craft.FactionId
+        && (shot.FactionId == 0 ? IsEnemy(craft) : IsPlayers(craft) || FactionsFight(shot.FactionId, craft.FactionId));
+
+    /// <summary>The player orders an attack on a civilization that isn't hostile (the UI asks first): it becomes hostile.</summary>
+    public ActionResult DeclareAttack(int factionId)
+    {
+        if (FactionById(factionId) is not { } faction) return new(false, "No such civilization.");
+        if (faction.Disposition == Disposition.Hostile) return new(false, $"The {faction.Name} are already hostile.");
+        faction.Grievance = AttackGrievance;
+        faction.Attitude = -100;
+        _lastDisposition[faction.Id] = faction.Disposition;
+        AddEvent($"You attacked the {faction.Name}. They are now hostile towards you.");
+        return new(true, $"Weapons free on the {faction.Name}.");
+    }
+
+    /// <summary>Once a second: brings patrols up to strength, in the civilization's own system.</summary>
+    private void StepFleets()
+    {
+        if (Parts is null || _stars.Count == 0) return;
+        foreach (var faction in _factions)
+        {
+            if (faction.HomeStarId == _stars[0].Id || Tick < faction.NextPatrolTick) continue; // never in the home system
+            var stops = PatrolStops(faction.HomeStarId);
+            if (stops.Count == 0) continue;
+            var ships = 0;
+            foreach (var craft in _crafts) if (craft.IsPatrol && craft.FactionId == faction.Id && !craft.IsWreck) ships++;
+            if (ships >= FleetPatrolShips) continue;
+            faction.NextPatrolTick = Tick + (long)((ships + 1 < FleetPatrolShips && faction.PatrolShipsBuilt < FleetPatrolShips ? 1 : FleetReplaceS) * FixedStepClock.TicksPerSecond);
+            var stop = stops[^1]; // they come from the outermost planet
+            var design = faction.PatrolShipsBuilt % FleetPatrolShips == FleetPatrolShips - 1 ? MissileRaiderDesign : RaiderDesign;
+            var stats = design.ComputeStats(Parts);
+            var angle = faction.PatrolShipsBuilt * 0.05 + faction.Id;
+            var position = GetPosition(stop.Id) + new Vector2D(Math.Cos(angle), Math.Sin(angle)) * (stop.RadiusM + PatrolAltitudeM + 500);
+            var ship = new CraftState(AllocateCraftId(), $"{faction.Name} patrol {faction.PatrolShipsBuilt + 1}", design, stats, position, 0)
+            {
+                FactionId = faction.Id, IsPatrol = true, PatrolStop = stops.Count - 1, Velocity = GetVelocityAt(stop.Id, TimeS),
+            };
+            ship.Inventory.Add(design == RaiderDesign ? ShellMaterial : MissileMaterial, RaiderShellsKg);
+            AddCraft(ship);
+            DiscoveredKg += (long)Math.Round(stats.TotalMassKg) + RaiderShellsKg;
+            faction.PatrolShipsBuilt++;
+        }
+    }
+
+    /// <summary>A patrol ship's tick: fight what it's hostile to nearby, else go round the planets.</summary>
+    private void SteerPatrol(CraftState ship, Faction faction)
+    {
+        CraftState? target = null;
+        var nearest = PatrolRangeM;
+        foreach (var craft in _crafts)
+        {
+            if (craft.FactionId == ship.FactionId || !CanBeShot(craft)) continue;
+            var d = craft.Position.DistanceTo(ship.Position);
+            if (d < nearest && AreHostile(ship, craft)) { nearest = d; target = craft; }
+        }
+        if (target is not null) { Attack(ship, target); return; }
+        var stops = PatrolStops(faction.HomeStarId);
+        if (stops.Count == 0) { ship.Controls = new ShipControls(0, 0, true); return; }
+        if (NearPatrolStop(ship, stops[ship.PatrolStop % stops.Count])) ship.PatrolStop = (ship.PatrolStop + 1) % stops.Count;
+        FlyToPatrolStop(ship, stops[ship.PatrolStop % stops.Count]);
+    }
+
+    private Vector2D PatrolSpot(CraftState craft, CelestialBodyState stop)
+    {
+        var centre = GetPosition(stop.Id);
+        var away = craft.Position - centre;
+        return centre + away * ((stop.RadiusM + PatrolAltitudeM) / Math.Max(away.Length, 1e-9));
+    }
+
+    private bool NearPatrolStop(CraftState craft, CelestialBodyState stop) => PatrolSpot(craft, stop).DistanceTo(craft.Position) < PatrolArriveM;
+
+    private void FlyToPatrolStop(CraftState craft, CelestialBodyState stop)
+    {
+        SetTarget(craft.Id, stop.Id);
+        craft.Controls = NavigateTo(craft, PatrolSpot(craft, stop), GetVelocityAt(stop.Id, TimeS), BodyId.None, JobCruiseSpeedMps, 20);
+    }
+}

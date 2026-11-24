@@ -70,6 +70,7 @@ public sealed partial class SectorState
 
     private readonly List<Shot> _shots = new();
     private readonly List<Beam> _beams = new();
+    /// <summary>The player's enemies this tick: raiders, and hostile civilizations' patrols.</summary>
     private readonly List<CraftState> _raiders = new();
 
     public IReadOnlyList<Shot> Shots => _shots;
@@ -138,7 +139,7 @@ public sealed partial class SectorState
         {
             if (!RaidOn(faction)) continue;
             var gate = _craftsById.GetValueOrDefault(faction.RaidGateId);
-            var alive = _crafts.Where(c => c.FactionId == faction.Id && !c.IsWreck).ToList();
+            var alive = _crafts.Where(c => c.FactionId == faction.Id && !c.IsPatrol && !c.IsWreck).ToList();
             if (alive.Count > 0 && gate is not null && IsGate(gate) && !gate.IsWreck && Tick < faction.RaidEndTick) continue;
             if (gate is not null && IsGate(gate) && !gate.IsWreck)
                 AddEvent(alive.Count == 0 ? $"The {faction.Name} raided {gate.Name}; your defenses drove them off."
@@ -156,10 +157,17 @@ public sealed partial class SectorState
     private void SteerRaiders()
     {
         _raiders.Clear();
-        foreach (var craft in _crafts) if (!IsPlayers(craft) && !craft.IsWreck) _raiders.Add(craft);
-        foreach (var raider in _raiders)
+        _foreign.Clear();
+        foreach (var craft in _crafts)
         {
-            if (_factions.FirstOrDefault(f => f.Id == raider.FactionId) is not { } faction) { raider.Controls = ShipControls.Idle; continue; }
+            if (IsPlayers(craft) || craft.IsWreck) continue;
+            _foreign.Add(craft);
+            if (IsEnemy(craft)) _raiders.Add(craft);
+        }
+        foreach (var raider in _foreign)
+        {
+            if (FactionById(raider.FactionId) is not { } faction) { raider.Controls = ShipControls.Idle; continue; }
+            if (raider.IsPatrol) { SteerPatrol(raider, faction); continue; } // #89
             CraftState? target = null;
             var nearest = RaiderEngageM;
             foreach (var craft in _crafts)
@@ -192,7 +200,7 @@ public sealed partial class SectorState
         if (Tick % FixedStepClock.TicksPerSecond == 0) StepRaids();
         StepMagazines();
         StepShields(); // #90
-        if ((_raiders.Count > 0 || _shots.Count > 0) && Parts is not null)
+        if ((_raiders.Count > 0 || _shots.Count > 0 || _foreign.Count > 1) && Parts is not null)
         {
             var count = _crafts.Count; // wrecks stay in the list, so it doesn't change here
             for (var i = 0; i < count; i++) FireWeapons(_crafts[i], endS);
@@ -278,7 +286,7 @@ public sealed partial class SectorState
         var distance = mount.Weapon.RangeM;
         foreach (var shot in _shots)
         {
-            if (!shot.IsMissile || (shot.FactionId == 0) == IsPlayers(craft)) continue;
+            if (!shot.IsMissile || !ShotHits(shot, craft)) continue;
             var d = shot.Position.DistanceTo(muzzle);
             if (d < distance && InArc(craft, mount, shot.Position - muzzle)) { distance = d; nearest = shot; }
         }
@@ -311,11 +319,12 @@ public sealed partial class SectorState
         IReadOnlyList<CraftState> candidates = IsPlayers(craft) ? _raiders : _crafts;
         foreach (var other in candidates)
         {
-            if (IsPlayers(other) == IsPlayers(craft) || !CanBeShot(other)) continue;
+            if (other.FactionId == craft.FactionId || !CanBeShot(other)) continue;
             var d = other.Position.DistanceTo(muzzle);
             if (d > mount.Weapon.RangeM) continue;
             var chosen = other.Id == craft.TargetCraftId;
             if (!chosen && d >= bestDistance) continue;
+            if (!AreHostile(craft, other)) continue;
             if (!InArc(craft, mount, other.Position - muzzle) || BodyBetween(muzzle, other.Position, endS)) continue;
             if (chosen) return other;
             best = other;
@@ -394,7 +403,7 @@ public sealed partial class SectorState
             var along = double.MaxValue;
             foreach (var craft in _crafts)
             {
-                if (IsPlayers(craft) == (shot.FactionId == 0) || !CanBeShot(craft)) continue;
+                if (!ShotHits(shot, craft) || !CanBeShot(craft)) continue;
                 // The craft moved this tick too: sweep against its motion.
                 var a = from + (craft.Position - craft.PreviousPosition);
                 if (SegmentClears(a, to, craft.Position, craft.CollisionRadiusM + CellContactRadiusM)) continue;

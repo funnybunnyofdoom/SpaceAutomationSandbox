@@ -42,6 +42,7 @@ public static class SaveMigrations
         [20] = ("v21 added combat: every craft in an older save is the player's and whole, and no raid is on", (_, _) => { }),
         [21] = ("v22 added salvage jobs: an older save has none", (_, _) => { }),
         [22] = ("v23 added missiles and shields: an older save has none", (_, _) => { }),
+        [23] = ("v24 added guard, escort and patrol jobs, and civilization patrols: an older save has none (patrols appear after loading)", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

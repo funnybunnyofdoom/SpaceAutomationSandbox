@@ -87,6 +87,10 @@ public sealed class Faction
     public CraftId RaidGateId { get; internal set; } = CraftId.None;
     public long RaidEndTick { get; internal set; }
 
+    /// <summary>When its patrol may get its next ship, and how many it has had so far (#89). Saved.</summary>
+    public long NextPatrolTick { get; internal set; }
+    public int PatrolShipsBuilt { get; internal set; }
+
     public const double HostileBelow = -30, FriendlyFrom = 30;
     public const double PointsPerStance = 15;
 

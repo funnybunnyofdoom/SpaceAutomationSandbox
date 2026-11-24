@@ -151,6 +151,8 @@ public partial class LawsPanel : PanelContainer
             var line = new Label
             {
                 Text = $"{f.Name}  ({f.Culture.Name}, {star} system):  {AttitudeText(f, sector.ActiveLaws)}"
+                       + $"\n   {sector.Crafts.Count(c => c.IsPatrol && c.FactionId == f.Id && !c.IsWreck)} patrol ships in their system"
+                       + (sector.Factions.Where(o => SectorState.AreEnemies(f, o)).Select(o => o.Name).ToList() is { Count: > 0 } foes ? $"; enemies of the {string.Join(", ", foes)}" : "")
                        + (f.Grievance >= 1 ? $"\n   grievance {f.Grievance:0} from mining in their system (fades with time)" : ""),
                 AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(430, 0),
                 Modulate = DispositionColor(f.Disposition),

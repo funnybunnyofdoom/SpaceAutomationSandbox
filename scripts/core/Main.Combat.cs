@@ -15,11 +15,14 @@ public partial class Main
     private static readonly Color EnemyBeamColor = new(1f, 0.35f, 0.5f, 0.9f);
     private static readonly Color WreckColor = new(0.6f, 0.6f, 0.6f);
 
-    private static Color CraftTint(CraftState craft) =>
-        craft.IsWreck ? WreckColor : SectorState.IsPlayers(craft) ? MarkerColor : Palette.Bad;
+    private static readonly Color NeutralColor = new(0.85f, 0.85f, 0.95f);
+
+    private Color CraftTint(CraftState craft) =>
+        craft.IsWreck ? WreckColor : SectorState.IsPlayers(craft) ? MarkerColor : _sector.IsEnemy(craft) ? Palette.Bad : NeutralColor;
 
     /// <summary>Name tags say what it is in words too, not by colour alone (#68).</summary>
-    private static string CraftTag(CraftState craft) => craft.IsWreck ? $"{craft.Name} (wreck)" : SectorState.IsPlayers(craft) ? craft.Name : $"! {craft.Name}";
+    private string CraftTag(CraftState craft) => craft.IsWreck ? $"{craft.Name} (wreck)" : SectorState.IsPlayers(craft) ? craft.Name
+        : _sector.IsEnemy(craft) ? $"! {craft.Name}" : $"{craft.Name} ({_sector.FactionById(craft.FactionId)?.Disposition.ToString().ToLowerInvariant() ?? "unknown"})";
 
     private void DrawCombat()
     {
@@ -47,7 +50,7 @@ public partial class Main
         }
         // A ring round each enemy on screen, so a raid can be found in a crowd.
         foreach (var (craft, at, radius) in _visibleCrafts)
-            if (!SectorState.IsPlayers(craft) && !craft.IsWreck)
+            if (!craft.IsWreck && _sector.IsEnemy(craft))
                 DrawArc(at, Mathf.Max(10f, radius + 4), 0, Mathf.Tau, 24, Palette.Bad, 1.5f);
     }
 
@@ -77,6 +80,19 @@ public partial class Main
     {
         if (_player is null) return;
         if (_player.Stats.WeaponList.Count == 0) { ShowStatus($"{_player.Name} has no weapons."); return; }
+        // Targeting a civilization's ship that isn't an enemy: an attack needs a yes first (#89).
+        if (_sector.Crafts.FirstOrDefault(c => c.Id == _player.TargetCraftId) is { IsWreck: false } target && !SectorState.IsPlayers(target)
+            && !_sector.IsEnemy(target) && _sector.FactionById(target.FactionId) is { } faction)
+        {
+            _confirm.Ask($"Attack {target.Name}? The {faction.Name} are {faction.Disposition.ToString().ToLowerInvariant()} now; they will become hostile and stay so for hours.",
+                ("Attack", () =>
+                {
+                    _player.HoldFire = false;
+                    _changedSinceSave = true;
+                    ShowStatus(_sector.DeclareAttack(faction.Id).Message);
+                }));
+            return;
+        }
         _player.HoldFire = !_player.HoldFire;
         _changedSinceSave = true;
         ShowStatus(_player.HoldFire ? $"{_player.Name}: holding fire." : $"{_player.Name}: weapons free. They fire at enemies by themselves; your target comes first.");

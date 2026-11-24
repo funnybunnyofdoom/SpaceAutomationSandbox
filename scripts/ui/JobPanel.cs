@@ -34,6 +34,10 @@ public partial class JobPanel : PanelContainer
     private GridContainer _serveRows = null!;
     private Label _surveyNote = null!;
     private GridContainer _salvageRows = null!;
+    private GridContainer _defendRows = null!;
+    private OptionButton _defendWhat = null!;
+    private List<CraftId> _posts = new();
+    private List<BodyId> _systems = new();
     private OptionButton _salvageDestination = null!;
     private OptionButton _serveMinLoad = null!;
     private OptionButton _source = null!, _mineMaterial = null!, _mineDestination = null!, _returnAt = null!;
@@ -81,6 +85,9 @@ public partial class JobPanel : PanelContainer
         _kind.AddItem("Freight: serve requests");
         _kind.AddItem("Survey: scout unsurveyed bodies");
         _kind.AddItem("Salvage: cut up wrecks");
+        _kind.AddItem("Guard a station");
+        _kind.AddItem("Escort a ship");
+        _kind.AddItem("Patrol a system");
         _kind.ItemSelected += _ => ShowKind();
         kindRow.AddChild(_kind);
         box.AddChild(kindRow);
@@ -122,6 +129,15 @@ public partial class JobPanel : PanelContainer
         };
         box.AddChild(_surveyNote);
 
+        _defendRows = new GridContainer { Columns = 2 };
+        box.AddChild(_defendRows);
+        _defendWhat = AddRow(_defendRows, "Protect");
+        _defendRows.AddChild(new Label { Text = "" });
+        _defendRows.AddChild(new Label
+        {
+            Text = "Needs weapons. Attacks enemies that come near, goes to a shipyard when badly damaged and to a station for ammunition.",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(250, 0), Modulate = new Color(1, 1, 1, 0.6f),
+        });
         _salvageRows = new GridContainer { Columns = 2 };
         box.AddChild(_salvageRows);
         _salvageDestination = AddRow(_salvageRows, "Deliver to");
@@ -184,6 +200,8 @@ public partial class JobPanel : PanelContainer
         _serveRows.Visible = _kind.Selected == 2;
         _surveyNote.Visible = _kind.Selected == 3;
         _salvageRows.Visible = _kind.Selected == 4;
+        _defendRows.Visible = _kind.Selected >= 5;
+        if (_kind.Selected >= 5) RefreshPosts();
     }
 
     private void RefreshChoices()
@@ -243,6 +261,10 @@ public partial class JobPanel : PanelContainer
                 Select(_keepStocked, Array.IndexOf(KeepStocked, haul.KeepStockedKg));
                 RefreshDeposits();
                 break;
+            case DefendJob defend:
+                _kind.Select(5 + (int)defend.Mode);
+                RefreshDeposits();
+                break;
             case SalvageJob salvage:
                 _kind.Select(4);
                 Select(_salvageDestination, _stations.IndexOf(salvage.DestinationId));
@@ -262,6 +284,20 @@ public partial class JobPanel : PanelContainer
                 break;
         }
         ShowKind();
+    }
+
+    /// <summary>What the chosen fleet order (#88) can protect: stations, ships or star systems.</summary>
+    private void RefreshPosts()
+    {
+        var sector = _sector();
+        var craft = _craft();
+        var mine = sector.Crafts.Where(c => SectorState.IsPlayers(c) && !c.IsWreck && c.Id != craft?.Id);
+        _posts = (_kind.Selected == 5 ? mine.Where(c => c.Stats.TotalThrustN <= 0 || c.IsOnRails) : mine.Where(c => c.Stats.TotalThrustN > 0)).Select(c => c.Id).ToList();
+        _systems = sector.Stars.Select(s => s.Id).ToList();
+        _defendWhat.Clear();
+        if (_kind.Selected == 7) foreach (var id in _systems) _defendWhat.AddItem($"{sector.GetBody(id).Name} system");
+        else foreach (var id in _posts) _defendWhat.AddItem($"{sector.GetCraft(id).Name} ({id})");
+        if (craft?.Job is DefendJob job) Select(_defendWhat, _kind.Selected == 7 ? _systems.IndexOf(job.StarId) : _posts.IndexOf(job.PostId));
     }
 
     private void RefreshDeposits()
@@ -298,6 +334,8 @@ public partial class JobPanel : PanelContainer
                            + $"{Station(m.DestinationId)}, return at {m.ReturnFraction * 100:0}%",
             HaulJob h => $"Freight: {job.MaterialId} from {Station(h.PickupId)} to {Station(h.DestinationId)}"
                          + (h.KeepStockedKg > 0 ? $", keep {h.KeepStockedKg / 1000} t there" : ""),
+            DefendJob d => d.Mode == DefendMode.Patrol ? $"Patrolling the {sector.Bodies.FirstOrDefault(b => b.Id == d.StarId)?.Name ?? "?"} system, {d.CompletedCycles} fights"
+                : $"{(d.Mode == DefendMode.Guard ? "Guarding" : "Escorting")} {Station(d.PostId)}, {d.CompletedCycles} fights",
             SalvageJob s => $"Salvaging for {Station(s.DestinationId)}: {(s.WreckId.IsNone ? "no wreck picked" : Station(s.WreckId))}, {sector.Crafts.Count(c => c.IsWreck)} wrecks in all",
             SurveyJob => $"Surveying: {job.CompletedCycles} bodies surveyed, {sector.Bodies.Count(b => !b.Surveyed && b.Kind != BodyKind.Star)} left",
             ServeRequestsJob s => "Freight: serving station requests"
@@ -323,6 +361,14 @@ public partial class JobPanel : PanelContainer
         var craft = _craft();
         if (craft is null) return;
         if (_kind.Selected == 3) { Show(_sector().StartJob(craft.Id, new SurveyJob())); return; }
+        if (_kind.Selected >= 5) // fleet orders (#88)
+        {
+            var what = Math.Max(0, _defendWhat.Selected);
+            if (_kind.Selected == 7) Show(_sector().StartJob(craft.Id, new DefendJob(_systems[what])));
+            else if (what >= _posts.Count) Show(new ActionResult(false, _kind.Selected == 5 ? "No other station to guard." : "No other ship to escort."));
+            else Show(_sector().StartJob(craft.Id, new DefendJob(_kind.Selected == 5 ? DefendMode.Guard : DefendMode.Escort, _posts[what])));
+            return;
+        }
         if (_stations.Count == 0 && _kind.Selected != 2) { Show(new ActionResult(false, "No station with a docking port.")); return; }
 
         if (_kind.Selected == 4)

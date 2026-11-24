@@ -142,6 +142,7 @@ public sealed partial class SectorState
     private void StepFactions()
     {
         if (_factions.Count == 0 || Tick % FixedStepClock.TicksPerSecond != 0) return; // once a second is plenty
+        StepFleets(); // their patrols (#89)
         foreach (var faction in _factions)
         {
             faction.Grievance = Math.Max(0, faction.Grievance - GrievanceFadePerMinute / 60);
@@ -218,9 +219,10 @@ public sealed partial class SectorState
 
     /// <summary>Restores a saved civilization exactly.</summary>
     public Faction RestoreFaction(int id, string name, string cultureId, BodyId homeStarId, double baseline, double attitude, double grievance, long nextEventTick, bool warned,
-        CraftId raidGateId = default, long raidEndTick = 0)
+        CraftId raidGateId = default, long raidEndTick = 0, long nextPatrolTick = 0, int patrolShipsBuilt = 0)
     {
-        var faction = new Faction(id, name, cultureId, homeStarId, baseline) { Attitude = attitude, Grievance = grievance, NextEventTick = nextEventTick, RaidGateId = raidGateId, RaidEndTick = raidEndTick };
+        var faction = new Faction(id, name, cultureId, homeStarId, baseline) { Attitude = attitude, Grievance = grievance, NextEventTick = nextEventTick, RaidGateId = raidGateId, RaidEndTick = raidEndTick,
+            NextPatrolTick = nextPatrolTick, PatrolShipsBuilt = patrolShipsBuilt };
         _factions.Add(faction);
         _lastDisposition[id] = faction.Disposition;
         _warned[id] = warned;

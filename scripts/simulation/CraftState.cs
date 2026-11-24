@@ -212,6 +212,10 @@ public sealed class CraftState
     /// <summary>Whose craft this is: 0 the player's, else the civilization's id. Saved.</summary>
     public int FactionId { get; internal set; }
 
+    /// <summary>One of a civilization's standing patrol, not a raider (#89), and which planet it heads for. Saved.</summary>
+    public bool IsPatrol { get; internal set; }
+    public int PatrolStop { get; internal set; }
+
     /// <summary>Shot to pieces: it drifts with what it holds and does nothing. Saved.</summary>
     public bool IsWreck { get; internal set; }
 
