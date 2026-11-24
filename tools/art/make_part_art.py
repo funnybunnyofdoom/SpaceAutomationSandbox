@@ -414,6 +414,65 @@ def animal_pen(a):
     return b, d
 
 
+def glow_core(a, rings=2):
+    b, d = panel(), Img()
+    d.disc(8, 8, 5.6, DARK)
+    for i in range(rings): d.ring(8, 8, 2.6 + 1.6 * i, 3.4 + 1.6 * i, shade(a, 1.1 - 0.3 * i))
+    d.disc(8, 8, 1.8, shade(a, 1.6)); d.set(7, 7, (255, 255, 255, 255))
+    return b, d
+
+
+def antimatter_factory(a):
+    b, d = glow_core(a)
+    for x, y in ((2, 2), (12, 2), (2, 12), (12, 12)): d.rect(x, y, x + 1, y + 1, shade(a, 0.7))
+    d.hline(4, 11, 1, PLATE_L); d.hline(4, 11, 14, PLATE_L)
+    return b, d
+
+
+def containment(a):
+    b, d = panel(), Img()
+    d.rect(4, 2, 11, 13, DARK); d.outline(4, 2, 11, 13, OUT)
+    for y in (4, 7, 10): d.hline(4, 11, y, PLATE_L); d.hline(4, 11, y + 1, SHADOW)
+    d.rect(7, 3, 8, 12, shade(a, 1.3)); d.set(7, 5, (255, 255, 255, 255))
+    return b, d
+
+
+def antimatter_drive(a):
+    b, d = panel(), Img()
+    for y in range(8, 15): d.hline(8 - (y - 5), 7 + (y - 5), y, DARK if y < 14 else OUT)
+    d.disc(8, 5, 3.4, shade(a, 0.7)); d.disc(8, 5, 1.8, shade(a, 1.5))
+    d.hline(4, 11, 13, shade(a, 1.2)); d.hline(5, 10, 12, a)
+    return b, d
+
+
+def quantum_drive(a):
+    b, d = panel(), Img()
+    for i in range(6):  # nested diamonds
+        c = shade(a, 0.5 + 0.2 * (5 - i)) if i % 2 == 0 else DARK
+        for y in range(16):
+            for x in range(16):
+                if abs(x - 7.5) + abs(y - 7.5) <= 7 - i: d.set(x, y, c)
+    d.rect(7, 7, 8, 8, (255, 255, 255, 255))
+    return b, d
+
+
+def nanite_bay(a):
+    b, d = panel(), Img()
+    d.rect(3, 3, 12, 12, DARK); d.outline(3, 3, 12, 12, OUT)
+    for i, (x, y) in enumerate(((4, 5), (6, 4), (9, 5), (11, 7), (5, 8), (8, 8), (10, 10), (6, 11), (4, 10), (9, 11), (7, 6))):
+        d.set(x, y, shade(a, 1.3 if i % 2 else 0.9))
+    return b, d
+
+
+def nano_assembler(a):
+    b, d = panel(), Img()
+    d.rect(2, 11, 13, 13, shade(a, 0.6)); d.hline(2, 13, 11, a)
+    for i in range(4):  # a frame being grown, dot by dot
+        d.set(4 + i * 2, 9 - i, shade(a, 1.3)); d.set(5 + i * 2, 9 - i, a)
+    d.outline(4, 3, 11, 9, shade(a, 0.8))
+    return b, d
+
+
 def research_lab(a):
     b, d = panel(), Img()
     for y in range(4, 10):  # a dish, open to the front
@@ -574,6 +633,8 @@ DRAW = {
     "solar_panel_mk2": lambda a: solar(a, 2), "solar_panel_mk3": lambda a: solar(a, 3),
     "battery_mk2": lambda a: battery(a, 2), "refinery_mk2": lambda a: refinery(a, 2),
     "fabricator_mk2": lambda a: fabricator(a, 2), "warp_gate": warp_gate, "gate_defense": gate_defense,
+    "antimatter_factory": antimatter_factory, "containment": containment, "antimatter_reactor": lambda a: glow_core(a, 2),
+    "antimatter_drive": antimatter_drive, "quantum_drive": quantum_drive, "nanite_bay": nanite_bay, "nano_assembler": nano_assembler,
     "repeller": repeller, "ranch": ranch, "animal_pen": animal_pen, "harvester": harvester, "armour_plate": armour_plate, "missile_launcher": missile_launcher, "point_defense": point_defense,
     "shield_generator": shield_generator, "salvage_arm": salvage_arm, "repair_drones": repair_drones,
     "autocannon": autocannon, "laser": laser,

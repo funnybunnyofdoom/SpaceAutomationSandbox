@@ -239,6 +239,8 @@ public sealed partial class SectorState
         StepCombat(endS); // weapons, shots and wrecks (#84, #85)
         ResolveCraftCollisions(); // after everything moved (#34)
         StepMining();
+        StepQuantum(); // #82
+        StepAntimatter(); // #81
         StepAnimalWork(); // ranches, repellers, culling, pens (#93)
         StepLife(); // native plants (#92)
         StepSwarms(); // many ships as one flow (#30)

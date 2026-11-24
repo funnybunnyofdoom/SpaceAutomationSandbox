@@ -67,6 +67,7 @@ public sealed partial class SectorState
     {
         var s = craft.Stats;
         if (!IsPlayers(craft) || craft.IsWreck) return "it isn't a working ship of yours";
+        if (s.QuantumDriveKW > 0 || s.NanoRepairKgPerS > 0 || s.AntimatterCapacityKg > 0) return "its design is too special";
         if (s.ShieldCapacity > 0) return "its design has a shield";
         if (s.WeaponList.Count > 0) return "its design is armed";
         if (craft.Id == PilotCraftId) return "you are flying it";

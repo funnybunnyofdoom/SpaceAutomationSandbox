@@ -18,6 +18,7 @@ public sealed partial class SectorState
         if (kg <= 0) return new(false, "Nothing to move.");
         if (from.DockedToCraftId != to.Id && to.DockedToCraftId != from.Id)
             return new(false, $"{from.Name} and {to.Name} must be docked together to move cargo.");
+        if (materialId == AntimatterMaterial && AntimatterRoomKg(to) < kg) return new(false, $"{to.Name} can contain only {AntimatterRoomKg(to)} kg more antimatter.");
         if (from.FactionId != to.FactionId) return new(false, $"{(IsPlayers(from) ? to : from).Name} isn't yours: trade instead.");
         if (from.Inventory[materialId] < kg)
             return new(false, $"{from.Name} has only {from.Inventory[materialId]} kg of {materialId}.");
@@ -31,5 +32,6 @@ public sealed partial class SectorState
 
     /// <summary>The most of a material that can move right now (stock on one side, room on the other).</summary>
     public long MaxTransferKg(CraftId fromId, CraftId toId, string materialId) =>
-        GetCraft(fromId).FactionId != GetCraft(toId).FactionId ? 0 : Math.Min(GetCraft(fromId).Inventory[materialId], GetCraft(toId).FreeCargoKg);
+        GetCraft(fromId).FactionId != GetCraft(toId).FactionId ? 0
+            : Math.Min(GetCraft(fromId).Inventory[materialId], materialId == AntimatterMaterial ? Math.Min(AntimatterRoomKg(GetCraft(toId)), GetCraft(toId).FreeCargoKg) : GetCraft(toId).FreeCargoKg);
 }

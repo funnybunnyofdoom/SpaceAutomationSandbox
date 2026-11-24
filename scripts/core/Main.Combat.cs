@@ -48,6 +48,13 @@ public partial class Main
             for (var i = 0; i < 12; i++)
                 DrawArc(at, radius + 3, Mathf.Tau * i / 12, Mathf.Tau * (i + 0.75f) / 12, 5, new Color(ShieldColor, alpha), 2f);
         }
+        foreach (var (tick, where, reach) in _sector.Blasts) // antimatter (#81)
+        {
+            var age = (_sector.Tick - tick + _warp.Alpha) / FixedStepClock.TicksPerSecond;
+            var blast = (float)(reach * _pixelsPerMetre * Mathf.Min(1f, 0.2f + 0.8f * (float)age));
+            DrawCircle(ToPixels(where), blast, new Color(1f, 0.8f, 1f, 0.5f * Mathf.Max(0f, 1f - (float)age)));
+            DrawArc(ToPixels(where), blast, 0, Mathf.Tau, 64, new Color(1f, 0.5f, 1f, Mathf.Max(0f, 1f - (float)age)), 3f);
+        }
         // A ring round each enemy on screen, so a raid can be found in a crowd.
         foreach (var (craft, at, radius) in _visibleCrafts)
             if (!craft.IsWreck && _sector.IsEnemy(craft))
@@ -74,6 +81,21 @@ public partial class Main
         var lasers = weapons.Count - guns - launchers - defense;
         if (lasers > 0) parts.Add($"{lasers} laser{(lasers == 1 ? "" : "s")}");
         return $"{shield}weapons: {string.Join(", ", parts)}{(craft.HoldFire ? " - HOLDING FIRE" : "")} ({InputActions.Key1(InputActions.HoldFire)})\n";
+    }
+
+    /// <summary>Antimatter containment and the quantum drive, for the HUD (#81, #82).</summary>
+    private string FutureTechLine(CraftState craft)
+    {
+        var line = "";
+        var antimatter = craft.Inventory[SectorState.AntimatterMaterial];
+        if (antimatter > 0 || craft.Stats.AntimatterCapacityKg > 0)
+            line += $"antimatter {antimatter} / {craft.Stats.AntimatterCapacityKg:0} kg"
+                    + (craft.ContainmentFailS > 0 ? $"  DANGER: CONTAINMENT FAILS IN {System.Math.Max(0, SectorState.ContainmentGraceS - craft.ContainmentFailS):0} s" : "") + "\n";
+        if (craft.Stats.QuantumDriveKW <= 0) return line;
+        var need = SectorState.QuantumChargeNeededKJ(craft);
+        return line + $"quantum drive {craft.QuantumChargeKJ / need * 100:0}%"
+               + (_sector.Tick < craft.QuantumReadyTick ? $", cooling down {(craft.QuantumReadyTick - _sector.Tick) * FixedStepClock.TickSeconds:0} s" : craft.QuantumRequested ? ", charging to jump" : "")
+               + $" ({InputActions.Key1(InputActions.Quantum)})\n";
     }
 
     private void ToggleHoldFire()

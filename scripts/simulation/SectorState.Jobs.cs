@@ -358,6 +358,7 @@ public sealed partial class SectorState
     private ShipControls NavigateTo(CraftState craft, Vector2D goal, Vector2D goalVelocity, BodyId ignore, double maxSpeed, double arrivalSpeed,
         CraftId ignoreCraft = default)
     {
+        if (TryQuantumLeg(craft, goal, goalVelocity)) return new ShipControls(0, 0, true); // #82
         if (CruiseLeg(craft, goal, goalVelocity) is { } cruise) return cruise; // long legs between planets (#53)
         // Keep right on long legs (#55), except on the way down to a body: there the shifted goal could
         // sit low over a surface the autopilot deliberately doesn't treat as an obstacle.

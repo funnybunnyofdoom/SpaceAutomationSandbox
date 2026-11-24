@@ -66,7 +66,8 @@ public sealed partial class SectorState
                 var budget = Math.Min((long)Math.Floor(craft.SalvageProgressKg), craft.FreeCargoKg);
                 foreach (var (material, kg) in wreck.Inventory.Kg.ToList())
                 {
-                    var take = Math.Min(kg, budget);
+                    var take = Math.Min(kg, material == AntimatterMaterial ? Math.Min(budget, AntimatterRoomKg(craft)) : budget);
+                    if (take <= 0 && material == AntimatterMaterial) continue; // only into containment
                     if (take <= 0) break;
                     wreck.Inventory.TryRemove(new Dictionary<string, long> { [material] = take });
                     craft.Inventory.Add(material, take);
@@ -243,20 +244,21 @@ public sealed partial class SectorState
         if (Parts is null) return;
         foreach (var craft in _crafts)
         {
-            if (craft.IsWreck || (craft.Stats.RepairRateKgPerS <= 0 && craft.RobotsWorking <= 0) || !Operational(craft)) continue;
-            CraftState? patient = Mendable(craft) ? craft : null;
+            if (craft.IsWreck || (craft.Stats.RepairRateKgPerS <= 0 && craft.RobotsWorking <= 0 && craft.Stats.NanoRepairKgPerS <= 0) || !Operational(craft)) continue;
+            CraftState? patient = Mendable(craft) || (craft.Stats.NanoRepairKgPerS > 0 && NeedsRepair(craft)) ? craft : null;
             if (patient is null)
                 foreach (var c in _crafts) if (c.DockedToCraftId == craft.Id && Mendable(c)) { patient = c; break; }
             // A shipyard mends with its fabricator (itself and what's docked at it).
             if (patient is null || craft.IsShipyard || (patient.IsDocked && _craftsById.TryGetValue(patient.DockedToCraftId, out var at) && at.IsShipyard)) continue;
-            if (NextRepair(patient) is not { Missing: false } next) continue;
+            if (NextRepair(patient) is not { } next || (next.Missing && (patient != craft || craft.Stats.NanoRepairKgPerS <= 0))) continue; // only nanites rebuild what broke off (#83)
             var part = Parts.Get(next.Cell.PartId);
-            var cost = RepairCost(patient, next.Cell, false);
+            var cost = RepairCost(patient, next.Cell, next.Missing);
             var work = Math.Max(1, cost.Values.Sum());
             if (patient.RepairProgressKg < work)
             {
-                var rate = craft.RobotsWorking * RobotRepairKgPerS;
-                if (craft.Stats.RepairRateKgPerS > 0 && TryUsePower(craft, craft.Stats.RepairPowerKW * FixedStepClock.TickSeconds)) rate += craft.Stats.RepairRateKgPerS;
+                var rate = next.Missing ? 0 : craft.RobotsWorking * RobotRepairKgPerS;
+                if (patient == craft && craft.Stats.NanoRepairKgPerS > 0 && TryUsePower(craft, craft.Stats.NanoPowerKW * FixedStepClock.TickSeconds)) rate += craft.Stats.NanoRepairKgPerS;
+                if (!next.Missing && craft.Stats.RepairRateKgPerS > 0 && TryUsePower(craft, craft.Stats.RepairPowerKW * FixedStepClock.TickSeconds)) rate += craft.Stats.RepairRateKgPerS;
                 if (rate <= 0) { patient.RepairStatus = "field repairs stopped: no power"; continue; }
                 patient.RepairProgressKg = Math.Min(work, patient.RepairProgressKg + rate * FixedStepClock.TickSeconds);
                 patient.RepairStatus = $"field repair of {part.Name} ({patient.RepairProgressKg / work * 100:0}%)";
@@ -265,6 +267,13 @@ public sealed partial class SectorState
             var shortfall = craft.Inventory.Shortfall(cost);
             if (shortfall.Count > 0) { patient.RepairStatus = $"waiting: field repair of {part.Name} needs {Describe(shortfall)} more aboard {craft.Name}"; continue; }
             craft.Inventory.TryRemove(cost);
+            if (next.Missing) // its materials become the part again
+            {
+                patient.RepairProgressKg = 0;
+                Rebuild(patient, next.Cell);
+                patient.RepairStatus = $"nanites rebuilt {part.Name}";
+                continue;
+            }
             foreach (var (material, kg) in cost) _ejectedKg[material] = _ejectedKg.GetValueOrDefault(material) + kg; // the worn material is discarded, as at a shipyard
             patient.RepairProgressKg = 0;
             patient.HealthList.Remove(next.Cell.Pos);

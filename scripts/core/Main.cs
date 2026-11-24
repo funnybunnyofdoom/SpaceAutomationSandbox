@@ -903,6 +903,7 @@ public partial class Main : Node2D
         }
         else if (_player == null) return;
         else if (Pressed(InputActions.HoldFire)) ToggleHoldFire(); // #85
+        else if (Pressed(InputActions.Quantum) && (_changedSinceSave = true)) ShowStatus(_sector.RequestQuantumJump(_player.Id).Message); // #82
         else if (Pressed(InputActions.Jump)) { ShowStatus(_sector.RequestJump(_player.Id).Message); _changedSinceSave = true; }
         else if (_mapMode && Pressed(InputActions.Anchor)) _galaxyView = !_galaxyView; // in the map, G is the galaxy view (#21)
         else if (Pressed(InputActions.Dock) && (_changedSinceSave = true))
@@ -1045,6 +1046,7 @@ public partial class Main : Node2D
                          + (_sector.DeployBlocker(p.Id) is { } blocked ? blocked : $"{InputActions.Key1(InputActions.Deploy)} to deploy here") + "\n"
                        : "")
                    + (SectorState.PowerStatus(p) is { Length: > 0 } power ? power + "\n" : "")
+                   + FutureTechLine(p) // #81, #82
                    + WeaponsLine(p) // #85
                    + (p.AnimalStatus is { } animals ? animals + "\n" : "") // #93
                    + (p.SalvageStatus is { } salvage ? salvage + "\n" : p.Stats.SalvageRateKgPerS > 0 && p.Job is null && _sector.Crafts.Any(c => c.IsWreck) ? "salvage arm: target a wreck and hold beside it\n" : "") // #86
@@ -1310,10 +1312,10 @@ public partial class Main : Node2D
             // Only rear-facing thrusters fire on throttle (docs/06); others stay dark for now.
             // Engines facing back fire on throttle: thrusters (Mk2/Mk3 too), rockets and ion drives (#80), not when dry.
             if (cell.Rotation == 0 && craft.Controls.Throttle > 0 && !craft.Controls.Brake
-                && (cell.PartId.StartsWith("thruster") || (cell.PartId is "rocket" or "ion_drive" or "methalox_rocket" or "nuclear_rocket" && !craft.DryDrives.Contains(cell.PartId))))
+                && (cell.PartId.StartsWith("thruster") || (cell.PartId is "rocket" or "ion_drive" or "methalox_rocket" or "nuclear_rocket" or "antimatter_drive" && !craft.DryDrives.Contains(cell.PartId))))
             {
                 var flameTop = local + new Vector2(0, cellPx / 2);
-                var length = cell.PartId is "rocket" or "methalox_rocket" ? 1.6f : cell.PartId is "ion_drive" or "nuclear_rocket" ? 1.2f : 0.9f;
+                var length = cell.PartId is "rocket" or "methalox_rocket" ? 1.6f : cell.PartId == "antimatter_drive" ? 2.4f : cell.PartId is "ion_drive" or "nuclear_rocket" ? 1.2f : 0.9f;
                 BatchTriangle(World(flameTop + new Vector2(-cellPx * 0.3f, 0)), World(flameTop + new Vector2(cellPx * 0.3f, 0)),
                     World(flameTop + new Vector2(0, cellPx * length)), cell.PartId == "ion_drive" ? IonGlowColor : FlameColor);
             }

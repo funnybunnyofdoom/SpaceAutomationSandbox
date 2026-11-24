@@ -96,6 +96,15 @@ public sealed record PartDefinition
     public double ShieldCapacity { get; init; }
     public double ShieldRechargePerS { get; init; }
 
+    /// <summary>Antimatter a containment part holds (#81), kg; it needs its power all the time while there is any.</summary>
+    public double AntimatterCapacityKg { get; init; }
+
+    /// <summary>A quantum drive (#82): charges at its power use, then jumps within the star system.</summary>
+    public bool IsQuantumDrive { get; init; }
+
+    /// <summary>Repair work nanites do on their own craft (#83), kg per second, rebuilding lost parts too.</summary>
+    public double NanoRepairKgPerS { get; init; }
+
     /// <summary>Keeps native animals off the site it's anchored on (#93).</summary>
     public bool IsRepeller { get; init; }
 
@@ -164,7 +173,7 @@ public sealed class PartCatalog
             if (part.ThrustN < 0 || part.CargoCapacityKg < 0 || part.EnergyCapacityKJ < 0 || part.MiningRateKgPerS < 0
                 || part.FabricationRateKgPerS < 0 || part.RefiningRateKgPerS < 0
                 || part.PowerUseKW < 0 || part.PowerGenerationKW < 0 || part.EjectionRateKgPerS < 0
-                || part.CrewCapacity < 0 || part.FoodRateKgPerS < 0 || part.RobotCount < 0 || part.SalvageRateKgPerS < 0 || part.ShieldCapacity < 0 || part.HarvestRateKgPerS < 0 || part.RanchRateKgPerS < 0 || part.PenCapacityKg < 0 || part.ShieldRechargePerS < 0 || part.RepairRateKgPerS < 0 || part.ResearchRatePerS < 0)
+                || part.CrewCapacity < 0 || part.FoodRateKgPerS < 0 || part.RobotCount < 0 || part.SalvageRateKgPerS < 0 || part.ShieldCapacity < 0 || part.HarvestRateKgPerS < 0 || part.RanchRateKgPerS < 0 || part.PenCapacityKg < 0 || part.AntimatterCapacityKg < 0 || part.NanoRepairKgPerS < 0 || part.ShieldRechargePerS < 0 || part.RepairRateKgPerS < 0 || part.ResearchRatePerS < 0)
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
             ValidateMaterials(part, materials);
             ValidateGenerator(part, materials);

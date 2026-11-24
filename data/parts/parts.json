@@ -109,6 +109,13 @@
     { "id": "harvester", "name": "Harvester", "massKg": 2000, "placeholderColor": "#6fae3c", "harvestRateKgPerS": 50, "powerUseKW": 60, "materialsKg": { "metal": 1600, "electronics": 400 } },
     { "id": "repeller", "name": "Animal repeller", "massKg": 1200, "placeholderColor": "#d0c040", "isRepeller": true, "powerUseKW": 30, "materialsKg": { "metal": 800, "electronics": 400 } },
     { "id": "ranch", "name": "Ranch", "massKg": 3000, "placeholderColor": "#b07a4a", "ranchRateKgPerS": 1, "powerUseKW": 20, "materialsKg": { "metal": 1600, "composites": 1100, "electronics": 300 } },
-    { "id": "animal_pen", "name": "Animal pen", "massKg": 1800, "placeholderColor": "#8a9a5a", "penCapacityKg": 5000, "materialsKg": { "metal": 1200, "composites": 600 } }
+    { "id": "animal_pen", "name": "Animal pen", "massKg": 1800, "placeholderColor": "#8a9a5a", "penCapacityKg": 5000, "materialsKg": { "metal": 1200, "composites": 600 } },
+    { "id": "antimatter_factory", "name": "Antimatter factory", "massKg": 60000, "placeholderColor": "#e070ff", "converterKW": 40000, "converterInputsKg": { "hydrogen": 1 }, "converterOutputsKg": { "antimatter": 1 }, "converterKJPerBatch": 160000000, "materialsKg": { "metal": 35000, "electronics": 15000, "composites": 4000, "superconductors": 6000 } },
+    { "id": "containment", "name": "Antimatter containment", "massKg": 3000, "placeholderColor": "#c050e0", "antimatterCapacityKg": 20, "cargoCapacityKg": 20, "powerUseKW": 100, "toughness": 2, "materialsKg": { "metal": 1200, "electronics": 1000, "superconductors": 800 } },
+    { "id": "antimatter_reactor", "name": "Antimatter reactor", "massKg": 30000, "placeholderColor": "#f090ff", "generatorKW": 100000, "generatorBurnsKg": { "antimatter": 1, "hydrogen": 1 }, "generatorKJPerBatch": 120000000, "materialsKg": { "metal": 18000, "electronics": 8000, "superconductors": 4000 } },
+    { "id": "antimatter_drive", "name": "Antimatter drive", "massKg": 8000, "placeholderColor": "#ff60d0", "thrustN": 3000000, "powerUseKW": 50, "propellantKgPerS": { "antimatter": 0.002, "hydrogen": 0.5 }, "materialsKg": { "metal": 5000, "electronics": 1500, "superconductors": 1500 } },
+    { "id": "quantum_drive", "name": "Quantum drive", "massKg": 8000, "placeholderColor": "#40e0d0", "isQuantumDrive": true, "powerUseKW": 2000, "materialsKg": { "metal": 3000, "electronics": 3000, "superconductors": 2000 } },
+    { "id": "nanite_bay", "name": "Nanite bay", "massKg": 1500, "placeholderColor": "#90ffb0", "nanoRepairKgPerS": 3, "powerUseKW": 60, "materialsKg": { "metal": 400, "electronics": 800, "superconductors": 300 } },
+    { "id": "nano_assembler", "name": "Nano-assembler", "massKg": 1500, "placeholderColor": "#60d090", "fabricationRateKgPerS": 25, "powerUseKW": 100, "materialsKg": { "metal": 400, "electronics": 700, "superconductors": 400 } }
   ]
 }

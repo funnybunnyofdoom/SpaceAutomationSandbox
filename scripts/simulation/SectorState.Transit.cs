@@ -142,6 +142,12 @@ public sealed partial class SectorState
         var (goalNow, _) = TransitGoal(leg, TimeS);
         var distance = goalNow.DistanceTo(craft.Position);
         if (distance < TransitMinLegM) return false;
+        if (distance > AutopilotCruiseMinDistanceM && QuantumReady(craft) && StarAt(goalNow) == StarAt(craft.Position) && FarFromObserver(goalNow)) // #82
+        {
+            var (spot, goalVelocity) = TransitGoal(leg, TimeS);
+            QuantumJump(craft, ClearOfBodies(spot, craft), goalVelocity);
+            return false;
+        }
 
         // Travel time: at autopilot speed, or the cruise drive for long legs if the fuel is there. One refinement for the moving target.
         var accel = craft.Stats.TotalThrustN / craft.MassKg;
@@ -175,6 +181,7 @@ public sealed partial class SectorState
     {
         var leg = craft.Transit!;
         var (goal, goalVelocity) = TransitGoal(leg, TimeS);
+        if (FarFromObserver(goal) && TryQuantumInTransit(craft, goal, goalVelocity)) return; // #82
         craft.PreviousPosition = craft.Position;
         craft.PreviousHeadingRad = craft.HeadingRad;
         if (Tick >= leg.ArriveTick || !FarFromObserver(craft.Position))

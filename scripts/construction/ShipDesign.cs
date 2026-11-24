@@ -136,7 +136,12 @@ public sealed record ShipStats(
     double RepelPowerKW = 0,
     double RanchRateKgPerS = 0,
     double RanchPowerKW = 0,
-    double PenCapacityKg = 0)
+    double PenCapacityKg = 0,
+    double AntimatterCapacityKg = 0,
+    double ContainmentPowerKW = 0,
+    double QuantumDriveKW = 0,
+    double NanoRepairKgPerS = 0,
+    double NanoPowerKW = 0)
 {
     /// <summary>Weapons, in cell order (#85); empty if none.</summary>
     public IReadOnlyList<WeaponMount> WeaponList => Weapons ?? Array.Empty<WeaponMount>();
@@ -163,7 +168,7 @@ public sealed record ShipStats(
     public int CrewRequired => CellCount <= UncrewedMaxParts ? 0 : (CellCount + PartsPerCrew - 1) / PartsPerCrew;
 
     /// <summary>Everything running at once (full throttle, drilling, refining, building, ejecting), kW.</summary>
-    public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW + HabitatPowerKW + FarmPowerKW + RobotPowerKW + SalvagePowerKW + RepairPowerKW + ShieldPowerKW + HarvestPowerKW + RepelPowerKW + RanchPowerKW + LabPowerKW;
+    public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW + HabitatPowerKW + FarmPowerKW + RobotPowerKW + SalvagePowerKW + RepairPowerKW + ShieldPowerKW + HarvestPowerKW + RepelPowerKW + RanchPowerKW + ContainmentPowerKW + QuantumDriveKW + NanoPowerKW + LabPowerKW;
 
     /// <summary>Can lock onto a body once landed (clamps release again; foundations never do).</summary>
     public bool CanAnchor => AnchorClampCount > 0 || FoundationCount > 0;
@@ -319,6 +324,7 @@ public sealed class ShipDesign
         var armour = 0;
         double harvest = 0, harvestPower = 0, repelPower = 0, ranch = 0, ranchPower = 0, pens = 0;
         var repellers = 0;
+        double antimatter = 0, containmentPower = 0, quantum = 0, nano = 0, nanoPower = 0;
         var generatorKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         var converterKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         double geothermal = 0, stellarHeat = 0;
@@ -379,6 +385,11 @@ public sealed class ShipDesign
             else if (part.HarvestRateKgPerS > 0) harvestPower += part.PowerUseKW;
             else if (part.IsRepeller) repelPower += part.PowerUseKW;
             else if (part.RanchRateKgPerS > 0) ranchPower += part.PowerUseKW;
+            else if (part.AntimatterCapacityKg > 0) containmentPower += part.PowerUseKW;
+            else if (part.IsQuantumDrive) quantum += part.PowerUseKW * h; // #82: charges as fast as it works
+            else if (part.NanoRepairKgPerS > 0) nanoPower += part.PowerUseKW;
+            antimatter += part.AntimatterCapacityKg; // #81
+            nano += part.NanoRepairKgPerS * h; // #83
             if (part.IsRepeller) repellers++; // #93
             ranch += part.RanchRateKgPerS * h;
             pens += part.PenCapacityKg;
@@ -423,7 +434,7 @@ public sealed class ShipDesign
             converterKW.Count == 0 ? null : converterKW.Select(c => ConverterStats.From(catalog.Get(c.Key), c.Value)).ToList(),
             geothermal,
             drives.Count == 0 ? null : drives.Select(d => PropellantDrive.From(catalog.Get(d.Key.Item1), d.Key.Item2, d.Value)).ToList(),
-            stellarHeat, weapons, salvage, salvagePower, repair, repairPower, shield, shieldRecharge, shieldPower, armour, harvest, harvestPower, repellers, repelPower, ranch, ranchPower, pens);
+            stellarHeat, weapons, salvage, salvagePower, repair, repairPower, shield, shieldRecharge, shieldPower, armour, harvest, harvestPower, repellers, repelPower, ranch, ranchPower, pens, antimatter, containmentPower, quantum, nano, nanoPower);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

@@ -181,7 +181,8 @@ public sealed partial class SectorState
         var bestDistance = double.MaxValue;
         foreach (var c in _crafts)
         {
-            if (c.Id == craft.Id || !c.IsShipyard || c.IsWreck || c.Stats.DockingPorts.Count == 0) continue;
+            if (c.Id == craft.Id || !c.IsShipyard || c.IsWreck || (c.Stats.TotalThrustN > 0 && !c.IsOnRails && !c.IsLanded) || // not a ship that may fly off (#83)
+                c.Stats.DockingPorts.Count == 0) continue;
             var d = c.Position.DistanceTo(craft.Position);
             if (d < bestDistance) { best = c; bestDistance = d; }
         }

@@ -31,6 +31,12 @@
     { "id": "defenses", "name": "Armour and missiles", "cost": 80, "requires": ["ship_weapons"], "parts": ["armour_plate", "missile_launcher", "point_defense"],
       "description": "Armour plates, missiles that steer, and point defense that shoots them down." },
     { "id": "shields", "name": "Shields", "cost": 140, "requires": ["defenses", "dense_batteries"], "parts": ["shield_generator"],
-      "description": "Shield generators: a bubble that takes weapon damage before the parts do, for power." }
+      "description": "Shield generators: a bubble that takes weapon damage before the parts do, for power." },
+    { "id": "nanotechnology", "name": "Nanotechnology", "cost": 400, "requires": ["superconductors", "advanced_fabrication", "automation"], "parts": ["nanite_bay", "nano_assembler"],
+      "description": "Nanite bays mend their craft and regrow lost parts; nano-assemblers build ships and kits anywhere, slowly." },
+    { "id": "antimatter", "name": "Antimatter", "cost": 500, "requires": ["fusion_power"], "parts": ["antimatter_factory", "containment", "antimatter_reactor", "antimatter_drive"],
+      "description": "Antimatter made from hydrogen with huge power, held in containment that explodes without power, for 100 MW reactors and mighty drives." },
+    { "id": "quantum_jumps", "name": "Quantum jumps", "cost": 500, "requires": ["superconductors", "warp_theory"], "parts": ["quantum_drive"],
+      "description": "Quantum drives: charge up, then jump to a target anywhere in the same star system." }
   ]
 }

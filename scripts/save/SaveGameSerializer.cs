@@ -48,11 +48,11 @@ public static class SaveGameSerializer
     /// added research (points, techs done; older saves have everything unlocked) and star types; v20 added
     /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids); v22 added salvage jobs (#86); v23 added missiles (#87) and shields (#90); v24 added guard, escort and patrol jobs (#88) and civilization patrols (#89);
     /// v25 added trade stations, trade routes and diplomacy (#89); v26 added native life (#91, #92); v27 added
-    /// native animals (#93).
+    /// native animals (#93); v28 added antimatter and quantum drives (#81, #82).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 27;
+    public const int SchemaVersion = 28;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -197,6 +197,10 @@ public static class SaveGameSerializer
                     PatrolStop = c.PatrolStop,
                     IsTradeStation = c.IsTradeStation,
                     PenKg = c.PenKg,
+                    ContainmentFailS = c.ContainmentFailS,
+                    QuantumChargeKJ = c.QuantumChargeKJ,
+                    QuantumRequested = c.QuantumRequested,
+                    QuantumReadyTick = c.QuantumReadyTick,
                     PenAnimal = c.PenAnimal.Length > 0 ? c.PenAnimal : null,
                     PenTemper = c.PenTemper,
                     Culling = c.Culling,
@@ -398,6 +402,11 @@ public static class SaveGameSerializer
                 if (c.PenKg < 0 || !(c.RanchRemainderKg >= 0 && c.RanchRemainderKg < 1) || !(c.CullRemainderKg >= 0 && c.CullRemainderKg < 1))
                     throw new FormatException($"Craft {c.Id} has invalid animals.");
                 craft.PenKg = c.PenKg;
+                if (!(c.ContainmentFailS >= 0) || !(c.QuantumChargeKJ >= 0)) throw new FormatException($"Craft {c.Id} has an invalid quantum drive or containment.");
+                craft.ContainmentFailS = c.ContainmentFailS;
+                craft.QuantumChargeKJ = c.QuantumChargeKJ;
+                craft.QuantumRequested = c.QuantumRequested;
+                craft.QuantumReadyTick = c.QuantumReadyTick;
                 craft.PenAnimal = c.PenAnimal ?? "";
                 craft.PenTemper = c.PenTemper;
                 craft.Culling = c.Culling;
@@ -1006,6 +1015,19 @@ public static class SaveGameSerializer
         /// <summary>v27: animals (#93).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public long PenKg { get; set; }
+
+        /// <summary>v28: antimatter and the quantum drive (#81, #82).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double ContainmentFailS { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double QuantumChargeKJ { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool QuantumRequested { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public long QuantumReadyTick { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? PenAnimal { get; set; }

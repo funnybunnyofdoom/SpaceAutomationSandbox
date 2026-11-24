@@ -152,7 +152,7 @@ public sealed partial class SectorState
 
     /// <summary>A converter starts a batch only with its inputs in stock beyond what the craft wants kept (its supply requests).</summary>
     private static bool CanStartConversion(CraftState craft, ConverterStats conv) =>
-        conv.InputsKg.All(i => craft.Inventory[i.Key] - WantedKg(craft, i.Key) >= i.Value);
+        conv.OutputsKg.GetValueOrDefault(AntimatterMaterial) <= AntimatterRoomKg(craft) && conv.InputsKg.All(i => craft.Inventory[i.Key] - WantedKg(craft, i.Key) >= i.Value);
 
     /// <summary>The craft whose pool another draws from (its network's root, #75); itself before the first tick.</summary>
     public CraftState PowerRootOf(CraftState craft) => craft.PowerRoot ?? craft;

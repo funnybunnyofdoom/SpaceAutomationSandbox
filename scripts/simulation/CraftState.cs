@@ -225,6 +225,16 @@ public sealed class CraftState
     /// <summary>The player's order not to fire. Saved.</summary>
     public bool HoldFire { get; set; }
 
+    // --- Antimatter and the quantum drive (#81, #82) ---
+
+    /// <summary>How long its antimatter containment has been failing, s; 0 while it holds. Saved.</summary>
+    public double ContainmentFailS { get; internal set; }
+
+    /// <summary>Charge in its quantum drive, whether the player asked for a jump, and when it has cooled down. Saved.</summary>
+    public double QuantumChargeKJ { get; internal set; }
+    public bool QuantumRequested { get; internal set; }
+    public long QuantumReadyTick { get; internal set; }
+
     // --- Animals (#93) ---
 
     /// <summary>Live animals in its pens: kg, kind and temper. Saved.</summary>
