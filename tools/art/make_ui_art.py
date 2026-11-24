@@ -122,7 +122,39 @@ def work(d): d.ring(8, 8, 3.5, 5, C); up(d, 8, 5, 3, C)
 def wait(d): d.hline(5, 11, 3, Y); d.hline(5, 11, 13, Y); line(d, 5, 4, 11, 12, Y); line(d, 11, 4, 5, 12, Y); d.hline(7, 9, 11, Y)
 
 
-MENU = {"pause": pause, "editor": editor, "shipyard": shipyard, "fleet": fleet, "swarm": swarm, "cargo": cargo, "trade": trade, "job": job,
+def undo(d): d.hline(5, 11, 5, W); d.vline(12, 6, 9, W); d.hline(6, 11, 10, W); line(d, 4, 5, 7, 2, C); line(d, 4, 5, 7, 8, C); line(d, 5, 5, 8, 2, C); line(d, 5, 5, 8, 8, C)
+def redo(d):
+    u = Img(); undo(u)
+    for y in range(N):
+        for x in range(N): d.set(N - 1 - x, y, u.px[y][x])
+def mirror_h(d): d.vline(8, 1, 14, Y); d.rect(3, 5, 5, 10, C); d.outline(11, 5, 13, 10, W)
+def mirror_v(d): d.hline(1, 14, 8, Y); d.rect(5, 3, 10, 5, C); d.outline(5, 11, 10, 13, W)
+def tool_draw(d): line(d, 4, 12, 11, 5, W); line(d, 5, 12, 12, 5, W); d.rect(11, 3, 13, 5, C); d.rect(2, 12, 4, 13, Y)
+def tool_line(d): line(d, 3, 12, 12, 3, C); d.rect(2, 11, 4, 13, W); d.rect(11, 2, 13, 4, W)
+def tool_rect(d): d.rect(3, 4, 12, 11, C); d.outline(3, 4, 12, 11, W)
+def tool_outline(d): d.outline(3, 4, 12, 11, C); d.outline(2, 3, 13, 12, C)
+def tool_fill(d): d.rect(4, 6, 10, 12, W); line(d, 4, 6, 7, 3, W); line(d, 10, 6, 7, 3, W); d.rect(12, 9, 13, 12, C); d.rect(5, 8, 9, 11, C)
+def tool_select(d):
+    for i in range(2, 14, 3):
+        for k in (2, 13): d.hline(i, i + 1, k, W); d.vline(k, i, i + 1, W)
+    d.rect(6, 6, 9, 9, C)
+def copy(d): d.outline(5, 2, 12, 9, G); d.rect(3, 5, 9, 13, shade(C, .6)); d.outline(3, 5, 9, 13, W)
+def paste(d): d.outline(3, 3, 12, 13, W); d.rect(6, 2, 9, 4, Y); d.rect(5, 6, 10, 11, C)
+def cut(d): line(d, 3, 2, 10, 10, W); line(d, 12, 2, 5, 10, W); d.ring(4, 12, 1, 2.2, R); d.ring(11, 12, 1, 2.2, R)
+def trash(d): d.rect(4, 5, 11, 13, G); d.hline(3, 12, 4, W); d.hline(6, 9, 2, W); d.vline(6, 7, 11, OUT); d.vline(9, 7, 11, OUT)
+def turn(d): d.ring(8, 8, 4, 5.4, W); d.rect(8, 2, 13, 7, CLEAR); up(d, 12, 4, 3, C)
+def pick(d): line(d, 3, 12, 9, 6, C); line(d, 4, 12, 10, 6, C); d.rect(9, 3, 12, 6, W); d.set(2, 13, Y)
+def replace(d): d.rect(2, 2, 6, 6, C); d.rect(9, 9, 13, 13, W); d.hline(8, 12, 4, Y); d.vline(12, 4, 7, Y); d.hline(3, 7, 11, Y); d.vline(3, 8, 11, Y)
+def fit(d):
+    for x, y, dx, dy in ((2, 2, 1, 1), (13, 2, -1, 1), (2, 13, 1, -1), (13, 13, -1, -1)):
+        for i in range(4): d.set(x + dx * i, y, W); d.set(x, y + dy * i, W)
+    d.rect(6, 6, 9, 9, C)
+
+
+MENU = {"undo": undo, "redo": redo, "mirror_h": mirror_h, "mirror_v": mirror_v, "tool_draw": tool_draw, "tool_line": tool_line, "tool_rect": tool_rect,
+        "tool_outline": tool_outline, "tool_fill": tool_fill, "tool_select": tool_select, "copy": copy, "paste": paste, "cut": cut, "trash": trash,
+        "turn": turn, "pick": pick, "replace": replace, "fit": fit,
+        "pause": pause, "editor": editor, "shipyard": shipyard, "fleet": fleet, "swarm": swarm, "cargo": cargo, "trade": trade, "job": job,
         "map": map_icon, "research": research, "power": power, "laws": laws, "life": life, "milestones": milestones, "settings": settings,
         "help": help_icon, "debug": debug, "diagnostics": diagnostics, "battery": battery, "hull": hull, "shield": shield, "speed": speed,
         "gravity": gravity, "heading": heading, "warn": warn, "danger": danger, "clock": clock, "target": target, "gate": gate, "crew": crew,

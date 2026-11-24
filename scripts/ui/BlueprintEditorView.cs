@@ -73,6 +73,8 @@ public partial class BlueprintEditorView : Control
         // Research changes over time: mark the parts that can't be built yet (they can still be planned with).
         FilterPalette();
         Visible = true;
+        if (_usingButtons) UseButtons(false);
+        RefreshLarge();
         Refresh();
     }
 
@@ -155,7 +157,7 @@ public partial class BlueprintEditorView : Control
         }
         left.AddChild(new Label
         {
-            Text = "Left drag: place    Right drag: erase    R: rotate\nCtrl+Z: undo    Ctrl+S: save    B or Esc: close\nNumber keys: pick (Shift for 11 to 20)",
+            Text = "Left drag: place    Right drag: erase    R: rotate\nCtrl+S: save    B or Esc: close    Arrows, Enter: without a mouse\nNumber keys: pick (Shift for 11 to 20)",
             ThemeTypeVariation = "HudText", AutowrapMode = TextServer.AutowrapMode.WordSmart,
             Modulate = new Color(1, 1, 1, 0.7f),
         });
@@ -164,7 +166,8 @@ public partial class BlueprintEditorView : Control
         var centre = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         columns.AddChild(centre);
         _grid = new BlueprintGridCanvas(_model, _colors, () => _selectedPart, () => _rotation);
-        _grid.Edited += () => { _pendingConfirm = null; Refresh(); };
+        _grid.Edited += () => { _pendingConfirm = null; _refreshDue = true; }; // once a frame, however many cells changed
+        BuildToolbar(centre);
         centre.AddChild(_grid);
         _grid.PartPointed += (id, cell) =>
         {
@@ -195,7 +198,6 @@ public partial class BlueprintEditorView : Control
 
         var actions = new HBoxContainer();
         actions.AddChild(ActionButton("Save", Save));
-        actions.AddChild(ActionButton("Undo", () => { if (_model.Undo()) Refresh(); }));
         actions.AddChild(ActionButton("New", NewDesign));
         actions.AddChild(ActionButton("Close", () => CloseRequested?.Invoke()));
         right.AddChild(actions);
@@ -272,6 +274,11 @@ public partial class BlueprintEditorView : Control
 
     public override void _Process(double delta)
     {
+        if (_refreshDue)
+        {
+            _refreshDue = false;
+            Refresh();
+        }
         // The palette takes what the grid and the numbers leave.
         var width = Mathf.Clamp(Size.X * 0.22f, 290, 420);
         if (_left is { } left && !Mathf.IsEqualApprox(left.CustomMinimumSize.X, width)) left.CustomMinimumSize = new Vector2(width, 0);
@@ -359,12 +366,11 @@ public partial class BlueprintEditorView : Control
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (!Visible || @event is not InputEventKey { Pressed: true, Echo: false } key) return;
+        if (!Visible) return;
+        if (ToolKey(@event)) { GetViewport().SetInputAsHandled(); return; }
+        if (@event is not InputEventKey { Pressed: true, Echo: false } key) return;
 
-        if (key.CtrlPressed && key.PhysicalKeycode == Key.Z) { if (_model.Undo()) Refresh(); }
-        else if (key.PhysicalKeycode == Key.R && !key.CtrlPressed) { _rotation = (_rotation + 1) % 4; _grid.QueueRedraw(); }
-        else if (key.CtrlPressed && key.PhysicalKeycode == Key.S) Save();
-        else if (key.PhysicalKeycode is >= Key.Key0 and <= Key.Key9 && !key.CtrlPressed)
+        if (key.PhysicalKeycode is >= Key.Key0 and <= Key.Key9 && !key.CtrlPressed)
         {
             // 1..9 then 0 pick parts 1–10; with Shift, parts 11–20.
             var digit = key.PhysicalKeycode == Key.Key0 ? 10 : (int)(key.PhysicalKeycode - Key.Key0);
@@ -395,6 +401,7 @@ public partial class BlueprintEditorView : Control
 
         var errors = _model.Errors;
         var warnings = _model.Warnings;
+        if (_model.IsLocked) warnings = warnings.Append(_model.LockedReason!).ToList();
         _problems.Set(errors.Count == 0 && warnings.Count == 0
             ? new[]
             {
@@ -405,7 +412,7 @@ public partial class BlueprintEditorView : Control
             : errors.Select(e => new HudRow("danger", $"{(_model.Role == DesignRole.Ship ? "Ship" : "Station")}: {e}", Severity.Bad))
                 .Concat(warnings.Select(w => new HudRow("warn", w, Severity.Warning))).ToArray());
         _grid.Problems = _model.ToDesign().ProblemCells(_catalog, _model.Role);
-        _grid.QueueRedraw();
+        RefreshTools();
     }
 
     private void SetStatus(string text, Color? color = null)
@@ -465,6 +472,7 @@ public partial class BlueprintEditorView : Control
         _loadedFromId = null;
         SetStatus("New empty design.");
         Refresh();
+        _grid.Fit();
     }
 
     private void LoadSelected()
@@ -495,6 +503,7 @@ public partial class BlueprintEditorView : Control
             SetStatus($"Load failed: {e.Message}", ErrorColor);
         }
         Refresh();
+        _grid.Fit();
     }
 
     private void RefreshLoadList(string? selectId = null)

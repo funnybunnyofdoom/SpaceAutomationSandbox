@@ -24,6 +24,8 @@
       "description": "Warp gates: the way to other star systems." },
     { "id": "superconductors", "name": "Superconductors", "cost": 300, "requires": ["warp_theory", "improved_engines"], "parts": ["thruster_mk3", "drill_mk3", "solar_panel_mk3"],
       "description": "Mk3 parts built with superconductors, refined from exotic ore found only in some other systems." },
+    { "id": "heavy_fabrication", "name": "Heavy fabrication", "cost": 350, "requires": ["advanced_fabrication", "superconductors"], "parts": ["fabricator_mk3"],
+      "description": "Fabricators that build three times as fast as Mk2, for the biggest jobs." },
     { "id": "fusion_power", "name": "Fusion power", "cost": 300, "requires": ["nuclear_physics", "superconductors"], "parts": ["fusion_reactor", "isotope_separator"],
       "description": "Fusion reactors: 10 MW from deuterium, which isotope separators pull out of water (slowly, on spare power)." },
     { "id": "ship_weapons", "name": "Ship weapons", "cost": 60, "requires": [], "parts": ["autocannon", "laser"],

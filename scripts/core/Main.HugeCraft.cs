@@ -14,6 +14,9 @@ namespace SpaceAutomationSandbox.Core;
 public partial class Main
 {
     private const int MeshCells = 200;
+
+    /// <summary>Dev/test hook: <c>--large-editor</c> opens large-ship building for this run.</summary>
+    private static readonly bool DevLarge = OS.GetCmdlineUserArgs().Contains("--large-editor");
     private const ulong MeshRebuildMs = 250, MeshForgetMs = 10_000;
 
     private sealed class CraftMesh

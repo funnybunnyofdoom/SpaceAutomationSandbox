@@ -12,6 +12,9 @@ namespace SpaceAutomationSandbox.Construction;
 /// </summary>
 public sealed class BlueprintEditor
 {
+    /// <summary>The whole grid of large-ship building (#111): 101 x 101, about 10,000 cells (docs/09).</summary>
+    public const int LargeHalfExtent = 50;
+
     /// <summary>Editable area is (2*HalfExtent+1) cells square around the origin (21×21). Placeholder limit.</summary>
     public const int HalfExtent = 10;
 
@@ -21,6 +24,7 @@ public sealed class BlueprintEditor
     private Dictionary<GridPos, DesignCell> _cells = new();
     private readonly List<List<(GridPos Pos, DesignCell? Before)>> _undo = new(); // what each step changed, not a copy of everything (#114)
     private ShipDesign? _design;
+    private readonly List<List<(GridPos Pos, DesignCell? Before)>> _redo = new();
     private bool _inStroke;
     private bool _strokeChanged;
     private string _name = "New design";
@@ -50,13 +54,43 @@ public sealed class BlueprintEditor
 
     public bool CanUndo => _undo.Count > 0;
 
-    public static bool InBounds(GridPos pos) => Math.Abs(pos.X) <= HalfExtent && Math.Abs(pos.Y) <= HalfExtent;
+    /// <summary>How far the grid reaches from its middle now: <see cref="HalfExtent"/>, or <see cref="LargeHalfExtent"/> once large-ship building is open.</summary>
+    public int Extent { get; set; } = HalfExtent;
+
+    public bool InBounds(GridPos pos) => Math.Abs(pos.X) <= Extent && Math.Abs(pos.Y) <= Extent;
+
+    /// <summary>Why this design can only be looked at, or null.</summary>
+    public string? LockedReason => _tooBig ??= _cells.Keys.Any(p => !InBounds(p)) ? $"This design is bigger than your {2 * Extent + 1} x {2 * Extent + 1} grid: it can be looked at, not changed." : "";
+
+    private string? _tooBig;
+
+    /// <summary>It's bigger than the grid there is.</summary>
+    public bool IsLocked
+    {
+        get
+        {
+            if (_tooBigFor != Extent) (_tooBig, _tooBigFor) = (null, Extent);
+            return LockedReason!.Length > 0;
+        }
+    }
+
+    private int _tooBigFor = HalfExtent;
+
+    public bool CanRedo => _redo.Count > 0;
+
+    /// <summary>Drawing is mirrored across the grid's middle: left to right, front to back (#112).</summary>
+    public bool MirrorLeftRight { get; set; }
+    public bool MirrorFrontBack { get; set; }
+
+    /// <summary>What's selected (#112): only cells that hold something.</summary>
+    public HashSet<GridPos> Selection { get; } = new();
 
     /// <summary>Replaces the contents with a design (unknown parts are kept and reported as errors).</summary>
     public void Load(ShipDesign design)
     {
         _cells = design.Cells.ToDictionary(c => c.Pos);
         _design = null;
+        Forget();
         _name = design.Name.Length > 0 ? design.Name : design.Id;
         _undo.Clear();
         IsDirty = false;
@@ -66,9 +100,17 @@ public sealed class BlueprintEditor
     {
         _cells = new Dictionary<GridPos, DesignCell>();
         _design = null;
+        Forget();
         _name = "New design";
         _undo.Clear();
         IsDirty = false;
+    }
+
+    private void Forget()
+    {
+        _redo.Clear();
+        Selection.Clear();
+        _tooBig = null;
     }
 
     public void MarkSaved() => IsDirty = false;
@@ -95,7 +137,7 @@ public sealed class BlueprintEditor
     /// </summary>
     public bool Place(GridPos pos, string partId, int rotation = 0)
     {
-        if (!InBounds(pos) || !_catalog.TryGet(partId, out _) || rotation is < 0 or > 3) return false;
+        if (IsLocked || !InBounds(pos) || !_catalog.TryGet(partId, out _) || rotation is < 0 or > 3) return false;
         var cell = new DesignCell(pos, partId, rotation);
         if (_cells.TryGetValue(pos, out var existing) && existing == cell) return false;
         Change(pos, () => _cells[pos] = cell);
@@ -104,7 +146,7 @@ public sealed class BlueprintEditor
 
     public bool Remove(GridPos pos)
     {
-        if (!_cells.ContainsKey(pos)) return false;
+        if (IsLocked || !_cells.ContainsKey(pos)) return false;
         Change(pos, () => _cells.Remove(pos));
         return true;
     }
@@ -112,16 +154,142 @@ public sealed class BlueprintEditor
     public bool Undo()
     {
         if (_inStroke || _undo.Count == 0) return false;
-        var step = _undo[^1];
+        _redo.Add(Revert(_undo[^1]));
+        _undo.RemoveAt(_undo.Count - 1);
+        return true;
+    }
+
+    /// <summary>Puts back what was undone.</summary>
+    public bool Redo()
+    {
+        if (_inStroke || _redo.Count == 0) return false;
+        _undo.Add(Revert(_redo[^1]));
+        _redo.RemoveAt(_redo.Count - 1);
+        return true;
+    }
+
+    /// <summary>Takes a step back; what comes back is the step that would do it again.</summary>
+    private List<(GridPos, DesignCell?)> Revert(List<(GridPos Pos, DesignCell? Before)> step)
+    {
+        var again = new List<(GridPos, DesignCell?)>(step.Count);
         for (var i = step.Count - 1; i >= 0; i--) // the last change first
         {
+            again.Add((step[i].Pos, _cells.TryGetValue(step[i].Pos, out var now) ? now : null));
             if (step[i].Before is { } before) _cells[step[i].Pos] = before;
             else _cells.Remove(step[i].Pos);
         }
         _design = null;
-        _undo.RemoveAt(_undo.Count - 1);
+        _tooBig = null;
+        Selection.RemoveWhere(p => !_cells.ContainsKey(p));
         IsDirty = true;
-        return true;
+        return again;
+    }
+
+    // --- Many parts at once (#112): each is one undo step (inside a stroke, part of it) ---
+
+    private bool AsOneStep(Func<bool> change)
+    {
+        var mine = !_inStroke;
+        if (mine) BeginStroke();
+        var changed = change();
+        if (mine) EndStroke();
+        Selection.RemoveWhere(p => !_cells.ContainsKey(p));
+        return changed;
+    }
+
+    /// <summary>Places a part, and its mirror images when mirroring is on.</summary>
+    public bool Draw(IEnumerable<GridPos> where, string partId, int rotation) => AsOneStep(() =>
+    {
+        var changed = false;
+        foreach (var pos in where)
+            foreach (var cell in BlueprintTools.Mirrored(new DesignCell(pos, partId, rotation), MirrorLeftRight, MirrorFrontBack)) changed |= Place(cell.Pos, cell.PartId, cell.Rotation);
+        return changed;
+    });
+
+    /// <summary>Removes parts, and the mirror images when mirroring is on.</summary>
+    public bool Erase(IEnumerable<GridPos> where) => AsOneStep(() =>
+    {
+        var changed = false;
+        foreach (var pos in where)
+            foreach (var cell in BlueprintTools.Mirrored(new DesignCell(pos, ""), MirrorLeftRight, MirrorFrontBack)) changed |= Remove(cell.Pos);
+        return changed;
+    });
+
+    /// <summary>Places cells as they are. False, and nothing placed, if any would fall off the grid.</summary>
+    public bool PlaceAll(IReadOnlyCollection<DesignCell> cells)
+    {
+        if (IsLocked || cells.Any(c => !InBounds(c.Pos))) return false;
+        return AsOneStep(() => cells.Aggregate(false, (changed, c) => Place(c.Pos, c.PartId, c.Rotation) | changed));
+    }
+
+    public IReadOnlyList<DesignCell> Selected => Selection.Where(_cells.ContainsKey).Select(p => _cells[p]).OrderBy(c => c.Pos.Y).ThenBy(c => c.Pos.X).ToList();
+
+    /// <summary>Puts something else in the selection's place (moved, turned, mirrored); refused if it wouldn't fit the grid.</summary>
+    public bool ReplaceSelection(IReadOnlyCollection<DesignCell> with)
+    {
+        if (IsLocked || with.Any(c => !InBounds(c.Pos))) return false;
+        var old = Selection.ToList();
+        var keep = with.Select(c => c.Pos).ToHashSet();
+        var changed = AsOneStep(() =>
+        {
+            var any = false;
+            foreach (var pos in old) if (!keep.Contains(pos)) any |= Remove(pos);
+            foreach (var c in with) any |= Place(c.Pos, c.PartId, c.Rotation);
+            return any;
+        });
+        Selection.Clear();
+        Selection.UnionWith(keep);
+        return changed;
+    }
+
+    /// <summary>Moves the selection; what it lands on is replaced.</summary>
+    public bool MoveSelection(int dx, int dy) => ReplaceSelection(Selected.Select(c => c with { Pos = new GridPos(c.Pos.X + dx, c.Pos.Y + dy) }).ToList());
+
+    /// <summary>Turns or mirrors the selection where it is, its top left corner staying put.</summary>
+    public bool ReshapeSelection(Func<IEnumerable<DesignCell>, IReadOnlyList<DesignCell>> reshape)
+    {
+        var cells = Selected;
+        if (cells.Count == 0) return false;
+        var (x, y) = (cells.Min(c => c.Pos.X), cells.Min(c => c.Pos.Y));
+        return ReplaceSelection(reshape(cells).Select(c => c with { Pos = new GridPos(c.Pos.X + x, c.Pos.Y + y) }).ToList());
+    }
+
+    /// <summary>Every part of one kind becomes another, keeping its facing: in the selection, or everywhere if nothing is selected.</summary>
+    public int ReplaceParts(string from, string to)
+    {
+        if (IsLocked || from == to) return 0;
+        var cells = (Selection.Count > 0 ? Selected : _cells.Values.ToList()).Where(c => c.PartId == from).ToList();
+        AsOneStep(() => cells.Aggregate(false, (changed, c) => Place(c.Pos, to, c.Rotation) | changed));
+        return cells.Count;
+    }
+
+    /// <summary>What a change would add to the mass, and where it would move the centre of mass (cells).</summary>
+    public (double MassKg, double ComX, double ComY, double DeltaKg) Preview(IReadOnlyCollection<DesignCell> placed, IReadOnlyCollection<GridPos> removed)
+    {
+        double Mass(string id) => _catalog.TryGet(id, out var p) ? p!.MassKg : 0;
+        double mass = 0, x = 0, y = 0;
+        void Add(DesignCell c, double sign)
+        {
+            var kg = Mass(c.PartId) * sign;
+            mass += kg;
+            x += kg * c.Pos.X;
+            y += kg * c.Pos.Y;
+        }
+        foreach (var c in _cells.Values) Add(c, 1);
+        var before = mass;
+        var gone = new HashSet<GridPos>(removed);
+        foreach (var c in placed) gone.Add(c.Pos);
+        foreach (var p in gone) if (_cells.TryGetValue(p, out var c)) Add(c, -1);
+        foreach (var c in placed) Add(c, 1);
+        return (mass, mass > 0 ? x / mass : 0, mass > 0 ? y / mass : 0, mass - before);
+    }
+
+    /// <summary>What parts about to be placed cost, the biggest materials first: "; 4 t Metal, 1 t Electronics".</summary>
+    public string CostText(IReadOnlyCollection<DesignCell> placed)
+    {
+        var bill = new ShipDesign("preview", "Preview", placed.DistinctBy(c => c.Pos)).ComputeBillOfMaterials(_catalog);
+        return string.Concat(bill.Kg.OrderByDescending(kv => kv.Value).Take(3).Select((kv, i) =>
+            $"{(i == 0 ? "; " : ", ")}{(kv.Value / 1000.0).ToString("#,0.#", System.Globalization.CultureInfo.InvariantCulture)} t {(_catalog.Materials.Contains(kv.Key) ? _catalog.Materials.Get(kv.Key).Name : kv.Key)}"));
     }
 
     /// <summary>The layout as a design: the same one until something changes, so what it works out is worked out once (#114).</summary>
@@ -216,6 +384,8 @@ public sealed class BlueprintEditor
         if (!_inStroke) PushUndo();
         _undo[^1].Add((pos, _cells.TryGetValue(pos, out var before) ? before : null));
         _design = null;
+        _tooBig = null;
+        _redo.Clear();
         apply();
         _strokeChanged = true;
         IsDirty = true;

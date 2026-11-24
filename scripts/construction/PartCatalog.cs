@@ -99,6 +99,9 @@ public sealed record PartDefinition
     /// <summary>Lets the player close the warp gate it's on (#95).</summary>
     public bool IsGateLock { get; init; }
 
+    /// <summary>Working on a craft of yours, it opens large-ship building in the blueprint editor (#111).</summary>
+    public bool OpensLargeDesigns { get; init; }
+
     /// <summary>Antimatter a containment part holds (#81), kg; it needs its power all the time while there is any.</summary>
     public double AntimatterCapacityKg { get; init; }
 

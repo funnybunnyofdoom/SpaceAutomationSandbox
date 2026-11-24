@@ -640,7 +640,7 @@ DRAW = {
     "drill_mk2": lambda a: drill(a, 2), "drill_mk3": lambda a: drill(a, 3),
     "solar_panel_mk2": lambda a: solar(a, 2), "solar_panel_mk3": lambda a: solar(a, 3),
     "battery_mk2": lambda a: battery(a, 2), "refinery_mk2": lambda a: refinery(a, 2),
-    "fabricator_mk2": lambda a: fabricator(a, 2), "warp_gate": warp_gate, "gate_defense": gate_defense,
+    "fabricator_mk2": lambda a: fabricator(a, 2), "fabricator_mk3": lambda a: fabricator(a, 3), "warp_gate": warp_gate, "gate_defense": gate_defense,
     "antimatter_factory": antimatter_factory, "containment": containment, "antimatter_reactor": lambda a: glow_core(a, 2),
     "antimatter_drive": antimatter_drive, "quantum_drive": quantum_drive, "nanite_bay": nanite_bay, "nano_assembler": nano_assembler,
     "gate_lock": gate_lock, "repeller": repeller, "ranch": ranch, "animal_pen": animal_pen, "harvester": harvester, "armour_plate": armour_plate, "missile_launcher": missile_launcher, "point_defense": point_defense,

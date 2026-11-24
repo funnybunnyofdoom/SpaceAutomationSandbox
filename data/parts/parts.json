@@ -47,6 +47,8 @@
       "materialsKg": { "metal": 3500, "electronics": 1700, "composites": 800 } },
     { "id": "fabricator_mk2", "name": "Fabricator Mk2", "massKg": 7000, "placeholderColor": "#a98bf0", "fabricationRateKgPerS": 1000, "powerUseKW": 300,
       "materialsKg": { "metal": 4000, "electronics": 2200, "composites": 800 } },
+    { "id": "fabricator_mk3", "name": "Fabricator Mk3", "massKg": 9000, "placeholderColor": "#c9b0ff", "fabricationRateKgPerS": 3000, "powerUseKW": 700, "opensLargeDesigns": true,
+      "materialsKg": { "metal": 5000, "electronics": 2500, "superconductors": 1500 } },
     { "id": "warp_gate", "name": "Warp gate", "massKg": 30000, "placeholderColor": "#c86bf0", "isWarpGate": true,"toughness": 10, 
       "materialsKg": { "metal": 15000, "electronics": 10000, "composites": 5000 } },
     { "id": "fuel_generator", "name": "Fuel generator", "massKg": 3000, "placeholderColor": "#c8a040", "generatorKW": 400,

@@ -50,11 +50,11 @@ public static class SaveGameSerializer
     /// v25 added trade stations, trade routes and diplomacy (#89); v26 added native life (#91, #92); v27 added
     /// native animals (#93); v28 added antimatter and quantum drives (#81, #82); v29 added milestones (#38)
     /// and closable gates (#95); v30 added
-    /// flying to a target (#108); v31 added what events are about (#100).
+    /// flying to a target (#108); v31 added what events are about (#100); v32 added large-ship building (#111).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 31;
+    public const int SchemaVersion = 32;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -99,6 +99,7 @@ public static class SaveGameSerializer
                 Events = sector.Events.Count > 0 ? sector.Events.Select(e => new EventDto { Tick = e.Tick, Text = e.Text, Kind = (int)e.Kind, CraftId = e.Target.Craft.Value, BodyId = e.Target.Body.Value }).ToList() : null,
                 Milestones = sector.MilestonesReached.Count > 0 ? new SortedDictionary<string, long>(sector.MilestonesReached.ToDictionary(m => m.Key, m => m.Value), StringComparer.Ordinal) : null,
                 MilestonesStarted = sector.MilestonesStarted,
+                LargeDesigns = sector.LargeDesigns,
                 Shots = sector.Shots.Count > 0
                     ? sector.Shots.Select(s => new ShotDto { Position = Vec(s.Position), Velocity = Vec(s.Velocity), ExpireTick = s.ExpireTick, Damage = s.Damage, FactionId = s.FactionId, IsMissile = s.IsMissile, TargetId = s.TargetId.Value, SpeedMps = s.SpeedMps }).ToList()
                     : null,
@@ -528,6 +529,7 @@ public static class SaveGameSerializer
                 sector.RestoreMilestone(id, tick);
             }
             sector.MilestonesStarted = dto.MilestonesStarted;
+            sector.LargeDesigns = dto.LargeDesigns;
             foreach (var s in dto.Shots ?? new List<ShotDto>())
             {
                 if (!(s.Damage >= 0)) throw new FormatException("A shot has invalid damage.");
@@ -812,6 +814,10 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool MilestonesStarted { get; set; }
+
+        /// <summary>v32: large-ship building is open (#111).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool LargeDesigns { get; set; }
 
         /// <summary>v21: shots in flight (#85).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

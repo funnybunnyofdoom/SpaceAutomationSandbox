@@ -171,6 +171,7 @@ public partial class Main : Node2D
         {
             _editor = new BlueprintEditorView(_catalog, _partColors, () => _player?.Design) { Visible = false };
             _editor.LockedBy = partId => _sector.IsPartUnlocked(partId) ? null : _catalog.Research.TechFor(partId)?.Name; // research (#37)
+            _editor.LargeOpen = () => _sector is { LargeDesigns: true } || DevLarge; // #111
             _editor.CloseRequested += CloseEditor;
             _uiRoot.AddChild(_editor);
 
@@ -1035,6 +1036,14 @@ public partial class Main : Node2D
         {
             var parts = arg0.Split('=');
             if (parts.Length == 2 && parts[0] == "--press" && _framesShown == 10) Input.ParseInputEvent(new InputEventAction { Action = parts[1], Pressed = true });
+            // --drag=x,y,x2,y2 presses at the first place and moves to the second; --drop lets go there (#112).
+            if (parts.Length == 2 && parts[0] == "--drag" && parts[1].Split(',').Select(float.Parse).ToArray() is [var ax, var ay, var bx, var by])
+            {
+                var (from, to) = (new Vector2(ax, ay), new Vector2(bx, by));
+                if (_framesShown == clickAt) Input.ParseInputEvent(new InputEventMouseButton { Position = from, GlobalPosition = from, Pressed = true, ButtonIndex = MouseButton.Left });
+                if (_framesShown == clickAt + 1) Input.ParseInputEvent(new InputEventMouseMotion { Position = to, GlobalPosition = to, ButtonMask = MouseButtonMask.Left });
+                if (_framesShown == clickAt + 2 && OS.GetCmdlineUserArgs().Contains("--drop")) Input.ParseInputEvent(new InputEventMouseButton { Position = to, GlobalPosition = to, Pressed = false, ButtonIndex = MouseButton.Left });
+            }
             if (parts.Length != 2 || parts[0] is not ("--click" or "--right-click" or "--point" or "--wheel") || parts[1].Split(',') is not [var px, var py]) continue;
             var at = new Vector2(float.Parse(px), float.Parse(py));
             if (parts[0] == "--point") _devPointer = at;

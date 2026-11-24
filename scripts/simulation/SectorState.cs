@@ -262,6 +262,7 @@ public sealed partial class SectorState
         StepEjection();
         EndPowerTick();
         StepMilestones(); // #38
+        StepLargeDesigns(); // #111
         Tick++;
     }
 

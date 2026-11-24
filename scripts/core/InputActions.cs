@@ -63,6 +63,35 @@ public static class InputActions
     public const string Log = "open_log";
     public const string Milestones = "open_milestones";
     public const string MenuBar = "toggle_menu_bar";
+    public const string EditUndo = "edit_undo";
+    public const string EditRedo = "edit_redo";
+    public const string EditSave = "edit_save";
+    public const string EditRotate = "edit_rotate";
+    public const string EditMirror = "edit_mirror";
+    public const string EditMirrorFront = "edit_mirror_front";
+    public const string EditErase = "edit_erase";
+    public const string EditNextPart = "edit_next_part";
+    public const string EditPreviousPart = "edit_previous_part";
+    public const string EditDraw = "edit_draw";
+    public const string EditLine = "edit_line";
+    public const string EditRectangle = "edit_rectangle";
+    public const string EditOutline = "edit_outline";
+    public const string EditFill = "edit_fill";
+    public const string EditSelect = "edit_select";
+    public const string EditNextTool = "edit_next_tool";
+    public const string EditPick = "edit_pick";
+    public const string EditFit = "edit_fit";
+    public const string EditZoomIn = "edit_zoom_in";
+    public const string EditZoomOut = "edit_zoom_out";
+    public const string EditCopy = "edit_copy";
+    public const string EditCut = "edit_cut";
+    public const string EditPaste = "edit_paste";
+    public const string EditSelectAll = "edit_select_all";
+    public const string EditSelectKind = "edit_select_kind";
+    public const string EditTurn = "edit_turn";
+    public const string EditFlip = "edit_flip";
+    public const string EditFlipFront = "edit_flip_front";
+    public const string EditDelete = "edit_delete";
     public const string PanelFocus = "panel_focus";
 
     /// <summary>Every action the player can rebind, in the order the Controls screen lists them, with its name and group.</summary>
@@ -82,6 +111,35 @@ public static class InputActions
         (PanelFocus, "Use the open panel with keys / controller", "Panels"),
         (ClosePanels, "Close panels / pause menu", "Game"), (TimeFaster, "Time faster", "Game"), (TimeSlower, "Time slower", "Game"),
         (TimePause, "Pause time", "Game"), (QuickSave, "Quicksave", "Game"), (QuickLoad, "Quickload", "Game"), (Fullscreen, "Fullscreen", "Game"),
+        (EditUndo, "Undo", "Blueprint editor"),
+        (EditRedo, "Redo", "Blueprint editor"),
+        (EditSave, "Save the design", "Blueprint editor"),
+        (EditRotate, "Turn the part to place", "Blueprint editor"),
+        (EditMirror, "Mirror left to right while drawing", "Blueprint editor"),
+        (EditMirrorFront, "Mirror front to back while drawing", "Blueprint editor"),
+        (EditErase, "Erase at the pointer", "Blueprint editor"),
+        (EditNextPart, "Next part", "Blueprint editor"),
+        (EditPreviousPart, "Previous part", "Blueprint editor"),
+        (EditDraw, "Tool: draw", "Blueprint editor"),
+        (EditLine, "Tool: line", "Blueprint editor"),
+        (EditRectangle, "Tool: rectangle", "Blueprint editor"),
+        (EditOutline, "Tool: outline", "Blueprint editor"),
+        (EditFill, "Tool: fill", "Blueprint editor"),
+        (EditSelect, "Tool: select", "Blueprint editor"),
+        (EditNextTool, "Next tool", "Blueprint editor"),
+        (EditPick, "Pick the part under the pointer", "Blueprint editor"),
+        (EditFit, "Show the whole design", "Blueprint editor"),
+        (EditZoomIn, "Zoom in", "Blueprint editor"),
+        (EditZoomOut, "Zoom out", "Blueprint editor"),
+        (EditCopy, "Copy", "Blueprint editor"),
+        (EditCut, "Cut", "Blueprint editor"),
+        (EditPaste, "Paste", "Blueprint editor"),
+        (EditSelectAll, "Select everything", "Blueprint editor"),
+        (EditSelectKind, "Select all of a kind", "Blueprint editor"),
+        (EditTurn, "Turn the selection", "Blueprint editor"),
+        (EditFlip, "Mirror the selection", "Blueprint editor"),
+        (EditFlipFront, "Mirror the selection front to back", "Blueprint editor"),
+        (EditDelete, "Delete the selection", "Blueprint editor"),
     };
 
     private static readonly Dictionary<string, InputEvent[]> Defaults = new(StringComparer.Ordinal);
@@ -135,6 +193,36 @@ public static class InputActions
         Add(Milestones, 0.5f, Keys(Key.Period)); // #38
         Add(MenuBar, 0.5f, Keys(Key.F10)); // #106
         Add(PanelFocus, 0.5f, Keys(Key.Quoteleft), Pad(JoyButton.Back)); // #68
+        // The blueprint editor's own (#112).
+        Add(EditUndo, 0.5f, new InputEventKey { PhysicalKeycode = Key.Z, CtrlPressed = true });
+        Add(EditRedo, 0.5f, new InputEventKey { PhysicalKeycode = Key.Y, CtrlPressed = true });
+        Add(EditSave, 0.5f, new InputEventKey { PhysicalKeycode = Key.S, CtrlPressed = true });
+        Add(EditRotate, 0.5f, Keys(Key.R), Pad(JoyButton.Y));
+        Add(EditMirror, 0.5f, Keys(Key.M));
+        Add(EditMirrorFront, 0.5f, new InputEventKey { PhysicalKeycode = Key.M, ShiftPressed = true });
+        Add(EditErase, 0.5f, Keys(Key.Backspace), Pad(JoyButton.X));
+        Add(EditNextPart, 0.5f, Keys(Key.Pagedown), Pad(JoyButton.RightShoulder));
+        Add(EditPreviousPart, 0.5f, Keys(Key.Pageup), Pad(JoyButton.LeftShoulder));
+        Add(EditDraw, 0.5f, Keys(Key.D));
+        Add(EditLine, 0.5f, Keys(Key.L));
+        Add(EditRectangle, 0.5f, Keys(Key.T));
+        Add(EditOutline, 0.5f, Keys(Key.O));
+        Add(EditFill, 0.5f, Keys(Key.F));
+        Add(EditSelect, 0.5f, Keys(Key.V));
+        Add(EditNextTool, 0.5f, Keys(Key.G), Pad(JoyButton.RightStick));
+        Add(EditPick, 0.5f, Keys(Key.E));
+        Add(EditFit, 0.5f, Keys(Key.Home), Pad(JoyButton.LeftStick));
+        Add(EditZoomIn, 0.5f, Keys(Key.Equal, Key.KpAdd), Stick(JoyAxis.TriggerRight, 1));
+        Add(EditZoomOut, 0.5f, Keys(Key.Minus, Key.KpSubtract), Stick(JoyAxis.TriggerLeft, 1));
+        Add(EditCopy, 0.5f, new InputEventKey { PhysicalKeycode = Key.C, CtrlPressed = true });
+        Add(EditCut, 0.5f, new InputEventKey { PhysicalKeycode = Key.X, CtrlPressed = true });
+        Add(EditPaste, 0.5f, new InputEventKey { PhysicalKeycode = Key.V, CtrlPressed = true });
+        Add(EditSelectAll, 0.5f, new InputEventKey { PhysicalKeycode = Key.A, CtrlPressed = true });
+        Add(EditSelectKind, 0.5f, Keys(Key.K));
+        Add(EditTurn, 0.5f, new InputEventKey { PhysicalKeycode = Key.R, ShiftPressed = true });
+        Add(EditFlip, 0.5f, Keys(Key.H));
+        Add(EditFlipFront, 0.5f, new InputEventKey { PhysicalKeycode = Key.H, ShiftPressed = true });
+        Add(EditDelete, 0.5f, Keys(Key.Delete));
         // Menus with a controller (#68): A chooses, B goes back (Godot's own UI actions, not rebindable).
         AddEvent("ui_accept", Pad(JoyButton.A));
         AddEvent("ui_cancel", Pad(JoyButton.B));
@@ -215,7 +303,12 @@ public static class InputActions
 
     /// <summary>Other actions that also use this input (a conflict to warn about).</summary>
     public static IEnumerable<string> ActionsUsing(InputEvent input, string except) =>
-        All.Where(a => a.Action != except && Events(a.Action).Any(e => Same(e, input))).Select(a => a.Name);
+        All.Where(a => a.Action != except && (a.Group == EditorGroup) == IsEditor(except) && Events(a.Action).Any(e => Same(e, input))).Select(a => a.Name);
+
+    /// <summary>The editor takes all keys while it's open, so its keys only clash with each other (#112).</summary>
+    private const string EditorGroup = "Blueprint editor";
+
+    private static bool IsEditor(string action) => All.Any(a => a.Action == action && a.Group == EditorGroup);
 
     /// <summary>Shift 1, Ctrl 2, Alt 4 (#107).</summary>
     public static int Modifiers(InputEventKey k) => (k.ShiftPressed ? 1 : 0) + (k.CtrlPressed ? 2 : 0) + (k.AltPressed ? 4 : 0);
