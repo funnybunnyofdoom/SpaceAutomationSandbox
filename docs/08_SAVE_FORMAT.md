@@ -1,4 +1,4 @@
-# 08 — Save format (schema 22)
+# 08 — Save format (schema 23)
 
 The code is `scripts/save/SaveGameSerializer.cs` and `scripts/save/SaveStore.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs` and `SaveStoreTests.cs`.
 
@@ -123,6 +123,7 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 20 | `sector.swarms` (#30: id, name, design, count, source, material, destination, return fraction, what's in the holds, battery charge, whole-kg remainders, delivered kg, growth yard and ships left to order), `sector.nextSwarmId`, and `buildQueue[].swarmId` (the swarm the ship joins). Older saves have no swarms. |
 | 21 | Combat (#84): `crafts[].factionId` (0 = the player's), `isWreck`, `holdFire`, `weaponReady` (cells and ticks); `sector.shots`; `factions[].raidGateId` and `raidEndTick`. In older saves every craft is the player's and no raid is on. |
 | 22 | Salvage (#86): jobs of kind `salvage` (`salvageState`; the wreck in `pickupId`) and `crafts[].salvageProgressKg`. Older saves have none. |
+| 23 | Missiles (#87: `isMissile`, `targetId`, `speedMps` per shot) and shields (#90: `crafts[].shieldCharge`, `shieldHitTick`). Older saves have none. |
 | 18 | Warp gates and further star systems: `gateLinkId`, `gateReadyTick`, `jumpRequestTick`, `jumps` per craft; `sector.discoveredKg` | An older save has one system and no gates; nothing changes. |
 | 17 (later additions, optional) | Kits record `originalCraftId` and `requestsKg` (a packed station comes back as itself, #24). Bodies record `originalMassKg` once mining has changed their mass, and `nextBodyId` is saved (#27); jobs may name bodies that are gone | Older kits are new kits: they deploy with a fresh id. Older bodies take their current mass as the starting mass. |
 | 17 | Refit, dismantle and pack orders (`yardOrder`, `yardProgressKg` per craft) and `sector.nextCraftId`. Jobs may now name craft that no longer exist (they were dismantled) | Nothing changes; the craft id counter follows from the craft. |

@@ -9,12 +9,17 @@ namespace SpaceAutomationSandbox.Simulation;
 public sealed class Shot
 {
     public Vector2D Position { get; internal set; }
-    public Vector2D Velocity { get; init; }
+    public Vector2D Velocity { get; internal set; }
     public long ExpireTick { get; init; }
     public double Damage { get; init; }
 
     /// <summary>Whose shot: it only hits the other side's craft.</summary>
     public int FactionId { get; init; }
+
+    /// <summary>A missile (#87): steers to <see cref="TargetId"/>, and point defense can shoot it down.</summary>
+    public bool IsMissile { get; init; }
+    public CraftId TargetId { get; init; }
+    public double SpeedMps { get; init; }
 }
 
 /// <summary>A laser hit this tick, for drawing. Not saved.</summary>
@@ -37,7 +42,16 @@ public readonly record struct Beam(long Tick, Vector2D From, Vector2D To, int Fa
 /// </summary>
 public sealed partial class SectorState
 {
-    public const string ShellMaterial = "shells";
+    public const string ShellMaterial = "shells", MissileMaterial = "missiles";
+
+    /// <summary>How fast missiles turn, and the chance one point defense shot kills one.</summary>
+    public const double MissileTurnRadPerS = 1.5, PointDefenseKillChance = 0.15;
+
+    /// <summary>Far from the player: chance a missile hits, and that it gets past each point defense of its target.</summary>
+    public const double FarMissileHitChance = 0.8, FarMissilePastPointDefense = 0.5;
+
+    /// <summary>Raids with this many ships bring a missile raider.</summary>
+    public const int MissileRaidShips = 4;
 
     /// <summary>How far from the gate raiders arrive, and how long a raid lasts at most.</summary>
     public const double RaidArriveM = 12_000, RaidDurationS = 600;
@@ -76,6 +90,10 @@ public sealed partial class SectorState
 
     private const long RaiderShellsKg = 200;
 
+    /// <summary>Larger raids bring one of these: a raider with a missile launcher instead of a gun (#87).</summary>
+    public static ShipDesign MissileRaiderDesign { get; } = new("missile_raider", "Missile raider",
+        RaiderDesign.Cells.Select(c => c.PartId == "autocannon" ? c with { PartId = "missile_launcher" } : c));
+
     /// <summary>Is this craft one of the player's (not a raider's, living or wrecked)?</summary>
     public static bool IsPlayers(CraftState craft) => craft.FactionId == 0;
 
@@ -90,20 +108,21 @@ public sealed partial class SectorState
     {
         if (Parts is null || ships < 1) return;
         var rng = new DeterministicRandom(Seed ^ ((ulong)faction.Id * 0xC2B2AE3D27D4EB4FUL) ^ (ulong)Tick);
-        var stats = RaiderDesign.ComputeStats(Parts);
         // From the side away from the planet the gate orbits, so nothing is in the way.
         var (body, _) = NearestBody(gate.Position);
         var outward = gate.Position - GetPosition(body.Id);
         var bearing = Math.Atan2(outward.Y, outward.X) + rng.Range(-0.6, 0.6);
         for (var i = 0; i < ships; i++)
         {
+            var design = ships >= MissileRaidShips && i == ships - 1 ? MissileRaiderDesign : RaiderDesign;
+            var stats = design.ComputeStats(Parts);
             var angle = bearing + (i - (ships - 1) / 2.0) * 0.02;
             var position = gate.Position + new Vector2D(Math.Cos(angle), Math.Sin(angle)) * RaidArriveM;
-            var raider = new CraftState(AllocateCraftId(), $"{faction.Name} raider {i + 1}", RaiderDesign, stats, position, Math.Atan2(-Math.Cos(angle), Math.Sin(angle)))
+            var raider = new CraftState(AllocateCraftId(), $"{faction.Name} raider {i + 1}", design, stats, position, Math.Atan2(-Math.Cos(angle), Math.Sin(angle)))
             {
                 FactionId = faction.Id, Velocity = gate.Velocity,
             };
-            raider.Inventory.Add(ShellMaterial, RaiderShellsKg);
+            raider.Inventory.Add(design == RaiderDesign ? ShellMaterial : MissileMaterial, RaiderShellsKg);
             AddCraft(raider);
             DiscoveredKg += (long)Math.Round(stats.TotalMassKg) + RaiderShellsKg; // from outside: the mass ledger stays balanced
         }
@@ -172,7 +191,8 @@ public sealed partial class SectorState
         if (_beams.Count > 0) _beams.RemoveAll(b => b.Tick < Tick - 3);
         if (Tick % FixedStepClock.TicksPerSecond == 0) StepRaids();
         StepMagazines();
-        if (_raiders.Count > 0 && Parts is not null)
+        StepShields(); // #90
+        if ((_raiders.Count > 0 || _shots.Count > 0) && Parts is not null)
         {
             var count = _crafts.Count; // wrecks stay in the list, so it doesn't change here
             for (var i = 0; i < count; i++) FireWeapons(_crafts[i], endS);
@@ -191,6 +211,7 @@ public sealed partial class SectorState
         {
             if (mount.Weapon.NeedsArmedGates && IsPlayers(craft) && !LawActive(Laws.ArmedGates)) continue;
             if (craft.IsWreck) return;
+            if (!far && mount.Weapon.PointDefense && FirePointDefense(craft, mount, rng)) continue;
             var weapon = mount.Weapon;
             if (far)
             {
@@ -201,8 +222,13 @@ public sealed partial class SectorState
                 {
                     if (PickTarget(craft, mount, endS) is not { } target || !PayForShot(craft, weapon)) break;
                     if (weapon.Kind == WeaponKind.Gun && rng.NextDouble() >= FarGunHitChance) continue;
-                    var cell = (int)(rng.NextUInt64() % (ulong)target.Design.Cells.Count);
-                    HitCell(target, cell, ShotDamage(craft, mount, target));
+                    if (weapon.Kind == WeaponKind.Missile)
+                    {
+                        var chance = FarMissileHitChance;
+                        foreach (var m in target.Stats.WeaponList) if (m.Weapon.PointDefense && !target.HoldFire) chance *= FarMissilePastPointDefense;
+                        if (rng.NextDouble() >= chance) continue;
+                    }
+                    HitCell(target, FarHitCell(target, rng), ShotDamage(craft, mount, target));
                 }
                 continue;
             }
@@ -215,6 +241,17 @@ public sealed partial class SectorState
                 var (cell, at) = NearestCell(aim, muzzle);
                 _beams.Add(new Beam(Tick, muzzle, at, craft.FactionId));
                 HitCell(aim, cell, ShotDamage(craft, mount, aim));
+                continue;
+            }
+            if (weapon.Kind == WeaponKind.Missile)
+            {
+                var ahead = (aim.Position - muzzle) * (1 / Math.Max((aim.Position - muzzle).Length, 1e-9));
+                _shots.Add(new Shot
+                {
+                    Position = muzzle, Velocity = aim.Velocity + ahead * weapon.ShotSpeedMps, SpeedMps = weapon.ShotSpeedMps,
+                    ExpireTick = Tick + (long)Math.Ceiling(1.4 * weapon.RangeM / weapon.ShotSpeedMps * FixedStepClock.TicksPerSecond),
+                    Damage = weapon.DamagePerShot * mount.Health, FactionId = craft.FactionId, IsMissile = true, TargetId = aim.Id,
+                });
                 continue;
             }
             // Lead the target, with a little scatter.
@@ -231,6 +268,37 @@ public sealed partial class SectorState
                 Damage = weapon.DamagePerShot * mount.Health, FactionId = craft.FactionId,
             });
         }
+    }
+
+    /// <summary>Shoots at the nearest enemy missile in reach (#87). True if it did, or is waiting to fire again at one.</summary>
+    private bool FirePointDefense(CraftState craft, WeaponMount mount, DeterministicRandom rng)
+    {
+        var muzzle = MountPosition(craft, mount);
+        Shot? nearest = null;
+        var distance = mount.Weapon.RangeM;
+        foreach (var shot in _shots)
+        {
+            if (!shot.IsMissile || (shot.FactionId == 0) == IsPlayers(craft)) continue;
+            var d = shot.Position.DistanceTo(muzzle);
+            if (d < distance && InArc(craft, mount, shot.Position - muzzle)) { distance = d; nearest = shot; }
+        }
+        if (nearest is null) return false;
+        if (craft.WeaponReadyTicks.GetValueOrDefault(mount.Pos) > Tick || !PayForShot(craft, mount.Weapon)) return true;
+        craft.WeaponReadyTicks[mount.Pos] = Tick + Math.Max(1, (long)Math.Round(mount.Weapon.IntervalS * FixedStepClock.TicksPerSecond));
+        _beams.Add(new Beam(Tick, muzzle, nearest.Position, craft.FactionId));
+        if (rng.NextDouble() < PointDefenseKillChance * mount.Health) _shots.Remove(nearest);
+        return true;
+    }
+
+    /// <summary>Where a hit lands in a fight resolved far away: armour takes most of them, if there's enough of it (#87).</summary>
+    private int FarHitCell(CraftState target, DeterministicRandom rng)
+    {
+        var cells = target.Design.Cells;
+        var any = (int)(rng.NextUInt64() % (ulong)cells.Count);
+        if (target.Stats.ArmourCount == 0 || rng.NextDouble() >= Math.Min(0.8, 3.0 * target.Stats.ArmourCount / cells.Count)) return any;
+        for (var i = 0; i < cells.Count; i++) // the next armour plate from there
+            if (Parts!.Get(cells[(any + i) % cells.Count].PartId).IsArmour) return (any + i) % cells.Count;
+        return any;
     }
 
     /// <summary>The craft's chosen target if this weapon can hit it, else the nearest enemy it can.</summary>
@@ -318,6 +386,7 @@ public sealed partial class SectorState
         {
             var shot = _shots[s];
             var from = shot.Position;
+            if (shot.IsMissile) SteerMissile(shot);
             var to = from + shot.Velocity * FixedStepClock.TickSeconds;
             shot.Position = to;
             CraftState? hit = null;
@@ -344,11 +413,25 @@ public sealed partial class SectorState
         }
     }
 
+    /// <summary>Turns a missile towards its target, keeping its speed relative to it; without a target it flies straight on.</summary>
+    private void SteerMissile(Shot missile)
+    {
+        if (!_craftsById.TryGetValue(missile.TargetId, out var target) || !CanBeShot(target)) return;
+        var relative = missile.Velocity - target.Velocity;
+        var to = target.Position - missile.Position;
+        var heading = Math.Atan2(relative.Y, relative.X);
+        var most = MissileTurnRadPerS * FixedStepClock.TickSeconds;
+        heading += Math.Clamp(FlightModel.WrapAngle(Math.Atan2(to.Y, to.X) - heading), -most, most);
+        missile.Velocity = target.Velocity + new Vector2D(Math.Cos(heading), Math.Sin(heading)) * missile.SpeedMps;
+    }
+
     // --- Being hit ---
 
     private void HitCell(CraftState craft, int cellIndex, double damage)
     {
         if (craft.IsWreck || Parts is null || cellIndex >= craft.Design.Cells.Count) return;
+        damage = AbsorbWithShield(craft, damage); // #90
+        if (damage <= 0) return;
         var cell = craft.Design.Cells[cellIndex];
         damage /= Math.Max(1, Parts.Get(cell.PartId).Toughness);
         var health = craft.HealthList.GetValueOrDefault(cell.Pos, 1) - damage;
@@ -385,6 +468,7 @@ public sealed partial class SectorState
         craft.JumpRequestTick = 0;
         craft.RequestsList.Clear();
         craft.WeaponReadyTicks.Clear();
+        craft.ShieldCharge = 0;
         ReleaseClaim(craft);
         craft.DockedToCraftId = CraftId.None;
         foreach (var ship in _crafts)
@@ -409,21 +493,24 @@ public sealed partial class SectorState
 
     // --- Ammunition ---
 
-    /// <summary>Armed ships docked at a station take on shells once a second, until every gun's magazine is full.</summary>
+    /// <summary>Armed ships docked at a station take on shells and missiles once a second, until every magazine is full.</summary>
     private void StepMagazines()
     {
         if (Tick % FixedStepClock.TicksPerSecond != 0) return;
         foreach (var craft in _crafts)
         {
             if (!craft.IsDocked || craft.Stats.WeaponList.Count == 0 || !_craftsById.TryGetValue(craft.DockedToCraftId, out var station)) continue;
-            long wanted = 0;
-            foreach (var mount in craft.Stats.WeaponList)
-                if (mount.Weapon is { AmmoKgPerShot: > 0, AmmoMaterial: ShellMaterial }) wanted += MagazineKg;
-            var kg = Math.Min(Math.Min(wanted - craft.Inventory[ShellMaterial], craft.FreeCargoKg), station.Inventory[ShellMaterial]);
-            if (kg > 0) TryTransfer(station.Id, craft.Id, ShellMaterial, kg);
+            foreach (var material in new[] { ShellMaterial, MissileMaterial })
+            {
+                long wanted = 0;
+                foreach (var mount in craft.Stats.WeaponList)
+                    if (mount.Weapon.AmmoKgPerShot > 0 && mount.Weapon.AmmoMaterial == material) wanted += MagazineKg;
+                var kg = Math.Min(Math.Min(wanted - craft.Inventory[material], craft.FreeCargoKg), station.Inventory[material]);
+                if (kg > 0) TryTransfer(station.Id, craft.Id, material, kg);
+            }
         }
     }
 
-    /// <summary>Shells an armed ship keeps aboard per gun.</summary>
+    /// <summary>Shells or missiles an armed ship keeps aboard per gun or launcher.</summary>
     public const long MagazineKg = 400;
 }

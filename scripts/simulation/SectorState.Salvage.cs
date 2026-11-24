@@ -124,7 +124,7 @@ public sealed partial class SectorState
 
     /// <summary>What a salvager delivers: everything but its own fuel, food and water (and shells, if it's armed).</summary>
     private static IEnumerable<string> Salvaged(CraftState craft) => craft.Inventory.Kg.Keys.Where(m =>
-        m is not (FuelMaterial or FoodMaterial or WaterMaterial) && !(m == ShellMaterial && craft.Stats.WeaponList.Count > 0));
+        m is not (FuelMaterial or FoodMaterial or WaterMaterial) && !(m is ShellMaterial or MissileMaterial && craft.Stats.WeaponList.Count > 0));
 
     /// <summary>The nearest wreck it can finish, in this system first, then in others it can reach; not those on the ground.</summary>
     private CraftState? PickWreck(CraftState craft)

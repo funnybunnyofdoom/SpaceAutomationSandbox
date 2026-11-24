@@ -10,6 +10,8 @@ public enum WeaponKind
     Gun,
     /// <summary>Hits at once; power only, weaker with distance.</summary>
     Laser,
+    /// <summary>Fires missiles that steer to their target; point defense can shoot them down (#87).</summary>
+    Missile,
 }
 
 /// <summary>What a weapon part does (#85), from data/parts/parts.json.</summary>
@@ -35,11 +37,15 @@ public sealed record WeaponDefinition
     /// <summary>Only fires with the Armed gates law (gate defense batteries, #36).</summary>
     public bool NeedsArmedGates { get; init; }
 
+    /// <summary>Shoots down enemy missiles first, and only then fires at craft (#87).</summary>
+    public bool PointDefense { get; init; }
+
     public void Validate(string partId, MaterialCatalog materials)
     {
         if (!(RangeM > 0) || !(DamagePerShot > 0) || !(IntervalS > 0) || !(EnergyKJPerShot >= 0) || !(ArcDeg > 0) || ArcDeg > 360 || AmmoKgPerShot < 0)
             throw new FormatException($"Weapon '{partId}' has an invalid stat.");
-        if (Kind == WeaponKind.Gun && !(ShotSpeedMps > 0)) throw new FormatException($"Gun '{partId}' needs shotSpeedMps.");
+        if (Kind != WeaponKind.Laser && !(ShotSpeedMps > 0)) throw new FormatException($"Weapon '{partId}' needs shotSpeedMps.");
+        if (PointDefense && Kind != WeaponKind.Laser) throw new FormatException($"Point defense '{partId}' must be a laser.");
         if (AmmoKgPerShot > 0 && (AmmoMaterial is null || !materials.Contains(AmmoMaterial)))
             throw new FormatException($"Weapon '{partId}' fires unknown material '{AmmoMaterial}'.");
     }

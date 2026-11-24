@@ -218,6 +218,13 @@ public sealed class CraftState
     /// <summary>The player's order not to fire. Saved.</summary>
     public bool HoldFire { get; set; }
 
+    /// <summary>Charge in its shield (#90), and the tick it was last hit. Saved.</summary>
+    public double ShieldCharge { get; internal set; }
+    public long ShieldHitTick { get; internal set; } = -1_000_000;
+
+    /// <summary>The shield is collapsing for lack of power (or crew). Not saved.</summary>
+    public bool ShieldPowerless { get; internal set; }
+
     /// <summary>Work done on the part being cut (or not yet a whole kg loaded), kg (#86). Saved.</summary>
     internal double SalvageProgressKg { get; set; }
 

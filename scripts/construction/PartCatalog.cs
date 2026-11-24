@@ -89,6 +89,13 @@ public sealed record PartDefinition
     /// <summary>How many ordinary parts' worth of weapon damage it takes (#84); 1 for an ordinary part.</summary>
     public double Toughness { get; init; } = 1;
 
+    /// <summary>Armour (#87): in a fight resolved far away, hits land on it before the parts behind it.</summary>
+    public bool IsArmour { get; init; }
+
+    /// <summary>Weapon damage a shield generator's charge takes (#90), in ordinary parts' worth, and how fast it recharges.</summary>
+    public double ShieldCapacity { get; init; }
+    public double ShieldRechargePerS { get; init; }
+
     /// <summary>How fast a salvage arm loads and cuts up wrecks (#86), kg per second.</summary>
     public double SalvageRateKgPerS { get; init; }
 
@@ -147,7 +154,7 @@ public sealed class PartCatalog
             if (part.ThrustN < 0 || part.CargoCapacityKg < 0 || part.EnergyCapacityKJ < 0 || part.MiningRateKgPerS < 0
                 || part.FabricationRateKgPerS < 0 || part.RefiningRateKgPerS < 0
                 || part.PowerUseKW < 0 || part.PowerGenerationKW < 0 || part.EjectionRateKgPerS < 0
-                || part.CrewCapacity < 0 || part.FoodRateKgPerS < 0 || part.RobotCount < 0 || part.SalvageRateKgPerS < 0 || part.RepairRateKgPerS < 0 || part.ResearchRatePerS < 0)
+                || part.CrewCapacity < 0 || part.FoodRateKgPerS < 0 || part.RobotCount < 0 || part.SalvageRateKgPerS < 0 || part.ShieldCapacity < 0 || part.ShieldRechargePerS < 0 || part.RepairRateKgPerS < 0 || part.ResearchRatePerS < 0)
                 throw new FormatException($"Part '{part.Id}' has a negative stat.");
             ValidateMaterials(part, materials);
             ValidateGenerator(part, materials);

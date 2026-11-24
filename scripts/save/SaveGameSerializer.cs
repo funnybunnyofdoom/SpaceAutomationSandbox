@@ -46,11 +46,11 @@ public static class SaveGameSerializer
     /// (removed craft's ids are never reused, and jobs may still name them); v18 added warp gates and
     /// further star systems (their bodies are ordinary bodies; gates record their link and queue); v19
     /// added research (points, techs done; older saves have everything unlocked) and star types; v20 added
-    /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids); v22 added salvage jobs (#86).
+    /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids); v22 added salvage jobs (#86); v23 added missiles (#87) and shields (#90).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 22;
+    public const int SchemaVersion = 23;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -92,7 +92,7 @@ public static class SaveGameSerializer
                 Laws = sector.ActiveLaws.Count > 0 ? sector.ActiveLaws.ToList() : null,
                 Events = sector.Events.Count > 0 ? sector.Events.Select(e => new EventDto { Tick = e.Tick, Text = e.Text }).ToList() : null,
                 Shots = sector.Shots.Count > 0
-                    ? sector.Shots.Select(s => new ShotDto { Position = Vec(s.Position), Velocity = Vec(s.Velocity), ExpireTick = s.ExpireTick, Damage = s.Damage, FactionId = s.FactionId }).ToList()
+                    ? sector.Shots.Select(s => new ShotDto { Position = Vec(s.Position), Velocity = Vec(s.Velocity), ExpireTick = s.ExpireTick, Damage = s.Damage, FactionId = s.FactionId, IsMissile = s.IsMissile, TargetId = s.TargetId.Value, SpeedMps = s.SpeedMps }).ToList()
                     : null,
                 NextSwarmId = sector.NextSwarmId > 1 ? sector.NextSwarmId : 0,
                 Swarms = sector.Swarms.Count > 0
@@ -182,6 +182,8 @@ public static class SaveGameSerializer
                     IsWreck = c.IsWreck,
                     HoldFire = c.HoldFire,
                     SalvageProgressKg = c.SalvageProgressKg,
+                    ShieldCharge = c.ShieldCharge,
+                    ShieldHitTick = c.ShieldHitTick >= 0 ? c.ShieldHitTick : null,
                     WeaponReady = c.WeaponReadyTicks.Any(w => w.Value > sector.Tick)
                         ? c.WeaponReadyTicks.Where(w => w.Value > sector.Tick).OrderBy(w => w.Key.Y).ThenBy(w => w.Key.X)
                             .Select(w => new WeaponReadyDto { X = w.Key.X, Y = w.Key.Y, Tick = w.Value }).ToList()
@@ -359,6 +361,9 @@ public static class SaveGameSerializer
                 craft.HoldFire = c.HoldFire;
                 if (!(c.SalvageProgressKg >= 0)) throw new FormatException($"Craft {c.Id} has invalid salvage progress.");
                 craft.SalvageProgressKg = c.SalvageProgressKg;
+                if (!(c.ShieldCharge >= 0)) throw new FormatException($"Craft {c.Id} has an invalid shield charge.");
+                craft.ShieldCharge = c.ShieldCharge;
+                if (c.ShieldHitTick is { } hitTick) craft.ShieldHitTick = hitTick;
                 foreach (var w in c.WeaponReady ?? new List<WeaponReadyDto>()) craft.WeaponReadyTicks[new GridPos(w.X, w.Y)] = w.Tick;
                 craft.CruiseFuelRemainderKg = c.CruiseFuelRemainderKg;
                 foreach (var (m, kg) in c.PropellantDebtKg ?? new SortedDictionary<string, double>()) // #80
@@ -457,7 +462,7 @@ public static class SaveGameSerializer
             foreach (var s in dto.Shots ?? new List<ShotDto>())
             {
                 if (!(s.Damage >= 0)) throw new FormatException("A shot has invalid damage.");
-                sector.RestoreShot(new Shot { Position = ToVec(s.Position, "shot position"), Velocity = ToVec(s.Velocity, "shot velocity"), ExpireTick = s.ExpireTick, Damage = s.Damage, FactionId = s.FactionId });
+                sector.RestoreShot(new Shot { Position = ToVec(s.Position, "shot position"), Velocity = ToVec(s.Velocity, "shot velocity"), ExpireTick = s.ExpireTick, Damage = s.Damage, FactionId = s.FactionId, IsMissile = s.IsMissile, TargetId = new CraftId(s.TargetId), SpeedMps = s.SpeedMps });
             }
 
             // Links between crafts, after every craft exists.
@@ -858,6 +863,13 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double SalvageProgressKg { get; set; }
 
+        /// <summary>v23: shields (#90).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double ShieldCharge { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public long? ShieldHitTick { get; set; }
+
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<WeaponReadyDto>? WeaponReady { get; set; }
 
@@ -1023,6 +1035,16 @@ public static class SaveGameSerializer
         public long ExpireTick { get; set; }
         public double Damage { get; set; }
         public int FactionId { get; set; }
+
+        /// <summary>v23: missiles (#87).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsMissile { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint TargetId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double SpeedMps { get; set; }
     }
 
     private sealed class WeaponReadyDto

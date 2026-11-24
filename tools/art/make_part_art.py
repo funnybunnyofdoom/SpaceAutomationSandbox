@@ -346,6 +346,39 @@ def repair_drones(a):
     return b, d
 
 
+def armour_plate(a):
+    b, d = panel(), Img()
+    d.rect(1, 1, 14, 14, a); d.outline(1, 1, 14, 14, shade(a, 1.4)); d.outline(3, 3, 12, 12, shade(a, 0.7))
+    d.rect(4, 4, 11, 11, shade(a, 0.85))
+    for x, y in ((2, 2), (13, 2), (2, 13), (13, 13), (7, 2), (7, 13)): d.set(x, y, HILITE)
+    for i in range(5): d.set(5 + i, 9 - i, shade(a, 1.25))
+    return b, d
+
+
+def missile_launcher(a):
+    b, d = panel(), Img()
+    d.rect(3, 2, 12, 13, DARK); d.outline(3, 2, 12, 13, OUT)
+    for x in (4, 7, 10):  # three tubes, noses forward
+        d.rect(x, 4, x + 1, 12, shade(a, 0.6)); d.set(x, 4, a); d.set(x + 1, 4, a); d.set(x, 3, shade(a, 1.5)); d.set(x + 1, 3, shade(a, 1.5))
+    return b, d
+
+
+def point_defense(a):
+    b, d = panel(), Img()
+    d.disc(8, 8, 4.5, DARK); d.ring(8, 8, 3.4, 4.5, shade(a, 0.6)); d.disc(8, 8, 2.2, a)
+    for x, y in ((8, 2), (13, 8), (8, 13), (2, 8)):  # short barrels all round
+        d.set(x, y, HILITE); d.set(x - 1, y, HILITE)
+    d.set(7, 7, shade(a, 1.6))
+    return b, d
+
+
+def shield_generator(a):
+    b, d = panel(), Img()
+    d.ring(8, 8, 5.2, 6.4, shade(a, 0.7)); d.ring(8, 8, 3.4, 4.2, a); d.disc(8, 8, 2, shade(a, 1.4))
+    for x, y in ((8, 1), (14, 8), (8, 14), (1, 8)): d.set(x, y, shade(a, 1.6)); d.set(x - 1 if x > 1 else x, y, shade(a, 1.3))
+    return b, d
+
+
 def research_lab(a):
     b, d = panel(), Img()
     for y in range(4, 10):  # a dish, open to the front
@@ -506,7 +539,8 @@ DRAW = {
     "solar_panel_mk2": lambda a: solar(a, 2), "solar_panel_mk3": lambda a: solar(a, 3),
     "battery_mk2": lambda a: battery(a, 2), "refinery_mk2": lambda a: refinery(a, 2),
     "fabricator_mk2": lambda a: fabricator(a, 2), "warp_gate": warp_gate, "gate_defense": gate_defense,
-    "salvage_arm": salvage_arm, "repair_drones": repair_drones,
+    "armour_plate": armour_plate, "missile_launcher": missile_launcher, "point_defense": point_defense,
+    "shield_generator": shield_generator, "salvage_arm": salvage_arm, "repair_drones": repair_drones,
     "autocannon": autocannon, "laser": laser,
     "research_lab": research_lab,
     "fuel_generator": fuel_generator,

@@ -27,6 +27,10 @@
     { "id": "fusion_power", "name": "Fusion power", "cost": 300, "requires": ["nuclear_physics", "superconductors"], "parts": ["fusion_reactor", "isotope_separator"],
       "description": "Fusion reactors: 10 MW from deuterium, which isotope separators pull out of water (slowly, on spare power)." },
     { "id": "ship_weapons", "name": "Ship weapons", "cost": 60, "requires": [], "parts": ["autocannon", "laser"],
-      "description": "Autocannons (shells made from metal, on request) and lasers (power only)." }
+      "description": "Autocannons (shells made from metal, on request) and lasers (power only)." },
+    { "id": "defenses", "name": "Armour and missiles", "cost": 80, "requires": ["ship_weapons"], "parts": ["armour_plate", "missile_launcher", "point_defense"],
+      "description": "Armour plates, missiles that steer, and point defense that shoots them down." },
+    { "id": "shields", "name": "Shields", "cost": 140, "requires": ["defenses", "dense_batteries"], "parts": ["shield_generator"],
+      "description": "Shield generators: a bubble that takes weapon damage before the parts do, for power." }
   ]
 }
