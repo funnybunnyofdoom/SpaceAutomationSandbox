@@ -57,10 +57,32 @@ public sealed partial class SectorState
             craft.InShadow = craft.Stats.PowerGenerationKW > 0 && InShadowAt(craft.Position);
             craft.SolarFactor = craft.Stats.PowerGenerationKW > 0 ? SolarFactorAt(craft.Position) * (craft.InShadow ? ShadowLight : 1) : 1;
             craft.SolarKJThisTick = craft.Stats.PowerGenerationKW * craft.SolarFactor * FixedStepClock.TickSeconds;
-            root.EnergyPoolKJ += craft.StoredEnergyKJ + craft.SolarKJThisTick;
+            craft.GeothermalKJThisTick = craft.Stats.GeothermalKW > 0 && GeothermalHeat(craft) is null
+                ? craft.Stats.GeothermalKW * FixedStepClock.TickSeconds : 0; // #77: steady while on a hot spot or near the star
+            root.EnergyPoolKJ += craft.StoredEnergyKJ + craft.SolarKJThisTick + craft.GeothermalKJThisTick;
             root.NetworkStartKJ += craft.StoredEnergyKJ;
             root.NetworkCapacityKJ += craft.Stats.EnergyCapacityKJ;
         }
+    }
+
+    /// <summary>Bodies this close to their star (sunlight at least this many times Home's) are hot all over (#77).</summary>
+    public const double HotSunlightFactor = 2.0;
+
+    /// <summary>A body near enough its star that geothermal taps work anywhere on it (#77).</summary>
+    public bool IsHotBody(CelestialBodyState body) =>
+        body.Kind is BodyKind.Planet or BodyKind.Moon or BodyKind.Asteroid && SolarFactorAt(GetPosition(body.Id)) >= HotSunlightFactor;
+
+    /// <summary>
+    /// Why a craft's geothermal taps give nothing (#77), or null when they work: anchored on a hot surface site,
+    /// or on any body close enough to its star.
+    /// </summary>
+    public string? GeothermalHeat(CraftState craft)
+    {
+        if (!craft.IsLanded || !craft.IsAnchored) return "needs to be anchored on a surface";
+        var body = GetBody(craft.LandedOnBodyId);
+        if (IsHotBody(body)) return null;
+        if (SiteUnder(craft) is { IsHot: true }) return null;
+        return $"no heat here: needs a hot spot (survey shows them) or a body nearer its star";
     }
 
     /// <summary>Share of sunlight that still reaches a craft in a body's shadow (#76: dimmed, not dark; the creator's choice).</summary>
@@ -215,6 +237,7 @@ public sealed partial class SectorState
         foreach (var craft in _crafts)
         {
             if (craft.Stats.EjectionRateKgPerS <= 0 || !Operational(craft)) continue;
+            if (craft.Inventory[SpentFuelMaterial] > 0) { EjectSpentFuel(craft); continue; } // spent fuel first, none kept (#79)
             var surplus = craft.Inventory["slag"] - SlagReserveKg;
             if (surplus <= 0) { craft.EjectionRemainderKg = 0; continue; }
             if (!TryUsePower(craft, craft.Stats.EjectorPowerKW * FixedStepClock.TickSeconds)) continue;
@@ -231,6 +254,19 @@ public sealed partial class SectorState
     /// Ends the tick's power (#75): generators top the batteries up if there's room (so they run only on demand),
     /// then each network's energy is shared out to its members' batteries in proportion to their capacity.
     /// </summary>
+    /// <summary>What reactors leave (#79): it piles up in stock until shipped away or thrown out by a slag ejector.</summary>
+    public const string SpentFuelMaterial = "spent_fuel";
+
+    private void EjectSpentFuel(CraftState craft)
+    {
+        if (!TryUsePower(craft, craft.Stats.EjectorPowerKW * FixedStepClock.TickSeconds)) return;
+        var due = craft.EjectionRemainderKg + craft.Stats.EjectionRateKgPerS * FixedStepClock.TickSeconds;
+        var whole = Math.Min((long)Math.Floor(due), craft.Inventory[SpentFuelMaterial]);
+        craft.Inventory.TryRemove(new Dictionary<string, long> { [SpentFuelMaterial] = whole });
+        _ejectedKg[SpentFuelMaterial] = _ejectedKg.GetValueOrDefault(SpentFuelMaterial) + whole;
+        craft.EjectionRemainderKg = due - Math.Floor(due);
+    }
+
     private void EndPowerTick()
     {
         foreach (var root in _crafts)
@@ -241,7 +277,7 @@ public sealed partial class SectorState
             if (capacity > root.EnergyPoolKJ) root.EnergyPoolKJ += Generate(root, capacity - root.EnergyPoolKJ);
             var pool = root.EnergyPoolKJ;
             double made = 0;
-            foreach (var member in root.PowerMembers) made += member.SolarKJThisTick + member.GeneratedKJThisTick;
+            foreach (var member in root.PowerMembers) made += member.SolarKJThisTick + member.GeothermalKJThisTick + member.GeneratedKJThisTick;
             root.NetworkUsedKJThisTick = Math.Max(0, root.NetworkStartKJ + made - pool);
             foreach (var member in root.PowerMembers)
             {
@@ -257,10 +293,11 @@ public sealed partial class SectorState
     {
         if (craft.LegacyFreePower) return "power: unlimited (old save)";
         var stats = craft.Stats;
-        if (stats.EnergyCapacityKJ <= 0 && stats.PowerGenerationKW <= 0 && stats.GeneratorKW <= 0 && stats.TotalPowerUseKW <= 0) return "";
+        if (stats.EnergyCapacityKJ <= 0 && stats.PowerGenerationKW <= 0 && stats.GeneratorKW <= 0 && stats.GeothermalKW <= 0 && stats.TotalPowerUseKW <= 0) return "";
         return $"power {craft.StoredEnergyKJ / 1000:0.0}/{stats.EnergyCapacityKJ / 1000:0} MJ, solar {stats.PowerGenerationKW * craft.SolarFactor:0} kW"
                + (craft.SolarFactor != 1 ? $" ({craft.SolarFactor * 100:0}% sunlight{(craft.InShadow ? ", in shadow" : "")})" : "")
-               + (stats.GeneratorKW > 0 ? $", generators {craft.GeneratedKJThisTick / FixedStepClock.TickSeconds:0}/{stats.GeneratorKW:0} kW" : "") + ", "
+               + (stats.GeneratorKW > 0 ? $", generators {craft.GeneratedKJThisTick / FixedStepClock.TickSeconds:0}/{stats.GeneratorKW:0} kW" : "")
+               + (stats.GeothermalKW > 0 ? $", geothermal {craft.GeothermalKJThisTick / FixedStepClock.TickSeconds:0}/{stats.GeothermalKW:0} kW" : "") + ", "
                + $"max use {stats.TotalPowerUseKW:0} kW" + (craft.PowerShort ? "  NO POWER" : "");
     }
 }

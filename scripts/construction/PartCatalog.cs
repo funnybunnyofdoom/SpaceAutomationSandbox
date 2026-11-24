@@ -59,6 +59,9 @@ public sealed record PartDefinition
     /// <summary>Energy from one batch (kJ).</summary>
     public double GeneratorKJPerBatch { get; init; }
 
+    /// <summary>Power a geothermal tap gives while anchored on a hot surface site or a body close to its star (#77), kW.</summary>
+    public double GeothermalKW { get; init; }
+
     // --- Converters (#78): a part that turns a batch of materials into others using power (e.g. an electrolyser). ---
 
     /// <summary>Most power one converter part uses (kW); it runs only on spare power (#78).</summary>

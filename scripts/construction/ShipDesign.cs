@@ -106,7 +106,8 @@ public sealed record ShipStats(
     double LabPowerKW = 0,
     int GateDefenseCount = 0,
     IReadOnlyList<GeneratorStats>? Generators = null,
-    IReadOnlyList<ConverterStats>? Converters = null)
+    IReadOnlyList<ConverterStats>? Converters = null,
+    double GeothermalKW = 0)
 {
     /// <summary>Converters by part type (#78); empty if none.</summary>
     public IReadOnlyList<ConverterStats> ConverterList => Converters ?? Array.Empty<ConverterStats>();
@@ -188,7 +189,7 @@ public sealed class ShipDesign
 
     private static bool IsStationFacility(PartDefinition p) =>
         p.FabricationRateKgPerS > 0 || p.IsDockingPort || p.CargoCapacityKg > 0 || p.RefiningRateKgPerS > 0
-        || p.CrewCapacity > 0 || p.FoodRateKgPerS > 0 || p.IsWarpGate || p.ResearchRatePerS > 0 || p.IsGateDefense || p.GeneratorKW > 0 || p.ConverterKW > 0;
+        || p.CrewCapacity > 0 || p.FoodRateKgPerS > 0 || p.IsWarpGate || p.ResearchRatePerS > 0 || p.IsGateDefense || p.GeneratorKW > 0 || p.ConverterKW > 0 || p.GeothermalKW > 0;
 
     /// <summary>Human-readable problems for the given role; empty means the design is usable in that role.</summary>
     /// <param name="requireConnected">
@@ -275,6 +276,7 @@ public sealed class ShipDesign
         var defenses = 0;
         var generatorKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         var converterKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
+        double geothermal = 0;
         double research = 0, labPower = 0;
         var crew = 0;
         int clamps = 0, foundations = 0;
@@ -327,6 +329,7 @@ public sealed class ShipDesign
             if (part.IsGateDefense) defenses++;
             if (part.GeneratorKW > 0) generatorKW[part.Id] = generatorKW.GetValueOrDefault(part.Id) + part.GeneratorKW * h; // #75
             if (part.ConverterKW > 0) converterKW[part.Id] = converterKW.GetValueOrDefault(part.Id) + part.ConverterKW * h; // #78
+            geothermal += part.GeothermalKW * h; // #77
             if (part.IsAnchorClamp) clamps++;
             if (part.IsFoundation) foundations++;
             if (part.IsDockingPort) ports.Add(new DockingPortInfo(cell.Pos, cell.Rotation));
@@ -352,7 +355,8 @@ public sealed class ShipDesign
             reverse, left, right, reversePower, leftPower, rightPower, crew, food, habitatPower, farmPower,
             (int)Math.Floor(robots + 1e-9), robotPower, gates, research, labPower, defenses,
             generatorKW.Count == 0 ? null : generatorKW.Select(g => GeneratorStats.From(catalog.Get(g.Key), g.Value)).ToList(),
-            converterKW.Count == 0 ? null : converterKW.Select(c => ConverterStats.From(catalog.Get(c.Key), c.Value)).ToList());
+            converterKW.Count == 0 ? null : converterKW.Select(c => ConverterStats.From(catalog.Get(c.Key), c.Value)).ToList(),
+            geothermal);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

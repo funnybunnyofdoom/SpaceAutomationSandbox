@@ -351,6 +351,24 @@ def fuel_cell(a):
     return b, d
 
 
+def geothermal_tap(a):
+    b, d = panel(), Img()
+    d.rect(4, 2, 11, 8, shade(a, 0.5)); d.outline(4, 2, 11, 8, OUT)  # heat exchanger housing
+    for y in (4, 6): d.hline(5, 10, y, RIVET)
+    d.rect(7, 9, 8, 13, DARK); d.vline(7, 9, 13, SHADOW)  # bore pipe down into the ground
+    d.rect(3, 13, 12, 14, a); d.hline(5, 10, 14, (255, 200, 90, 255))  # glowing heat at the bottom
+    return b, d
+
+
+def reactor(a):
+    b, d = panel(), Img()
+    d.disc(8, 8, 6.2, shade(a, 0.45)); d.ring(8, 8, 5.2, 6.2, OUT)  # containment dome
+    d.disc(8, 8, 3.0, a); d.disc(8, 8, 1.6, (235, 255, 180, 255))  # core glow
+    for x, y in ((8, 2), (8, 13), (2, 8), (13, 8)): d.set(x, y, RIVET)  # coolant ports
+    d.set(5, 5, shade(a, 1.4))
+    return b, d
+
+
 DRAW = {
     "hull": hull, "cockpit": cockpit, "thruster": thruster, "battery": battery, "solar_panel": solar,
     "cargo": cargo, "drill": drill, "fabricator": fabricator, "anchor_clamp": anchor_clamp,
@@ -364,6 +382,7 @@ DRAW = {
     "research_lab": research_lab,
     "fuel_generator": fuel_generator,
     "electrolyser": electrolyser, "fuel_cell": fuel_cell,
+    "geothermal_tap": geothermal_tap, "reactor": reactor,
 }
 
 

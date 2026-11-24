@@ -16,6 +16,8 @@
       "description": "Refineries that work twice as fast." },
     { "id": "advanced_fabrication", "name": "Advanced fabrication", "cost": 120, "requires": ["industrial_refining"], "parts": ["fabricator_mk2"],
       "description": "Fabricators that build twice as fast." },
+    { "id": "nuclear_physics", "name": "Nuclear physics", "cost": 150, "requires": ["industrial_refining"], "parts": ["reactor"],
+      "description": "Fission reactors: 2 MW from fuel rods made of uranium ore. They leave spent fuel, which a slag ejector can throw out." },
     { "id": "warp_theory", "name": "Warp theory", "cost": 200, "requires": ["automation", "photovoltaics"], "parts": ["warp_gate", "gate_defense"],
       "description": "Warp gates: the way to other star systems." },
     { "id": "superconductors", "name": "Superconductors", "cost": 300, "requires": ["warp_theory", "improved_engines"], "parts": ["thruster_mk3", "drill_mk3", "solar_panel_mk3"],

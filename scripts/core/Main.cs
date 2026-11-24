@@ -1144,7 +1144,8 @@ public partial class Main : Node2D
         var ore = !site.Surveyed ? "unsurveyed"
             : site.DepositsKg.Count == 0 ? "no ore" + (body.BulkKg > 0 ? $" (bulk {body.BulkMaterialId})" : "")
             : string.Join(", ", site.DepositsKg.Select(kv => $"{kv.Key} {kv.Value / 1000.0:0.#} t"));
-        return $"site {site.Name}: {ore}";
+        return $"site {site.Name}: {ore}" + (site.Surveyed && site.IsHot ? " - geothermal hot spot" : "")
+               + (_sector.IsHotBody(body) ? $" ({body.Name} is hot all over: near its star)" : "");
     }
 
     private static string FormatDistance(double metres) =>
@@ -1254,7 +1255,8 @@ public partial class Main : Node2D
             var (cs, cc) = Mathf.SinCos((float)site.CentreRad);
             var at = centre + new Vector2(cc, cs) * (radiusPx + 22);
             if (!view.HasPoint(at)) continue;
-            var ore = !site.Surveyed ? "?" : site.DepositsKg.Count == 0 ? "no ore" : string.Join(", ", site.DepositsKg.Keys.Select(k => k.Replace("_ore", "")));
+            var ore = !site.Surveyed ? "?" : (site.DepositsKg.Count == 0 ? "no ore" : string.Join(", ", site.DepositsKg.Keys.Select(k => k.Replace("_ore", ""))))
+                                              + (site.IsHot ? ", HOT" : ""); // geothermal hot spot (#77)
             DrawString(ThemeDB.FallbackFont, at - new Vector2(20, 0), $"{SurfaceSite.Letter(site.Index)}: {ore}",
                 HorizontalAlignment.Left, -1, 12, site.Surveyed ? SiteLabelColor : SiteUnknownColor);
         }

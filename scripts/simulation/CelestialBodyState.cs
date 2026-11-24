@@ -70,7 +70,20 @@ public sealed class CelestialBodyState
             var count = SurfaceSite.SiteCount(RadiusFromMass(OriginalMassKg, densityKgPerM3));
             for (var i = 0; i < count; i++) _sites.Add(new SurfaceSite(i, count, name));
             SurfaceSite.Distribute(_sites, id, _deposits);
+            SurfaceSite.PickHotSpots(_sites, id, kind); // geothermal hot spots (#77)
         }
+    }
+
+    /// <summary>
+    /// Adds an ore deposit to a freshly generated body (#79): part of its existing mass becomes that ore, so the
+    /// mass doesn't change. Spread over its sites by the usual rule. Generation only, before anything is mined.
+    /// </summary>
+    internal void AddDeposit(string material, long kg)
+    {
+        if (kg <= 0 || _deposits.Values.Sum() + kg > MassKg) return;
+        _deposits[material] = _deposits.GetValueOrDefault(material) + kg;
+        foreach (var site in _sites) site.Deposits.Remove(material);
+        SurfaceSite.Distribute(_sites, Id, new Dictionary<string, long> { [material] = _deposits[material] });
     }
 
     // --- Surface sites (#70) ---

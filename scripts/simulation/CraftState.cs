@@ -92,6 +92,9 @@ public sealed class CraftState
     /// <summary>Energy this craft's converters used this tick (kJ), for the power panel. Not saved.</summary>
     public double ConvertedKJThisTick { get; internal set; }
 
+    /// <summary>Geothermal energy this craft's taps made this tick (kJ, #77). Not saved.</summary>
+    public double GeothermalKJThisTick { get; internal set; }
+
     /// <summary>Solar energy this craft made this tick (kJ). Not saved.</summary>
     public double SolarKJThisTick { get; internal set; }
 

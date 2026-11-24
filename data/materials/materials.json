@@ -16,6 +16,9 @@
     { "id": "exotic_ore",  "name": "Exotic ore",  "placeholderColor": "#d05fd9" },
     { "id": "superconductors", "name": "Superconductors", "placeholderColor": "#7fe0e6" },
     { "id": "hydrogen",    "name": "Hydrogen",    "placeholderColor": "#e8f4ff" },
-    { "id": "oxygen",      "name": "Oxygen",      "placeholderColor": "#9fd8ff" }
+    { "id": "oxygen",      "name": "Oxygen",      "placeholderColor": "#9fd8ff" },
+    { "id": "uranium_ore", "name": "Uranium ore", "placeholderColor": "#7fbf3f" },
+    { "id": "fuel_rods",   "name": "Fuel rods",   "placeholderColor": "#b8f060" },
+    { "id": "spent_fuel",  "name": "Spent fuel",  "placeholderColor": "#5f6f3f" }
   ]
 }

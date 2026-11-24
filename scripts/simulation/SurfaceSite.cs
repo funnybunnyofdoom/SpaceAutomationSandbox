@@ -28,6 +28,9 @@ public sealed class SurfaceSite
 
     public bool Surveyed { get; internal set; }
 
+    /// <summary>A geothermal hot spot (#77): a tap anchored here gives power. Fixed by the body's id (not saved).</summary>
+    public bool IsHot { get; internal set; }
+
     internal readonly SortedDictionary<string, long> Deposits = new(StringComparer.Ordinal);
 
     /// <summary>Ore left at this site, whole kg by material.</summary>
@@ -59,6 +62,19 @@ public sealed class SurfaceSite
 
     /// <summary>Share of a body's sites that hold each ore (at least one).</summary>
     public const double OreShare = 0.35;
+
+    /// <summary>Share of a planet's or moon's sites that are hot spots (#77); a planet has at least one. Asteroids are cold.</summary>
+    public const double HotShare = 0.2;
+
+    /// <summary>Picks the hot spots of a planet or moon by a fixed rule from its id, so saves and new games agree.</summary>
+    public static void PickHotSpots(IReadOnlyList<SurfaceSite> sites, BodyId bodyId, BodyKind kind)
+    {
+        if (kind is not (BodyKind.Planet or BodyKind.Moon) || sites.Count == 0) return;
+        var rng = new DeterministicRandom((ulong)bodyId.Value * 0xD1B54A32D192ED03UL ^ 0x4E4154EUL);
+        var any = false;
+        foreach (var site in sites) any |= site.IsHot = rng.NextDouble() < HotShare;
+        if (!any && kind == BodyKind.Planet) sites[(int)(rng.NextUInt64() % (ulong)sites.Count)].IsHot = true;
+    }
 
     public static int SiteCount(double radiusM) =>
         Math.Clamp((int)Math.Round(2 * Math.PI * radiusM / TargetArcM), MinSites, MaxSites);

@@ -91,7 +91,7 @@ public static class SectorGenerator
         // The rest of the system orbits the star.
         Body(sector, "Cinder", BodyKind.Planet, system.Range(3_000, 4_000), PlanetDensityKgPerM3, true,
             AroundStar(star.Id, system.Range(240_000, 260_000), homePhase + system.Range(-0.3, 0.3)),
-            new Dictionary<string, long> { ["iron_ore"] = 2_000_000, ["copper_ore"] = 1_000_000 });
+            new Dictionary<string, long> { ["iron_ore"] = 2_000_000, ["copper_ore"] = 1_000_000, ["uranium_ore"] = UraniumAtHomeKg }); // rare: only here at home (#79)
 
         for (var i = 1; i <= BeltAsteroidCount; i++)
         {
@@ -116,6 +116,9 @@ public static class SectorGenerator
 
         return sector;
     }
+
+    /// <summary>Uranium ore on Cinder, the only uranium in the home system (#79): enough to start nuclear power.</summary>
+    public const long UraniumAtHomeKg = 400_000;
 
     // --- Further star systems (#54) ---
 
@@ -157,6 +160,9 @@ public static class SectorGenerator
                 ["copper_ore"] = 1_500_000 + 500_000 * (long)rng.Range(0, 4),
                 ["silicate"] = 1_000_000 + 500_000 * (long)rng.Range(0, 4),
             });
+        // Uranium (#79) on the inner planet of about two systems in three, from its own roll so the rest of the system is unchanged.
+        var uranium = new DeterministicRandom(sector.Seed ^ (0x5552414EUL * (ulong)index));
+        if (uranium.NextDouble() < 0.65) first.AddDeposit("uranium_ore", 500_000 + 100_000 * (long)(uranium.NextDouble() * 5));
         var moonDeposits = new Dictionary<string, long> { ["iron_ore"] = 1_000_000, ["silicate"] = 800_000 };
         if (exotic) moonDeposits["exotic_ore"] = 300_000 + 100_000 * (long)rng.Range(0, 4);
         AddBody(sector, rng, first.Id, $"{name} I-a", BodyKind.Moon, MoonDensityKgPerM3, 900, 1_400, 15_000, 25_000, 1_000, 1_800, true,
