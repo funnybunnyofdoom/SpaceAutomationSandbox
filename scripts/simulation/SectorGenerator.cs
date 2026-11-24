@@ -185,6 +185,8 @@ public static class SectorGenerator
                 orbit with { PeriodS = SlowPeriod(orbit.RadiusM) },
                 new Dictionary<string, long> { ["iron_ore"] = 100_000 + 20_000 * (long)rng.Range(0, 10), ["copper_ore"] = 80_000 });
         }
+        // Native life (#91), from its own rolls, so the rest of the system is unchanged.
+        foreach (var planet in sector.Bodies.Where(b => b.Orbit?.Parent == star.Id && b.Kind == BodyKind.Planet).ToList()) SectorState.MaybeAddLife(sector, star, planet);
         return (star, first);
     }
 

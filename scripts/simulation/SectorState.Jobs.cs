@@ -34,7 +34,8 @@ public sealed partial class SectorState
     {
         var craft = GetCraft(craftId);
         if (craft.Stats.TotalThrustN <= 0) return new(false, $"{craft.Name} can't fly.");
-        if (craft.Stats.MiningRateKgPerS <= 0) return new(false, $"{craft.Name} has no drill.");
+        if (job.MaterialId == BiomassMaterial ? craft.Stats.HarvestRateKgPerS <= 0 : craft.Stats.MiningRateKgPerS <= 0)
+            return new(false, $"{craft.Name} has no {(job.MaterialId == BiomassMaterial ? "harvester" : "drill")}.");
         if (craft.Stats.CargoCapacityKg <= 0) return new(false, $"{craft.Name} has no cargo bay.");
         if (craft.Stats.AnchorClampCount <= 0) return new(false, $"{craft.Name} has no anchor clamp (needed to mine).");
         if (!_byId.TryGetValue(job.SourceBodyId, out var source) || !source.IsMineable)
@@ -304,7 +305,7 @@ public sealed partial class SectorState
             var spacing = MiningSpotSpacingM / Math.Max(body.RadiusM, 1);
             // Into the site first (keeping room for the nudge), then apart by craft id: miners arriving
             // from outside the site would otherwise all get the same edge spot.
-            if (MiningSite(body, job.MaterialId, bearing) is { } site) bearing = site.Clamp(bearing, 4 * spacing);
+            if (MiningSite(body, job.MaterialId, bearing, LawActive(Laws.ProtectLife), JobLeavesCover) is { } site) bearing = site.Clamp(bearing, 4 * spacing);
             job.SpotBearingRad = FlightModel.WrapAngle(bearing + nudge * spacing);
         }
         var angle = job.SpotBearingRad.Value;
@@ -316,7 +317,10 @@ public sealed partial class SectorState
 
     /// <summary>Why a mining job has nothing to mine: none left anywhere, or none in the surveyed sites (#70).</summary>
     private string NothingToMine(CelestialBodyState source, string material) =>
-        LawForbidsMining(source) ?? (material == source.BulkMaterialId && !BulkMiningAllowed && source.SurveyedDeposit(material, false) == 0
+        LawForbidsMining(source) ?? (LawActive(Laws.ProtectLife) && source.SurveyedDeposit(material, BulkMiningAllowed) > 0 && MineableSurveyed(source, material) == 0
+            ? $"law: native life on {source.Name} is protected (Protect native life)"
+            : material == BiomassMaterial ? source.HasLife ? $"the plants on {source.Name}'s surveyed sites need to grow back" : $"{source.Name} has no native plants"
+            : material == source.BulkMaterialId && !BulkMiningAllowed && source.SurveyedDeposit(material, false) == 0
             ? $"law: no bulk {material} mining (No planet dismantling)"
             : source.Deposit(material) > 0 ? $"no surveyed site on {source.Name} has {material}: fly over more of it" : $"{source.Name} has no {material} left");
 
@@ -324,14 +328,14 @@ public sealed partial class SectorState
     /// The surveyed site nearest a bearing where the material can be mined (#70): one holding its ore,
     /// or for the body's bulk (rock or ice) any surveyed site. Null if there's none.
     /// </summary>
-    public static SurfaceSite? MiningSite(CelestialBodyState body, string material, double nearBearingRad)
+    public static SurfaceSite? MiningSite(CelestialBodyState body, string material, double nearBearingRad, bool spareLiving = false, double leaveCover = 0)
     {
         SurfaceSite? best = null;
         var bestGap = double.MaxValue;
         foreach (var site in body.Sites)
         {
-            if (!site.Surveyed) continue;
-            var ok = site.DepositsKg.GetValueOrDefault(material) > 0 || (material == body.BulkMaterialId && body.BulkKg > 0);
+            if (!site.Surveyed || (spareLiving && site.Flora > 0)) continue;
+            var ok = material == BiomassMaterial ? body.BiomassKg(site, leaveCover) > 0 : site.DepositsKg.GetValueOrDefault(material) > 0 || (material == body.BulkMaterialId && body.BulkKg > 0);
             if (!ok) continue;
             var gap = Math.Abs(Math.IEEERemainder(nearBearingRad - site.CentreRad, 2 * Math.PI)) - site.WidthRad / 2;
             if (gap < bestGap) { best = site; bestGap = gap; }

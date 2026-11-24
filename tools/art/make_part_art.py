@@ -379,6 +379,16 @@ def shield_generator(a):
     return b, d
 
 
+def harvester(a):
+    b, d = panel(), Img()
+    d.rect(2, 1, 13, 4, DARK); d.hline(2, 13, 1, OUT)
+    for x in range(2, 14, 2):  # cutting teeth along the front
+        d.set(x, 1, HILITE); d.set(x, 2, a); d.set(x + 1, 3, shade(a, 0.7))
+    d.rect(4, 6, 11, 12, shade(a, 0.6)); d.outline(4, 6, 11, 12, OUT)
+    for x, y in ((5, 8), (7, 7), (9, 9), (6, 10), (10, 11), (8, 11)): d.set(x, y, shade(a, 1.4))
+    return b, d
+
+
 def research_lab(a):
     b, d = panel(), Img()
     for y in range(4, 10):  # a dish, open to the front
@@ -539,7 +549,7 @@ DRAW = {
     "solar_panel_mk2": lambda a: solar(a, 2), "solar_panel_mk3": lambda a: solar(a, 3),
     "battery_mk2": lambda a: battery(a, 2), "refinery_mk2": lambda a: refinery(a, 2),
     "fabricator_mk2": lambda a: fabricator(a, 2), "warp_gate": warp_gate, "gate_defense": gate_defense,
-    "armour_plate": armour_plate, "missile_launcher": missile_launcher, "point_defense": point_defense,
+    "harvester": harvester, "armour_plate": armour_plate, "missile_launcher": missile_launcher, "point_defense": point_defense,
     "shield_generator": shield_generator, "salvage_arm": salvage_arm, "repair_drones": repair_drones,
     "autocannon": autocannon, "laser": laser,
     "research_lab": research_lab,

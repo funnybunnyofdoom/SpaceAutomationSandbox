@@ -21,11 +21,13 @@ public sealed partial class SectorState
     /// <summary>What a craft would mine right now: its job's material, else the first ore at its site, else the bulk.</summary>
     public string? MiningMaterial(CraftState craft)
     {
-        if (!craft.IsAnchored || !craft.IsLanded || craft.Stats.MiningRateKgPerS <= 0) return null;
+        if (!craft.IsAnchored || !craft.IsLanded || (craft.Stats.MiningRateKgPerS <= 0 && craft.Stats.HarvestRateKgPerS <= 0)) return null;
         var body = GetBody(craft.LandedOnBodyId);
         var bearing = LandedBearing(craft);
         if (LawForbidsMining(body) is not null) return null; // the laws in force (#36)
         if (craft.Job is MiningJob { Active: true } job) return MineableAt(body, job.MaterialId, bearing) > 0 ? job.MaterialId : null;
+        if (LifeProtected(body.SiteAt(bearing))) return null; // the law protects its plants (#91)
+        if (craft.Stats.MiningRateKgPerS <= 0) return body.BiomassKg(body.SiteAt(bearing)) > 0 ? BiomassMaterial : null; // only a harvester (#92)
         // By hand: the ore at this site first (#70), then the body's bulk (#27) if the laws allow it.
         return body.SiteAt(bearing)?.DepositsKg.Keys.FirstOrDefault() ?? (body.BulkKg > 0 && BulkMiningAllowed ? body.BulkMaterialId : null);
     }
@@ -36,16 +38,17 @@ public sealed partial class SectorState
         {
             var material = MiningMaterial(craft);
             if (material is null || craft.FreeCargoKg <= 0 || !Operational(craft)) continue;
-            if (!TryUsePower(craft, craft.Stats.DrillPowerKW * FixedStepClock.TickSeconds)) continue; // drill idle without power
+            if (!TryUsePower(craft, (material == BiomassMaterial ? craft.Stats.HarvestPowerKW : craft.Stats.DrillPowerKW) * FixedStepClock.TickSeconds)) continue; // drill idle without power
 
-            var drilled = craft.MiningRemainderKg + craft.Stats.MiningRateKgPerS * Tuning.DrillRateMultiplier * FixedStepClock.TickSeconds;
+            var drilled = craft.MiningRemainderKg + ExtractionRateKgPerS(craft, material) * Tuning.DrillRateMultiplier * FixedStepClock.TickSeconds;
             var whole = (long)Math.Floor(drilled);
             var body = GetBody(craft.LandedOnBodyId);
             var bearing = LandedBearing(craft);
             var taken = body.Extract(material, Math.Min(whole, craft.FreeCargoKg), bearing, BulkMiningAllowed); // from the site under the drill (#70)
             craft.Inventory.Add(material, taken);
             NoteMining(body, taken); // a grievance in a claimed system (#36)
-            body.Dig(bearing, taken); // a crater where it digs (#28)
+            NoteExtraction(body, material, bearing, taken); // native life (#92)
+            if (material != BiomassMaterial) body.Dig(bearing, taken); // a crater where it digs (#28)
             // Keep the unfinished fraction only while the drill can continue; a full hold or an
             // empty deposit stops the drill, and partly-cut material stays in the rock.
             craft.MiningRemainderKg = taken == whole ? drilled - whole : 0;

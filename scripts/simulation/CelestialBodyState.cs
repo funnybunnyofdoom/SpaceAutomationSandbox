@@ -86,6 +86,25 @@ public sealed class CelestialBodyState
         SurfaceSite.Distribute(_sites, Id, new Dictionary<string, long> { [material] = _deposits[material] });
     }
 
+    // --- Native life (#91, #92) ---
+
+    /// <summary>Biomass standing on a fully covered site.</summary>
+    public const double FullFloraKg = 500_000;
+
+    /// <summary>Native plants live here now. Saved.</summary>
+    public bool HasLife { get; internal set; }
+
+    /// <summary>How its plants trouble machines; whether the player has found and sampled them. Saved.</summary>
+    public FloraHazard FloraHazard { get; internal set; }
+    public bool LifeFound { get; internal set; }
+    public bool LifeSampled { get; internal set; }
+
+    internal IReadOnlyList<SurfaceSite> SiteList => _sites;
+
+    /// <summary>Biomass that can be harvested at a site, leaving this much cover standing. Biomass is part of the body's bulk.</summary>
+    public long BiomassKg(SurfaceSite? site, double leaveCover = 0) =>
+        site is null ? 0 : Math.Min(BulkKg, (long)Math.Floor(Math.Max(0, site.Flora - leaveCover) * FullFloraKg));
+
     // --- Surface sites (#70) ---
 
     private readonly List<SurfaceSite> _sites = new();
@@ -101,12 +120,25 @@ public sealed class CelestialBodyState
     public bool AnySiteSurveyed => !IsMineable || _sites.Any(s => s.Surveyed);
 
     /// <summary>Kg of a material in the surveyed sites (what jobs can count on), plus the bulk if it's the bulk material.</summary>
-    public long SurveyedDeposit(string materialId, bool allowBulk = true) =>
-        _sites.Where(s => s.Surveyed).Sum(s => s.Deposits.GetValueOrDefault(materialId)) + (allowBulk && materialId == BulkMaterialId ? BulkKg : 0);
+    /// <param name="spareLiving">Leave out sites with native plants (the Protect native life law, #91).</param>
+    /// <param name="leaveCover">For biomass: cover to leave standing.</param>
+    public long SurveyedDeposit(string materialId, bool allowBulk = true, bool spareLiving = false, double leaveCover = 0)
+    {
+        long kg = 0;
+        var any = false;
+        foreach (var site in _sites)
+        {
+            if (!site.Surveyed || (spareLiving && site.Flora > 0)) continue;
+            any = true;
+            kg += materialId == SectorState.BiomassMaterial ? BiomassKg(site, leaveCover) : site.Deposits.GetValueOrDefault(materialId);
+        }
+        // Bulk belongs to the whole body: a surveyed site to dig it at is enough (or any, as before, without the law).
+        return kg + (allowBulk && materialId == BulkMaterialId && (any || !spareLiving) ? BulkKg : 0);
+    }
 
     /// <summary>Kg of a material that can be mined at a bearing: that site's deposit, plus the bulk if it's the bulk material.</summary>
     public long DepositAt(string materialId, double bearingRad, bool allowBulk = true) =>
-        (SiteAt(bearingRad)?.Deposits.GetValueOrDefault(materialId) ?? 0) + (allowBulk && materialId == BulkMaterialId ? BulkKg : 0);
+        materialId == SectorState.BiomassMaterial ? BiomassKg(SiteAt(bearingRad)) : (SiteAt(bearingRad)?.Deposits.GetValueOrDefault(materialId) ?? 0) + (allowBulk && materialId == BulkMaterialId ? BulkKg : 0);
 
     /// <summary>Restores saved sites: their surveyed flags and deposits. The deposits must add up to the body's.</summary>
     internal void RestoreSites(IReadOnlyList<(bool Surveyed, IReadOnlyDictionary<string, long> DepositsKg)> saved)
@@ -157,7 +189,7 @@ public sealed class CelestialBodyState
 
     /// <summary>Everything that can be mined here now: the deposits and the bulk (A–Z).</summary>
     public IReadOnlyList<string> MineableMaterials =>
-        (BulkKg > 0 ? _deposits.Keys.Append(BulkMaterialId) : _deposits.Keys).Distinct().OrderBy(m => m, StringComparer.Ordinal).ToList();
+        (BulkKg > 0 ? _deposits.Keys.Append(BulkMaterialId) : _deposits.Keys).Concat(HasLife ? new[] { SectorState.BiomassMaterial } : Array.Empty<string>()).Distinct().OrderBy(m => m, StringComparer.Ordinal).ToList();
 
     /// <summary>True when nothing is left to mine and only the remnant remains.</summary>
     public bool MinedOut => IsDismantlable && _deposits.Count == 0 && BulkKg == 0;
@@ -169,6 +201,7 @@ public sealed class CelestialBodyState
 
     /// <summary>Kg of a material that can be mined here: its deposit, plus the bulk if it's the bulk material (#27).</summary>
     public long Deposit(string materialId) =>
+        materialId == SectorState.BiomassMaterial ? _sites.Sum(s => BiomassKg(s)) :
         (_deposits.TryGetValue(materialId, out var kg) ? kg : 0) + (materialId == BulkMaterialId ? BulkKg : 0);
 
     /// <summary>Removes up to <paramref name="kg"/> of a material from anywhere: the sites in order, then the bulk (tests and scenarios).</summary>
@@ -200,6 +233,13 @@ public sealed class CelestialBodyState
         var taken = Math.Min(kg, DepositAt(materialId, bearingRad, allowBulk));
         if (taken <= 0) return 0;
         var site = SiteAt(bearingRad);
+        if (materialId == SectorState.BiomassMaterial) // plants: off the cover and out of the bulk (#92)
+        {
+            site!.Flora = Math.Max(0, site.Flora - taken / FullFloraKg);
+            if (site.Flora < SectorState.FloraGone) site.Flora = 0;
+            MassKg -= taken;
+            return taken;
+        }
         var had = site?.Deposits.GetValueOrDefault(materialId) ?? 0;
         var fromDeposit = Math.Min(taken, had);
         if (fromDeposit > 0)

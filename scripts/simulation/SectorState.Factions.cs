@@ -85,11 +85,13 @@ public sealed partial class SectorState
 
     /// <summary>Kg of a material that may be mined at a bearing, under the laws in force.</summary>
     public long MineableAt(CelestialBodyState body, string material, double bearing) =>
-        LawForbidsMining(body) is null ? body.DepositAt(material, bearing, BulkMiningAllowed) : 0;
+        LawForbidsMining(body) is not null || LifeProtected(body.SiteAt(bearing)) ? 0 // native life protected (#91)
+            : material == BiomassMaterial ? body.BiomassKg(body.SiteAt(bearing), JobLeavesCover)
+            : body.DepositAt(material, bearing, BulkMiningAllowed);
 
     /// <summary>Kg of a material in the surveyed sites that may be mined, under the laws in force.</summary>
     public long MineableSurveyed(CelestialBodyState body, string material) =>
-        LawForbidsMining(body) is null ? body.SurveyedDeposit(material, BulkMiningAllowed) : 0;
+        LawForbidsMining(body) is null ? body.SurveyedDeposit(material, BulkMiningAllowed, LawActive(Laws.ProtectLife), JobLeavesCover) : 0;
 
     // --- Meeting civilizations ---
 

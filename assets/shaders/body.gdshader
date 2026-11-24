@@ -27,6 +27,10 @@ uniform int site_count = 0;
 uniform vec4 site_ore[MAX_SITES];   // colour; a = 1 when surveyed with ore
 uniform vec4 site_ore2[MAX_SITES];  // second colour (the same if there is only one)
 
+uniform bool has_flora = false;      // native plants (#92)
+uniform float site_flora[MAX_SITES]; // cover 0..1
+uniform vec3 flora_color = vec3(0.3, 0.6, 0.25);
+
 varying vec2 at_px;
 
 void vertex() {
@@ -93,6 +97,15 @@ float vein_at(vec2 p) {
 vec3 solid(vec2 p, vec2 cell) {
 	vec3 bulk = base_color * ground(p);
 	vec3 col = bulk;
+
+	// Native plants (#92): patches over the ground, thicker where a site's cover is higher, blending between sites.
+	if (has_flora && site_count > 0) {
+		float at = clamp((atan(p.y, p.x) + PI) / TAU, 0.0, 0.99999) * float(site_count) - 0.5;
+		int low = (int(floor(at)) + site_count) % site_count;
+		float cover = mix(site_flora[low], site_flora[(low + 1) % site_count], fract(at));
+		float grown = patches(p / 420.0) * 0.55 + patches(p / 90.0 + 7.0) * 0.45;
+		if (cover > 0.0 && grown + (bayer(cell) - 0.5) * 0.1 < 0.2 + 0.6 * cover) col = mix(col, flora_color * ground(p), 0.8);
+	}
 
 	// Ore veins near the rim of surveyed sites (#74). Unsurveyed ground shows nothing.
 	if (site_count > 0) {

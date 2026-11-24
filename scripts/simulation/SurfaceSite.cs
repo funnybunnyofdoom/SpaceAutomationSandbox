@@ -31,6 +31,9 @@ public sealed class SurfaceSite
     /// <summary>A geothermal hot spot (#77): a tap anchored here gives power. Fixed by the body's id (not saved).</summary>
     public bool IsHot { get; internal set; }
 
+    /// <summary>How much of the site its native plants cover, 0..1 (#92). Saved.</summary>
+    public double Flora { get; internal set; }
+
     internal readonly SortedDictionary<string, long> Deposits = new(StringComparer.Ordinal);
 
     /// <summary>Ore left at this site, whole kg by material.</summary>

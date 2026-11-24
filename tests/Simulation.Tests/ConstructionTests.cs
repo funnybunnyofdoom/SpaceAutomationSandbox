@@ -16,7 +16,7 @@ public class ConstructionTests
         {
             "anchor_clamp", "armour_plate", "autocannon", "battery", "battery_mk2", "cargo", "cockpit", "docking_port", "drill", "drill_mk2", "drill_mk3", "electrolyser",
             "fabricator", "fabricator_mk2", "farm", "foundation", "fuel_cell", "fuel_generator", "fusion_reactor", "gate_defense", "geothermal_tap",
-            "habitat", "heat_collector", "hull", "ion_drive", "isotope_separator", "laser", "methalox_rocket", "methane_generator", "missile_launcher", "nuclear_rocket", "point_defense",
+            "habitat", "harvester", "heat_collector", "hull", "ion_drive", "isotope_separator", "laser", "methalox_rocket", "methane_generator", "missile_launcher", "nuclear_rocket", "point_defense",
             "reactor", "refinery", "refinery_mk2", "repair_drones", "research_lab", "robot_bay", "rocket", "salvage_arm", "shield_generator", "slag_ejector", "solar_array", "solar_panel",
             "solar_panel_mk2", "solar_panel_mk3", "storage_silo", "thruster", "thruster_mk2", "thruster_mk3", "warp_gate",
         }, ids);

@@ -264,6 +264,7 @@ public partial class Main
         foreach (var site in body.Sites)
         {
             hash.Add(site.Surveyed);
+            hash.Add((int)(site.Flora * 64));
             if (!site.Surveyed) continue;
             var (first, second) = TopOres(site);
             hash.Add(first);
@@ -282,6 +283,11 @@ public partial class Main
         }
         visual.Material.SetShaderParameter("site_count", Mathf.Min(body.Sites.Count, ShaderSites));
         visual.Material.SetShaderParameter("site_ore", ore);
+        var flora = new float[ShaderSites]; // native plants (#92)
+        for (var i = 0; i < Mathf.Min(body.Sites.Count, ShaderSites); i++) flora[i] = (float)body.Sites[i].Flora;
+        visual.Material.SetShaderParameter("has_flora", body.HasLife);
+        visual.Material.SetShaderParameter("site_flora", flora);
+        visual.Material.SetShaderParameter("flora_color", Rgb(Color.FromHsv(0.2f + 0.3f * BodyVariation(body.Id, 6), 0.55f, 0.55f)));
         visual.Material.SetShaderParameter("site_ore2", ore2);
 
         Vector4 OreVector(string material)
@@ -374,7 +380,8 @@ public partial class Main
             var labelAt = centre + new Vector2(cc, cs) * (radiusPx + 22);
             if (!view.HasPoint(labelAt)) continue;
             var ore = !site.Surveyed ? "?" : (site.DepositsKg.Count == 0 ? "no ore" : string.Join(", ", site.DepositsKg.Keys.Select(k => k.Replace("_ore", ""))))
-                                              + (site.IsHot ? ", HOT" : ""); // geothermal hot spot (#77)
+                                              + (site.IsHot ? ", HOT" : "") // geothermal hot spot (#77)
+                                              + (site.Flora > 0 ? $", plants {site.Flora * 100:0}%" : ""); // #92
             DrawString(ThemeDB.FallbackFont, labelAt - new Vector2(20, 0), $"{SurfaceSite.Letter(site.Index)}: {ore}",
                 HorizontalAlignment.Left, -1, 12, site.Surveyed ? SiteLabelColor : SiteUnknownColor);
         }
@@ -410,6 +417,7 @@ public partial class Main
     /// </summary>
     private void SetUpBodyView(string[] args)
     {
+        if (System.Array.IndexOf(args, "--add-life") >= 0) foreach (var b in _sector.Bodies.Where(b => b.IsMineable && b.Kind == BodyKind.Planet)) _sector.DebugAddLife(b.Id); // #92
         if (System.Array.IndexOf(args, "--survey-all") >= 0) _sector.DebugSurveyAll();
         if (args.FirstOrDefault(a => a.StartsWith("--view-body=")) is not { } arg) return;
         var name = arg["--view-body=".Length..];

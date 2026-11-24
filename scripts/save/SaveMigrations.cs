@@ -44,6 +44,7 @@ public static class SaveMigrations
         [22] = ("v23 added missiles and shields: an older save has none", (_, _) => { }),
         [23] = ("v24 added guard, escort and patrol jobs, and civilization patrols: an older save has none (patrols appear after loading)", (_, _) => { }),
         [24] = ("v25 added trade stations, trade routes and goodwill: an older save has none (stations appear after loading)", (_, _) => { }),
+        [25] = ("v26 added native life: no body of an older save has any; systems opened later may", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

@@ -14,6 +14,7 @@ public static class Laws
     public const string NoDismantling = "no_dismantling";
     public const string OrganicCrews = "organic_crews";
     public const string ArmedGates = "armed_gates";
+    public const string ProtectLife = "protect_life";
 
     public static readonly IReadOnlyList<LawDefinition> All = new LawDefinition[]
     {
@@ -21,6 +22,7 @@ public static class Laws
         new(NoDismantling, "No planet dismantling", "No bulk rock or ice mining anywhere: ore deposits only."),
         new(OrganicCrews, "Organic crews only", "Robot bays don't count as crew."),
         new(ArmedGates, "Armed gates", "Gate defense batteries fire at raiders near their gate."),
+        new(ProtectLife, "Protect native life", "No mining or harvesting on sites where native plants grow."),
     };
 
     public static LawDefinition Get(string id) => All.First(l => l.Id == id);
@@ -35,9 +37,9 @@ public sealed record Culture(string Id, string Name, IReadOnlyDictionary<string,
     public static readonly IReadOnlyList<Culture> All = new Culture[]
     {
         new("territorial", "territorial", new Dictionary<string, int> { [Laws.RespectClaims] = 2, [Laws.ArmedGates] = -1 }),
-        new("conservationist", "conservationist", new Dictionary<string, int> { [Laws.NoDismantling] = 2, [Laws.RespectClaims] = 1 }),
+        new("conservationist", "conservationist", new Dictionary<string, int> { [Laws.NoDismantling] = 2, [Laws.RespectClaims] = 1, [Laws.ProtectLife] = 2 }),
         new("purist", "purist", new Dictionary<string, int> { [Laws.OrganicCrews] = 2, [Laws.NoDismantling] = -1 }),
-        new("pacifist", "pacifist", new Dictionary<string, int> { [Laws.ArmedGates] = -2, [Laws.RespectClaims] = 1 }),
+        new("pacifist", "pacifist", new Dictionary<string, int> { [Laws.ArmedGates] = -2, [Laws.RespectClaims] = 1, [Laws.ProtectLife] = 1 }),
         new("militarist", "militarist", new Dictionary<string, int> { [Laws.ArmedGates] = 2, [Laws.OrganicCrews] = -1 }),
     };
 

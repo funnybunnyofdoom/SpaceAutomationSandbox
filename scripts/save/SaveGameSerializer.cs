@@ -47,11 +47,11 @@ public static class SaveGameSerializer
     /// further star systems (their bodies are ordinary bodies; gates record their link and queue); v19
     /// added research (points, techs done; older saves have everything unlocked) and star types; v20 added
     /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids); v22 added salvage jobs (#86); v23 added missiles (#87) and shields (#90); v24 added guard, escort and patrol jobs (#88) and civilization patrols (#89);
-    /// v25 added trade stations, trade routes and diplomacy (#89).
+    /// v25 added trade stations, trade routes and diplomacy (#89); v26 added native life (#91, #92).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 25;
+    public const int SchemaVersion = 26;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -133,10 +133,15 @@ public static class SaveGameSerializer
                         : null,
                     Orbit = b.Orbit is { } o ? OrbitToDto(o) : null,
                     Surveyed = b.Surveyed,
+                    HasLife = b.HasLife,
+                    FloraHazard = b.FloraHazard,
+                    LifeFound = b.LifeFound,
+                    LifeSampled = b.LifeSampled,
                     Sites = b.Sites.Count > 0
                         ? b.Sites.Select(s => new SiteDto
                         {
                             Surveyed = s.Surveyed,
+                            Flora = s.Flora,
                             DepositsKg = s.DepositsKg.Count > 0 ? new SortedDictionary<string, long>(s.DepositsKg.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.Ordinal) : null,
                         }).ToList()
                         : null,
@@ -656,6 +661,16 @@ public static class SaveGameSerializer
                         sector.RestoreSites(new BodyId(b.Id), sites.Select(s => (s.Surveyed, (IReadOnlyDictionary<string, long>)(s.DepositsKg ?? new SortedDictionary<string, long>()))).ToList());
                     }
                     catch (ArgumentException e) { throw new FormatException(e.Message); }
+                    var living = sector.GetBody(new BodyId(b.Id));
+                    living.HasLife = b.HasLife;
+                    living.FloraHazard = b.FloraHazard;
+                    living.LifeFound = b.LifeFound;
+                    living.LifeSampled = b.LifeSampled;
+                    for (var i = 0; i < sites.Count; i++)
+                    {
+                        if (!(sites[i].Flora >= 0 && sites[i].Flora <= 1)) throw new FormatException($"Body {b.Id} has invalid plant cover.");
+                        living.SiteList[i].Flora = sites[i].Flora;
+                    }
                 }
                 else if (b.Surveyed) sector.MarkSurveyed(new BodyId(b.Id));
                 added.Add(b.Id);
@@ -831,11 +846,28 @@ public static class SaveGameSerializer
         /// <summary>v19 (later addition, optional, #70): the rim's sites in order. Older saves: made from the deposits.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<SiteDto>? Sites { get; set; }
+
+        /// <summary>v26: native life (#91).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool HasLife { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public FloraHazard FloraHazard { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool LifeFound { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool LifeSampled { get; set; }
     }
 
     private sealed class SiteDto
     {
         public bool Surveyed { get; set; }
+
+        /// <summary>v26: cover of native plants (#92).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double Flora { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public SortedDictionary<string, long>? DepositsKg { get; set; }

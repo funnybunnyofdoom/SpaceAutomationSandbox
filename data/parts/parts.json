@@ -105,6 +105,7 @@
     { "id": "armour_plate", "name": "Armour plate", "massKg": 2500, "placeholderColor": "#6a7482", "isArmour": true, "toughness": 6, "materialsKg": { "metal": 2100, "composites": 400 } },
     { "id": "missile_launcher", "name": "Missile launcher", "massKg": 2500, "placeholderColor": "#c05a3c", "cargoCapacityKg": 500, "toughness": 2, "weapon": { "kind": "missile", "rangeM": 2500, "damagePerShot": 1.2, "intervalS": 6, "energyKJPerShot": 10, "ammoMaterial": "missiles", "ammoKgPerShot": 25, "shotSpeedMps": 300, "arcDeg": 360 }, "materialsKg": { "metal": 1700, "electronics": 800 } },
     { "id": "point_defense", "name": "Point defense", "massKg": 1200, "placeholderColor": "#6fd0e0", "toughness": 2, "weapon": { "kind": "laser", "rangeM": 450, "damagePerShot": 0.008, "intervalS": 0.2, "energyKJPerShot": 8, "arcDeg": 360, "pointDefense": true }, "materialsKg": { "metal": 600, "electronics": 600 } },
-    { "id": "shield_generator", "name": "Shield generator", "massKg": 4000, "placeholderColor": "#7a8cff", "shieldCapacity": 2, "shieldRechargePerS": 0.1, "powerUseKW": 150, "materialsKg": { "metal": 1800, "electronics": 1700, "composites": 500 } }
+    { "id": "shield_generator", "name": "Shield generator", "massKg": 4000, "placeholderColor": "#7a8cff", "shieldCapacity": 2, "shieldRechargePerS": 0.1, "powerUseKW": 150, "materialsKg": { "metal": 1800, "electronics": 1700, "composites": 500 } },
+    { "id": "harvester", "name": "Harvester", "massKg": 2000, "placeholderColor": "#6fae3c", "harvestRateKgPerS": 50, "powerUseKW": 60, "materialsKg": { "metal": 1600, "electronics": 400 } }
   ]
 }

@@ -10,6 +10,7 @@
     { "id": "make_fuel_rods", "name": "Make fuel rods", "inputsKg": { "uranium_ore": 1000 }, "outputsKg": { "fuel_rods": 50, "slag": 950 } },
     { "id": "make_superconductors", "name": "Make superconductors", "inputsKg": { "exotic_ore": 1000 }, "outputsKg": { "superconductors": 300, "slag": 700 } },
     { "id": "make_shells", "name": "Make shells", "onRequest": true, "inputsKg": { "metal": 100 }, "outputsKg": { "shells": 100 } },
-    { "id": "make_missiles", "name": "Make missiles", "onRequest": true, "inputsKg": { "metal": 70, "electronics": 30 }, "outputsKg": { "missiles": 100 } }
+    { "id": "make_missiles", "name": "Make missiles", "onRequest": true, "inputsKg": { "metal": 70, "electronics": 30 }, "outputsKg": { "missiles": 100 } },
+    { "id": "process_biomass", "name": "Process biomass", "inputsKg": { "biomass": 1000 }, "outputsKg": { "food": 500, "water": 250, "fuel": 100, "slag": 150 } }
   ]
 }

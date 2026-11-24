@@ -129,7 +129,9 @@ public sealed record ShipStats(
     double ShieldCapacity = 0,
     double ShieldRechargePerS = 0,
     double ShieldPowerKW = 0,
-    int ArmourCount = 0)
+    int ArmourCount = 0,
+    double HarvestRateKgPerS = 0,
+    double HarvestPowerKW = 0)
 {
     /// <summary>Weapons, in cell order (#85); empty if none.</summary>
     public IReadOnlyList<WeaponMount> WeaponList => Weapons ?? Array.Empty<WeaponMount>();
@@ -156,7 +158,7 @@ public sealed record ShipStats(
     public int CrewRequired => CellCount <= UncrewedMaxParts ? 0 : (CellCount + PartsPerCrew - 1) / PartsPerCrew;
 
     /// <summary>Everything running at once (full throttle, drilling, refining, building, ejecting), kW.</summary>
-    public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW + HabitatPowerKW + FarmPowerKW + RobotPowerKW + SalvagePowerKW + RepairPowerKW + ShieldPowerKW + LabPowerKW;
+    public double TotalPowerUseKW => ThrustPowerKW + DrillPowerKW + RefineryPowerKW + FabricatorPowerKW + EjectorPowerKW + HabitatPowerKW + FarmPowerKW + RobotPowerKW + SalvagePowerKW + RepairPowerKW + ShieldPowerKW + HarvestPowerKW + LabPowerKW;
 
     /// <summary>Can lock onto a body once landed (clamps release again; foundations never do).</summary>
     public bool CanAnchor => AnchorClampCount > 0 || FoundationCount > 0;
@@ -310,6 +312,7 @@ public sealed class ShipDesign
         double salvage = 0, salvagePower = 0, repair = 0, repairPower = 0;
         double shield = 0, shieldRecharge = 0, shieldPower = 0;
         var armour = 0;
+        double harvest = 0, harvestPower = 0;
         var generatorKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         var converterKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         double geothermal = 0, stellarHeat = 0;
@@ -367,6 +370,8 @@ public sealed class ShipDesign
             else if (part.SalvageRateKgPerS > 0) salvagePower += part.PowerUseKW;
             else if (part.RepairRateKgPerS > 0) repairPower += part.PowerUseKW;
             else if (part.ShieldCapacity > 0) shieldPower += part.PowerUseKW;
+            else if (part.HarvestRateKgPerS > 0) harvestPower += part.PowerUseKW;
+            harvest += part.HarvestRateKgPerS * h; // #92
             shield += part.ShieldCapacity * h; // #90
             shieldRecharge += part.ShieldRechargePerS * h;
             if (part.IsArmour) armour++; // #87
@@ -407,7 +412,7 @@ public sealed class ShipDesign
             converterKW.Count == 0 ? null : converterKW.Select(c => ConverterStats.From(catalog.Get(c.Key), c.Value)).ToList(),
             geothermal,
             drives.Count == 0 ? null : drives.Select(d => PropellantDrive.From(catalog.Get(d.Key.Item1), d.Key.Item2, d.Value)).ToList(),
-            stellarHeat, weapons, salvage, salvagePower, repair, repairPower, shield, shieldRecharge, shieldPower, armour);
+            stellarHeat, weapons, salvage, salvagePower, repair, repairPower, shield, shieldRecharge, shieldPower, armour, harvest, harvestPower);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

@@ -1070,7 +1070,7 @@ public partial class Main : Node2D
                        ? $"AUTOPILOT ({job.Kind} job): {job.Status}   cycles {job.CompletedCycles}, delivered {job.DeliveredKg / 1000.0:0.0} t - {InputActions.Key1(InputActions.Job)} to view/stop\n"
                        : "")
                    + (_sector.MiningMaterial(p) is { } mining && p.FreeCargoKg > 0
-                       ? $"MINING {mining}: {p.Stats.MiningRateKgPerS:0} kg/s, {_sector.GetBody(p.LandedOnBodyId).Deposit(mining) / 1000.0:0.0} t left in {_sector.GetBody(p.LandedOnBodyId).Name}\n"
+                       ? $"MINING {mining}: {_sector.ExtractionRateKgPerS(p, mining):0} kg/s, {_sector.GetBody(p.LandedOnBodyId).Deposit(mining) / 1000.0:0.0} t left in {_sector.GetBody(p.LandedOnBodyId).Name}\n"
                        : "")
                    + (p.IsLanded ? LandedLine(p) : "")
                    + (p.IsDocked
@@ -1175,6 +1175,7 @@ public partial class Main : Node2D
             : site.DepositsKg.Count == 0 ? "no ore" + (body.BulkKg > 0 ? $" (bulk {body.BulkMaterialId})" : "")
             : string.Join(", ", site.DepositsKg.Select(kv => $"{kv.Key} {kv.Value / 1000.0:0.#} t"));
         return $"site {site.Name}: {ore}" + (site.Surveyed && site.IsHot ? " - geothermal hot spot" : "")
+               + (site.Flora > 0 ? $" - native plants {site.Flora * 100:0}%{(body.FloraHazard switch { FloraHazard.Clinging => ", clinging (machines are slower)", FloraHazard.Corrosive => ", corrosive (machines wear)", _ => "" })}" : "") // #92
                + (_sector.IsHotBody(body) ? $" ({body.Name} is hot all over: near its star)" : "");
     }
 

@@ -71,6 +71,7 @@ public sealed partial class SectorState
         if (s.WeaponList.Count > 0) return "its design is armed";
         if (craft.Id == PilotCraftId) return "you are flying it";
         if (craft.Job is not MiningJob { Active: true }) return "it has no mining job";
+        if (craft.Job is MiningJob { MaterialId: BiomassMaterial }) return "harvesters can't swarm";
         if (s.DockingPorts.Count > 0) return "its design has docking ports";
         if (s.CrewRequired > 0 || craft.Crew > 0) return "it has crew";
         if (s.DriveList.Count > 0 || s.GeneratorList.Count > 0 || s.ConverterList.Count > 0) return "its design burns or converts materials";
@@ -206,6 +207,7 @@ public sealed partial class SectorState
         if (!_byId.TryGetValue(sourceId, out var source) || !source.IsMineable) return new(false, "The source must be a mineable body.");
         if (!_craftsById.TryGetValue(destinationId, out var destination) || destination.Stats.DockingPorts.Count == 0 || !IsPlayers(destination))
             return new(false, "The destination must have a docking port.");
+        if (material == BiomassMaterial) return new(false, "Swarms can't harvest plants.");
         if (MineableSurveyed(source, material) <= 0) return new(false, $"Not possible: {NothingToMine(source, material)}.");
         var star = _byId.ContainsKey(swarm.SourceBodyId) ? StarOf(swarm.SourceBodyId)
             : _craftsById.TryGetValue(swarm.DestinationId, out var old) ? StarAt(old.Position) : StarOf(sourceId);
@@ -380,12 +382,13 @@ public sealed partial class SectorState
         var near = FlightModel.WrapAngle((Tick / (60 * FixedStepClock.TicksPerSecond) + swarm.Id.Value) * 2.399963229728653 % (2 * Math.PI));
         for (var guard = 0; whole > 0 && guard <= SurfaceSite.MaxSites; guard++)
         {
-            if (MiningSite(source, swarm.MaterialId, near) is not { } site) break;
+            if (MiningSite(source, swarm.MaterialId, near, LawActive(Laws.ProtectLife)) is not { } site) break;
             var bearing = site.Clamp(near, 0.1 * site.WidthRad);
             var taken = source.Extract(swarm.MaterialId, whole, bearing, BulkMiningAllowed);
             if (taken == 0) break;
             swarm.Inventory.Add(swarm.MaterialId, taken);
             NoteMining(source, taken); // a grievance in a claimed system (#36)
+            HarmLife(source, bearing, taken); // native life (#92)
             source.Dig(bearing, taken);
             whole -= taken;
         }
