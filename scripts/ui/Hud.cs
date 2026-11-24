@@ -30,6 +30,10 @@ public partial class Hud : Control
     private readonly Action _saveSettings;
     private Section _status = null!, _ship = null!, _stations = null!, _target = null!, _goals = null!;
     private PanelContainer _help = null!;
+    private VBoxContainer _left = null!, _bottom = null!;
+
+    /// <summary>How far the HUD reaches from the left edge: side panels keep clear of it (#96).</summary>
+    public float LeftWidth => Visible ? _left.Position.X + Mathf.Max(_left.Size.X, _bottom.Position.X + _bottom.Size.X - _left.Position.X) : 0;
     private Label _helpLabel = null!;
     private Label _hintLabel = null!;
 
@@ -62,32 +66,32 @@ public partial class Hud : Control
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore;
 
-        var left = new VBoxContainer { Position = new Vector2(12, 12), MouseFilter = MouseFilterEnum.Ignore };
-        left.AddThemeConstantOverride("separation", 6);
-        AddChild(left);
+        _left = new VBoxContainer { Position = new Vector2(12, 12), MouseFilter = MouseFilterEnum.Ignore };
+        _left.AddThemeConstantOverride("separation", 6);
+        AddChild(_left);
         _status = new Section(null, this);
         _ship = new Section("Ship", this);
         _stations = new Section("Stations", this);
-        left.AddChild(_status.Panel);
-        left.AddChild(_ship.Panel);
-        left.AddChild(_stations.Panel);
+        _left.AddChild(_status.Panel);
+        _left.AddChild(_ship.Panel);
+        _left.AddChild(_stations.Panel);
         _goals = new Section("Goals", this); // new-player goal list (#65)
-        left.AddChild(_goals.Panel);
+        _left.AddChild(_goals.Panel);
 
         // Bottom left, growing upwards.
-        var bottom = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore, GrowVertical = GrowDirection.Begin };
-        bottom.SetAnchorsPreset(LayoutPreset.BottomLeft);
-        bottom.Position = new Vector2(12, -12);
-        bottom.OffsetLeft = 12;
-        bottom.OffsetBottom = -12;
-        bottom.AddThemeConstantOverride("separation", 6);
-        AddChild(bottom);
+        _bottom = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore, GrowVertical = GrowDirection.Begin };
+        _bottom.SetAnchorsPreset(LayoutPreset.BottomLeft);
+        _bottom.Position = new Vector2(12, -12);
+        _bottom.OffsetLeft = 12;
+        _bottom.OffsetBottom = -12;
+        _bottom.AddThemeConstantOverride("separation", 6);
+        AddChild(_bottom);
         _target = new Section("Target", this);
-        bottom.AddChild(_target.Panel);
+        _bottom.AddChild(_target.Panel);
         _hintLabel = new Label { Modulate = new Color(1, 1, 1, 0.75f) };
         RefreshHint();
         var hint = Panel(_hintLabel);
-        bottom.AddChild(hint);
+        _bottom.AddChild(hint);
 
         _helpLabel = new Label();
         _help = Panel(_helpLabel);
@@ -107,6 +111,13 @@ public partial class Hud : Control
         _stations.Set(sections.Stations);
         _target.Set(sections.Target);
         _goals.Set(sections.Goals);
+        // On a short screen the two columns would meet (#96): the target area gives way, then the goals.
+        var collide = _left.Position.Y + _left.GetCombinedMinimumSize().Y + 6 > Size.Y - 12 - _bottom.GetCombinedMinimumSize().Y;
+        if (collide && Size.Y > 0)
+        {
+            if (sections.Goals.Length > 0) _goals.Set("");
+            if (_left.Position.Y + _left.GetCombinedMinimumSize().Y + 6 > Size.Y - 12 - _bottom.GetCombinedMinimumSize().Y) _target.Set(sections.Target.Split('\n')[0]);
+        }
     }
 
     private static PanelContainer Panel(Control content)
@@ -203,7 +214,7 @@ public partial class Hud : Control
 
             Panels  (they open on the right; {K(InputActions.ClosePanels)} closes them)
                blueprint editor: {K(InputActions.Editor)}      shipyard: {K(InputActions.Shipyard)}      fleet: {K(InputActions.Fleet)}      cargo: {K(InputActions.Cargo)}      job: {K(InputActions.Job)}      map: {K(InputActions.Map)}
-               research: {K(InputActions.Research)}      laws and civilizations: {K(InputActions.Laws)}      power: {K(InputActions.Power)}      native life: {K(InputActions.Life)}      settings: {K(InputActions.Settings)}      debug: {K(InputActions.Debug)}      diagnostics: {K(InputActions.Diagnostics)}      fullscreen: {K(InputActions.Fullscreen)}
+               research: {K(InputActions.Research)}      laws and civilizations: {K(InputActions.Laws)}      power: {K(InputActions.Power)}      native life: {K(InputActions.Life)}      milestones: {K(InputActions.Milestones)}      settings: {K(InputActions.Settings)}      debug: {K(InputActions.Debug)}      diagnostics: {K(InputActions.Diagnostics)}      fullscreen: {K(InputActions.Fullscreen)}
 
             Time and game
                slower: {K(InputActions.TimeSlower)}      faster: {K(InputActions.TimeFaster)}      pause: {K(InputActions.TimePause)}

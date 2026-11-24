@@ -36,6 +36,9 @@ public partial class FleetPanel : PanelContainer
     /// <summary>Raised when the player picks a craft as the piloted ship's target.</summary>
     public event Action<CraftId>? CraftTargeted;
 
+    /// <summary>Raised when something in the game was changed from here.</summary>
+    public event Action? Changed;
+
     /// <summary>Raised by the Swarms button (#30).</summary>
     public event Action? SwarmsChosen;
 
@@ -189,6 +192,17 @@ public partial class FleetPanel : PanelContainer
         var target = new Button { Text = "Target", Disabled = you, FocusMode = FocusModeEnum.None, TooltipText = "Target it: the HUD shows distance and speed, and brake matches its motion" };
         target.Pressed += () => CraftTargeted?.Invoke(id);
         row.AddChild(target);
+        if (_sector().Crafts.FirstOrDefault(c => c.Id == id) is { } gate && SectorState.IsGate(gate) && gate.Stats.GateLockCount > 0) // #95
+        {
+            var shut = new Button { Text = gate.GateClosed ? "Open gate" : "Close gate", FocusMode = FocusModeEnum.None, TooltipText = "A closed gate lets nothing through, either way" };
+            shut.Pressed += () =>
+            {
+                _sector().SetGateClosed(id, !gate.GateClosed);
+                shut.Text = gate.GateClosed ? "Open gate" : "Close gate";
+                Changed?.Invoke();
+            };
+            row.AddChild(shut);
+        }
         return row;
     }
 
@@ -208,6 +222,7 @@ public partial class FleetPanel : PanelContainer
         var distance = pilot is null || pilot == craft ? "" : $", {FormatDistance(pilot.Position.DistanceTo(craft.Position))} away";
         var second = Where(sector, craft);
         if (craft.IsWreck) return $"{craft.Name}  ({craft.Id}, wreck{distance})\n   {second}   adrift with {craft.CargoKg / 1000.0:0.0} t aboard";
+        if (craft.GateClosed) second += "   GATE CLOSED";
         if (craft.BuildQueue.Count > 0) second += $"   building {craft.BuildQueue[0].Fraction * 100:0}%";
         if (craft.PowerShort && !craft.LegacyFreePower) second += "   NO POWER";
         if (craft.CrewShortReason is { } why) second += $"   STOPPED: {why}";

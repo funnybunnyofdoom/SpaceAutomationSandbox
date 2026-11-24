@@ -129,7 +129,8 @@ public sealed partial class SectorState
         }
         faction.RaidGateId = gate.Id;
         faction.RaidEndTick = Tick + (long)(RaidDurationS * FixedStepClock.TicksPerSecond);
-        AddEvent($"{ships} {faction.Name} raiders are attacking {gate.Name}!");
+        faction.Invading = CanInvade(faction, gate) && rng.NextDouble() < InvadeChance; // #95
+        AddEvent($"{ships} {faction.Name} raiders are {(faction.Invading ? "heading for" : "attacking")} {gate.Name}!");
     }
 
     /// <summary>Once a second per raid: is it over?</summary>
@@ -139,8 +140,13 @@ public sealed partial class SectorState
         {
             if (!RaidOn(faction)) continue;
             var gate = _craftsById.GetValueOrDefault(faction.RaidGateId);
+            if (gate is { GateClosed: true } && gate.Stats.GateLockCount == 0) gate.GateClosed = false;
             var alive = _crafts.Where(c => c.FactionId == faction.Id && !c.IsPatrol && !c.IsTradeStation && !c.IsWreck).ToList();
-            if (alive.Count > 0 && gate is not null && IsGate(gate) && !gate.IsWreck && Tick < faction.RaidEndTick) continue;
+            if (alive.Count > 0 && gate is not null && IsGate(gate) && !gate.IsWreck && Tick < faction.RaidEndTick)
+            {
+                if (faction.Invading) StepInvasion(faction, gate, alive); // #95
+                continue;
+            }
             if (gate is not null && IsGate(gate) && !gate.IsWreck)
                 AddEvent(alive.Count == 0 ? $"The {faction.Name} raided {gate.Name}; your defenses drove them off."
                     : $"The {faction.Name} raid on {gate.Name} is over: their raiders withdrew.");
@@ -150,6 +156,7 @@ public sealed partial class SectorState
                 RemoveCraft(raider);
             }
             faction.RaidGateId = CraftId.None;
+            faction.Invading = false;
         }
     }
 
@@ -326,6 +333,7 @@ public sealed partial class SectorState
             var chosen = other.Id == craft.TargetCraftId;
             if (!chosen && d >= bestDistance) continue;
             if (!AreHostile(craft, other)) continue;
+            if (!IsPlayers(craft) && !craft.IsPatrol && FactionById(craft.FactionId) is { Invading: true } invader && other.Id == invader.RaidGateId) continue; // spared: their way through (#95)
             if (!InArc(craft, mount, other.Position - muzzle) || BodyBetween(muzzle, other.Position, endS)) continue;
             if (chosen) return other;
             best = other;

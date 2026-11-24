@@ -113,6 +113,8 @@ public sealed partial class SectorState
 
             var wait = gate.GateReadyTick - Tick;
             if (wait > 0) { next.GateStatus = $"next to jump at {gate.Name} (in {wait * FixedStepClock.TickSeconds:0} s)"; continue; }
+            if (gate.GateClosed && gate.Stats.GateLockCount == 0) gate.GateClosed = false; // its lock was lost
+            if (GateClosedReason(gate) is { } shut) { next.GateStatus = $"waiting: {shut}"; continue; } // #95
             if (!Operational(gate)) { next.GateStatus = $"waiting: {gate.Name} isn't working ({gate.CrewShortReason})"; continue; }
 
             var energy = next.MassKg / 1000 * JumpEnergyKJPerTonne;
@@ -187,7 +189,7 @@ public sealed partial class SectorState
         _gateLinks.Clear();
         foreach (var gate in _crafts)
         {
-            if (!IsGate(gate) || gate.GateLinkId.IsNone || !_craftsById.TryGetValue(gate.GateLinkId, out var far)) continue;
+            if (!IsGate(gate) || gate.GateLinkId.IsNone || GateClosedReason(gate) is not null || !_craftsById.TryGetValue(gate.GateLinkId, out var far)) continue;
             if (StarAt(gate.Position) is not { } from || StarAt(far.Position) is not { } to || from.Id == to.Id) continue;
             _gateLinks.Add((gate, from.Id, to.Id));
         }

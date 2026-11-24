@@ -48,11 +48,12 @@ public static class SaveGameSerializer
     /// added research (points, techs done; older saves have everything unlocked) and star types; v20 added
     /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids); v22 added salvage jobs (#86); v23 added missiles (#87) and shields (#90); v24 added guard, escort and patrol jobs (#88) and civilization patrols (#89);
     /// v25 added trade stations, trade routes and diplomacy (#89); v26 added native life (#91, #92); v27 added
-    /// native animals (#93); v28 added antimatter and quantum drives (#81, #82).
+    /// native animals (#93); v28 added antimatter and quantum drives (#81, #82); v29 added milestones (#38)
+    /// and closable gates (#95).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 28;
+    public const int SchemaVersion = 29;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -90,11 +91,13 @@ public static class SaveGameSerializer
                         Attitude = f.Attitude, Grievance = f.Grievance, NextEventTick = f.NextEventTick, Warned = sector.FactionWarned(f.Id),
                         RaidGateId = f.RaidGateId.Value, RaidEndTick = f.RaidGateId.IsNone ? 0 : f.RaidEndTick,
                         NextPatrolTick = f.NextPatrolTick, PatrolShipsBuilt = f.PatrolShipsBuilt,
-                        Goodwill = f.Goodwill, TruceUntilTick = f.TruceUntilTick, NextStationTick = f.NextStationTick,
+                        Invading = f.Invading, Goodwill = f.Goodwill, TruceUntilTick = f.TruceUntilTick, NextStationTick = f.NextStationTick,
                     }).ToList()
                     : null,
                 Laws = sector.ActiveLaws.Count > 0 ? sector.ActiveLaws.ToList() : null,
                 Events = sector.Events.Count > 0 ? sector.Events.Select(e => new EventDto { Tick = e.Tick, Text = e.Text }).ToList() : null,
+                Milestones = sector.MilestonesReached.Count > 0 ? new SortedDictionary<string, long>(sector.MilestonesReached.ToDictionary(m => m.Key, m => m.Value), StringComparer.Ordinal) : null,
+                MilestonesStarted = sector.MilestonesStarted,
                 Shots = sector.Shots.Count > 0
                     ? sector.Shots.Select(s => new ShotDto { Position = Vec(s.Position), Velocity = Vec(s.Velocity), ExpireTick = s.ExpireTick, Damage = s.Damage, FactionId = s.FactionId, IsMissile = s.IsMissile, TargetId = s.TargetId.Value, SpeedMps = s.SpeedMps }).ToList()
                     : null,
@@ -197,6 +200,7 @@ public static class SaveGameSerializer
                     PatrolStop = c.PatrolStop,
                     IsTradeStation = c.IsTradeStation,
                     PenKg = c.PenKg,
+                    GateClosed = c.GateClosed,
                     ContainmentFailS = c.ContainmentFailS,
                     QuantumChargeKJ = c.QuantumChargeKJ,
                     QuantumRequested = c.QuantumRequested,
@@ -403,6 +407,7 @@ public static class SaveGameSerializer
                     throw new FormatException($"Craft {c.Id} has invalid animals.");
                 craft.PenKg = c.PenKg;
                 if (!(c.ContainmentFailS >= 0) || !(c.QuantumChargeKJ >= 0)) throw new FormatException($"Craft {c.Id} has an invalid quantum drive or containment.");
+                craft.GateClosed = c.GateClosed;
                 craft.ContainmentFailS = c.ContainmentFailS;
                 craft.QuantumChargeKJ = c.QuantumChargeKJ;
                 craft.QuantumRequested = c.QuantumRequested;
@@ -480,7 +485,7 @@ public static class SaveGameSerializer
                 if (sector.Bodies.All(b => b.Id.Value != f.HomeStarId)) throw new FormatException($"Civilization {f.Id} claims a missing system.");
                 if (!double.IsFinite(f.Attitude) || !(f.Grievance >= 0) || !(f.Goodwill >= 0)) throw new FormatException($"Civilization {f.Id} has invalid attitude.");
                 sector.RestoreFaction(f.Id, f.Name ?? $"Civilization {f.Id}", f.Culture ?? "", new BodyId(f.HomeStarId), f.Baseline, f.Attitude, f.Grievance, f.NextEventTick, f.Warned, new CraftId(f.RaidGateId), f.RaidEndTick,
-                    f.NextPatrolTick, f.PatrolShipsBuilt, f.Goodwill, f.TruceUntilTick, f.NextStationTick);
+                    f.NextPatrolTick, f.PatrolShipsBuilt, f.Goodwill, f.TruceUntilTick, f.NextStationTick, f.Invading);
             }
             sector.RestoreLaws(dto.Laws ?? new List<string>());
             sector.RestoreEvents((dto.Events ?? new List<EventDto>()).Select(e => new SectorEvent(e.Tick, e.Text ?? "")));
@@ -514,6 +519,12 @@ public static class SaveGameSerializer
                 sector.RestoreSwarm(swarm);
             }
             sector.RestoreNextSwarmId(dto.NextSwarmId);
+            foreach (var (id, tick) in dto.Milestones ?? new SortedDictionary<string, long>()) // #38
+            {
+                if (tick < 0) throw new FormatException($"Milestone {id} has an invalid time.");
+                sector.RestoreMilestone(id, tick);
+            }
+            sector.MilestonesStarted = dto.MilestonesStarted;
             foreach (var s in dto.Shots ?? new List<ShotDto>())
             {
                 if (!(s.Damage >= 0)) throw new FormatException("A shot has invalid damage.");
@@ -790,6 +801,13 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<EventDto>? Events { get; set; }
 
+        /// <summary>v29: milestones reached (#38).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public SortedDictionary<string, long>? Milestones { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool MilestonesStarted { get; set; }
+
         /// <summary>v21: shots in flight (#85).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<ShotDto>? Shots { get; set; }
@@ -837,6 +855,10 @@ public static class SaveGameSerializer
         /// <summary>v25: trade and diplomacy (#89).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double Goodwill { get; set; }
+
+        /// <summary>v29: a raid meaning to go through the gate (#95).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool Invading { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public long TruceUntilTick { get; set; }
@@ -1019,6 +1041,10 @@ public static class SaveGameSerializer
         /// <summary>v28: antimatter and the quantum drive (#81, #82).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double ContainmentFailS { get; set; }
+
+        /// <summary>v29: a closed warp gate (#95).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool GateClosed { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double QuantumChargeKJ { get; set; }

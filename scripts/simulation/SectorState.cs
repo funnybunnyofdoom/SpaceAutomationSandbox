@@ -259,6 +259,7 @@ public sealed partial class SectorState
         StepFactions(); // other civilizations' attitude and raids (#36)
         StepEjection();
         EndPowerTick();
+        StepMilestones(); // #38
         Tick++;
     }
 

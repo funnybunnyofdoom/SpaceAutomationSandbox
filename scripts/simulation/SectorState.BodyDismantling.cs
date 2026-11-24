@@ -54,6 +54,7 @@ public sealed partial class SectorState
 
     private void RemoveBody(CelestialBodyState body)
     {
+        ReachMilestone("dismantled"); // #38
         var velocity = GetVelocityAt(body.Id, TimeS);
         // The remnant scatters as debris: whole kg into the ledger, as the bulk material.
         var remnant = body.WholeMassKg;

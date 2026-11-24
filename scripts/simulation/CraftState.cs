@@ -225,6 +225,9 @@ public sealed class CraftState
     /// <summary>The player's order not to fire. Saved.</summary>
     public bool HoldFire { get; set; }
 
+    /// <summary>A warp gate the player has closed with its gate lock (#95). Saved.</summary>
+    public bool GateClosed { get; internal set; }
+
     // --- Antimatter and the quantum drive (#81, #82) ---
 
     /// <summary>How long its antimatter containment has been failing, s; 0 while it holds. Saved.</summary>

@@ -141,7 +141,8 @@ public sealed record ShipStats(
     double ContainmentPowerKW = 0,
     double QuantumDriveKW = 0,
     double NanoRepairKgPerS = 0,
-    double NanoPowerKW = 0)
+    double NanoPowerKW = 0,
+    int GateLockCount = 0)
 {
     /// <summary>Weapons, in cell order (#85); empty if none.</summary>
     public IReadOnlyList<WeaponMount> WeaponList => Weapons ?? Array.Empty<WeaponMount>();
@@ -324,6 +325,7 @@ public sealed class ShipDesign
         var armour = 0;
         double harvest = 0, harvestPower = 0, repelPower = 0, ranch = 0, ranchPower = 0, pens = 0;
         var repellers = 0;
+        var locks = 0;
         double antimatter = 0, containmentPower = 0, quantum = 0, nano = 0, nanoPower = 0;
         var generatorKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         var converterKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
@@ -390,6 +392,7 @@ public sealed class ShipDesign
             else if (part.NanoRepairKgPerS > 0) nanoPower += part.PowerUseKW;
             antimatter += part.AntimatterCapacityKg; // #81
             nano += part.NanoRepairKgPerS * h; // #83
+            if (part.IsGateLock) locks++; // #95
             if (part.IsRepeller) repellers++; // #93
             ranch += part.RanchRateKgPerS * h;
             pens += part.PenCapacityKg;
@@ -434,7 +437,7 @@ public sealed class ShipDesign
             converterKW.Count == 0 ? null : converterKW.Select(c => ConverterStats.From(catalog.Get(c.Key), c.Value)).ToList(),
             geothermal,
             drives.Count == 0 ? null : drives.Select(d => PropellantDrive.From(catalog.Get(d.Key.Item1), d.Key.Item2, d.Value)).ToList(),
-            stellarHeat, weapons, salvage, salvagePower, repair, repairPower, shield, shieldRecharge, shieldPower, armour, harvest, harvestPower, repellers, repelPower, ranch, ranchPower, pens, antimatter, containmentPower, quantum, nano, nanoPower);
+            stellarHeat, weapons, salvage, salvagePower, repair, repairPower, shield, shieldRecharge, shieldPower, armour, harvest, harvestPower, repellers, repelPower, ranch, ranchPower, pens, antimatter, containmentPower, quantum, nano, nanoPower, locks);
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>

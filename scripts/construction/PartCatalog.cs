@@ -96,6 +96,9 @@ public sealed record PartDefinition
     public double ShieldCapacity { get; init; }
     public double ShieldRechargePerS { get; init; }
 
+    /// <summary>Lets the player close the warp gate it's on (#95).</summary>
+    public bool IsGateLock { get; init; }
+
     /// <summary>Antimatter a containment part holds (#81), kg; it needs its power all the time while there is any.</summary>
     public double AntimatterCapacityKg { get; init; }
 

@@ -47,6 +47,7 @@ public static class SaveMigrations
         [25] = ("v26 added native life: no body of an older save has any; systems opened later may", (_, _) => { }),
         [26] = ("v27 added native animals: living worlds of an older save have none (they can be settled)", (_, _) => { }),
         [27] = ("v28 added antimatter containment and quantum drives: an older save has none", (_, _) => { }),
+        [28] = ("v29 added milestones and closable gates: what an older game already reached is noted without a time; its gates are open", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

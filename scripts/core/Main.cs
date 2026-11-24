@@ -113,6 +113,9 @@ public partial class Main : Node2D
     /// <summary>Native life (#94).</summary>
     private LifePanel? _lifePanel;
 
+    /// <summary>Milestones (#38).</summary>
+    private MilestonesPanel? _milestonesPanel;
+
     /// <summary>The title screen and main menu (#58). While it shows, no game is running.</summary>
     private TitleScreen? _title;
 
@@ -172,6 +175,7 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_shipyardPanel);
             _fleetPanel = new FleetPanel(() => _sector, () => _player?.Id) { Visible = false };
             _fleetPanel.CraftChosen += Pilot;
+            _fleetPanel.Changed += () => _changedSinceSave = true;
             _fleetPanel.CraftTargeted += target =>
             {
                 if (_player == null || target == _player.Id) return;
@@ -205,6 +209,8 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_powerPanel);
             _lifePanel = new LifePanel(() => _sector, () => _player, () => _changedSinceSave = true) { Visible = false }; // #94
             _uiRoot.AddChild(_lifePanel);
+            _milestonesPanel = new MilestonesPanel(() => _sector) { Visible = false }; // #38
+            _uiRoot.AddChild(_milestonesPanel);
             _debugPanel = new DebugPanel(() => _sector, () => _warp.Speed, SetGameSpeed, _catalog.Materials) { Visible = false };
             _uiRoot.AddChild(_debugPanel);
         }
@@ -301,6 +307,9 @@ public partial class Main : Node2D
         if (args.FirstOrDefault(a => a.StartsWith("--shipyard-design=")) is { } designArg && int.TryParse(designArg["--shipyard-design=".Length..], out var designIndex))
             _shipyardPanel?.SelectDesign(designIndex);
         DemoSwarm(args); // #30
+        if (args.FirstOrDefault(x => x.StartsWith("--window=")) is { } size && size["--window=".Length..].Split('x') is [var w, var h]) // dev: test small windows (#96)
+            GetWindow().Size = new Vector2I(int.Parse(w), int.Parse(h));
+        if (System.Array.IndexOf(args, "--open-milestones") >= 0) _milestonesPanel?.Open(); // #38
         if (System.Array.IndexOf(args, "--open-life") >= 0) _lifePanel?.Open(); // #94, with --add-life
         if (System.Array.IndexOf(args, "--open-trade") >= 0) { if (_lawsPanel != null) _lawsPanel.Visible = false; _tradePanel?.Open(); } // #89, with --demo-civ
         if (System.Array.IndexOf(args, "--open-swarms") >= 0) _swarmPanel?.Open();
@@ -399,6 +408,7 @@ public partial class Main : Node2D
     {
         if (_editor == null) { ShowStatus("Editor unavailable: part data failed to load."); return; }
         _editor.Open();
+        _uiRoot.MoveChild(_editor, _uiRoot.GetChildCount() - 1);
         _hud.Visible = false;
     }
 
@@ -708,7 +718,7 @@ public partial class Main : Node2D
             if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1); // settings open above the menu
         }
         _hud.Visible = false;
-        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel })
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel })
             if (panel != null) panel.Visible = false;
         _title.Open(SaveSummary());
     }
@@ -765,7 +775,7 @@ public partial class Main : Node2D
         var first = _lastEventShown is null;
         _lastEventShown = last;
         if (first && _sector.Tick > 1) return; // just loaded: old news
-        ShowStatus($"{last.Text}  ({InputActions.Key1(InputActions.Laws)}: laws and civilizations)");
+        ShowStatus(last.Text);
     }
 
     private void ShowStatus(string message)
@@ -882,6 +892,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Settings)) Toggle(_settingsPanel, () => _settingsPanel!.Open());
         else if (Pressed(InputActions.Research)) Toggle(_researchPanel, () => _researchPanel!.Open());
         else if (Pressed(InputActions.Laws)) Toggle(_lawsPanel, () => _lawsPanel!.Open());
+        else if (Pressed(InputActions.Milestones)) Toggle(_milestonesPanel, () => _milestonesPanel!.Open());
         else if (Pressed(InputActions.Life)) Toggle(_lifePanel, () => _lifePanel!.Open());
         else if (Pressed(InputActions.Power)) Toggle(_powerPanel, () => _powerPanel!.Open());
         else if (Pressed(InputActions.Map)) ToggleMap();
@@ -893,7 +904,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
-            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel };
+            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel };
             var anyOpen = _mapMode || _hud.HelpOpen || panels.Any(p => p is { Visible: true });
             if (!anyOpen) OpenPause();
             if (_mapMode) ToggleMap();
@@ -953,6 +964,7 @@ public partial class Main : Node2D
         var audioStart = System.Diagnostics.Stopwatch.GetTimestamp();
         _audio.Watch(InMenu ? null : _sector, InMenu ? null : _player, delta); // ship sounds; music plays throughout (#64)
         _audioCost.Add(System.Diagnostics.Stopwatch.GetElapsedTime(audioStart).TotalMilliseconds);
+        ArrangePanels(); // #96
         UpdatePanelNav();
         ShowNewEvents(); // civilizations, laws (#36)
         StressFrame(delta);

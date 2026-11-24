@@ -116,6 +116,7 @@
     { "id": "antimatter_drive", "name": "Antimatter drive", "massKg": 8000, "placeholderColor": "#ff60d0", "thrustN": 3000000, "powerUseKW": 50, "propellantKgPerS": { "antimatter": 0.002, "hydrogen": 0.5 }, "materialsKg": { "metal": 5000, "electronics": 1500, "superconductors": 1500 } },
     { "id": "quantum_drive", "name": "Quantum drive", "massKg": 8000, "placeholderColor": "#40e0d0", "isQuantumDrive": true, "powerUseKW": 2000, "materialsKg": { "metal": 3000, "electronics": 3000, "superconductors": 2000 } },
     { "id": "nanite_bay", "name": "Nanite bay", "massKg": 1500, "placeholderColor": "#90ffb0", "nanoRepairKgPerS": 3, "powerUseKW": 60, "materialsKg": { "metal": 400, "electronics": 800, "superconductors": 300 } },
-    { "id": "nano_assembler", "name": "Nano-assembler", "massKg": 1500, "placeholderColor": "#60d090", "fabricationRateKgPerS": 25, "powerUseKW": 100, "materialsKg": { "metal": 400, "electronics": 700, "superconductors": 400 } }
+    { "id": "nano_assembler", "name": "Nano-assembler", "massKg": 1500, "placeholderColor": "#60d090", "fabricationRateKgPerS": 25, "powerUseKW": 100, "materialsKg": { "metal": 400, "electronics": 700, "superconductors": 400 } },
+    { "id": "gate_lock", "name": "Gate lock", "massKg": 2000, "placeholderColor": "#8090ff", "isGateLock": true, "materialsKg": { "metal": 1400, "electronics": 600 } }
   ]
 }

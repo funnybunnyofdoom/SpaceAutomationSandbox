@@ -473,6 +473,14 @@ def nano_assembler(a):
     return b, d
 
 
+def gate_lock(a):
+    b, d = panel(), Img()
+    d.rect(4, 7, 11, 13, a); d.outline(4, 7, 11, 13, OUT)
+    d.ring(8, 6.5, 2.6, 3.8, PLATE_L); d.rect(4, 7, 11, 8, shade(a, 1.2))
+    d.rect(7, 9, 8, 11, DARK); d.set(7, 9, HILITE)
+    return b, d
+
+
 def research_lab(a):
     b, d = panel(), Img()
     for y in range(4, 10):  # a dish, open to the front
@@ -635,7 +643,7 @@ DRAW = {
     "fabricator_mk2": lambda a: fabricator(a, 2), "warp_gate": warp_gate, "gate_defense": gate_defense,
     "antimatter_factory": antimatter_factory, "containment": containment, "antimatter_reactor": lambda a: glow_core(a, 2),
     "antimatter_drive": antimatter_drive, "quantum_drive": quantum_drive, "nanite_bay": nanite_bay, "nano_assembler": nano_assembler,
-    "repeller": repeller, "ranch": ranch, "animal_pen": animal_pen, "harvester": harvester, "armour_plate": armour_plate, "missile_launcher": missile_launcher, "point_defense": point_defense,
+    "gate_lock": gate_lock, "repeller": repeller, "ranch": ranch, "animal_pen": animal_pen, "harvester": harvester, "armour_plate": armour_plate, "missile_launcher": missile_launcher, "point_defense": point_defense,
     "shield_generator": shield_generator, "salvage_arm": salvage_arm, "repair_drones": repair_drones,
     "autocannon": autocannon, "laser": laser,
     "research_lab": research_lab,

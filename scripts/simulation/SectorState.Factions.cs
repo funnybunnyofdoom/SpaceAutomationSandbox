@@ -225,11 +225,11 @@ public sealed partial class SectorState
     /// <summary>Restores a saved civilization exactly.</summary>
     public Faction RestoreFaction(int id, string name, string cultureId, BodyId homeStarId, double baseline, double attitude, double grievance, long nextEventTick, bool warned,
         CraftId raidGateId = default, long raidEndTick = 0, long nextPatrolTick = 0, int patrolShipsBuilt = 0,
-        double goodwill = 0, long truceUntilTick = 0, long nextStationTick = 0)
+        double goodwill = 0, long truceUntilTick = 0, long nextStationTick = 0, bool invading = false)
     {
         var faction = new Faction(id, name, cultureId, homeStarId, baseline) { Attitude = attitude, Grievance = grievance, NextEventTick = nextEventTick, RaidGateId = raidGateId, RaidEndTick = raidEndTick,
             NextPatrolTick = nextPatrolTick, PatrolShipsBuilt = patrolShipsBuilt,
-            Goodwill = goodwill, TruceUntilTick = truceUntilTick, NextStationTick = nextStationTick };
+            Goodwill = goodwill, TruceUntilTick = truceUntilTick, NextStationTick = nextStationTick, Invading = invading };
         _factions.Add(faction);
         _lastDisposition[id] = faction.Disposition;
         _warned[id] = warned;

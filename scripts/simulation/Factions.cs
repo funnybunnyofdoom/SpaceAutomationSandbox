@@ -89,6 +89,9 @@ public sealed class Faction
     public CraftId RaidGateId { get; internal set; } = CraftId.None;
     public long RaidEndTick { get; internal set; }
 
+    /// <summary>Its raid means to go through the gate, not destroy it (#95). Saved.</summary>
+    public bool Invading { get; internal set; }
+
     /// <summary>When its patrol may get its next ship, and how many it has had so far (#89). Saved.</summary>
     public long NextPatrolTick { get; internal set; }
     public int PatrolShipsBuilt { get; internal set; }
