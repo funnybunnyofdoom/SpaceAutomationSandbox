@@ -33,6 +33,7 @@ public sealed partial class SectorState
         var to = GetCraft(toId);
         if (from.DockedToCraftId != to.Id && to.DockedToCraftId != from.Id)
             return new(false, $"{from.Name} and {to.Name} must be docked together to move a kit.");
+        if (from.FactionId != to.FactionId) return new(false, "That craft isn't yours.");
         var kit = from.KitsList.FirstOrDefault(k => k.Id == kitId);
         if (kit is null) return new(false, $"{from.Name} has no such kit.");
         if (to.FreeCargoKg < kit.MassKg)

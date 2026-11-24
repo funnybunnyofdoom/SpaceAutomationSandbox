@@ -1,4 +1,4 @@
-# 08 — Save format (schema 24)
+# 08 — Save format (schema 25)
 
 The code is `scripts/save/SaveGameSerializer.cs` and `scripts/save/SaveStore.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs` and `SaveStoreTests.cs`.
 
@@ -125,6 +125,7 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 22 | Salvage (#86): jobs of kind `salvage` (`salvageState`; the wreck in `pickupId`) and `crafts[].salvageProgressKg`. Older saves have none. |
 | 23 | Missiles (#87: `isMissile`, `targetId`, `speedMps` per shot) and shields (#90: `crafts[].shieldCharge`, `shieldHitTick`). Older saves have none. |
 | 24 | Fleet orders (#88): jobs of kind `guard`, `escort` and `patrol` (`defendState`, `patrolIndex`; what's protected in `pickupId`, the system in `sourceBodyId`, the ammunition station in `destinationId`) and civilization patrols (#89: `crafts[].isPatrol`, `patrolStop`; `factions[].nextPatrolTick`, `patrolShipsBuilt`). Older saves have none. |
+| 25 | Trade and diplomacy (#89): `crafts[].isTradeStation`; jobs of kind `trade` (`giveMaterial`, `tradeState`, `tradeResumeState`; the trade station in `pickupId`, home in `destinationId`); `factions[].goodwill`, `truceUntilTick`, `nextStationTick`. Older saves have none. |
 | 18 | Warp gates and further star systems: `gateLinkId`, `gateReadyTick`, `jumpRequestTick`, `jumps` per craft; `sector.discoveredKg` | An older save has one system and no gates; nothing changes. |
 | 17 (later additions, optional) | Kits record `originalCraftId` and `requestsKg` (a packed station comes back as itself, #24). Bodies record `originalMassKg` once mining has changed their mass, and `nextBodyId` is saved (#27); jobs may name bodies that are gone | Older kits are new kits: they deploy with a fresh id. Older bodies take their current mass as the starting mass. |
 | 17 | Refit, dismantle and pack orders (`yardOrder`, `yardProgressKg` per craft) and `sector.nextCraftId`. Jobs may now name craft that no longer exist (they were dismantled) | Nothing changes; the craft id counter follows from the craft. |

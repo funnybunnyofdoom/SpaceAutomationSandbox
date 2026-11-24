@@ -162,6 +162,7 @@ public sealed partial class SectorState
         if (count <= 0) return new(false, "No one to move.");
         if (from.DockedToCraftId != to.Id && to.DockedToCraftId != from.Id)
             return new(false, $"{from.Name} and {to.Name} must be docked together to move crew.");
+        if (from.FactionId != to.FactionId) return new(false, "That craft isn't yours.");
         if (from.Crew < count) return new(false, $"{from.Name} has only {from.Crew} crew.");
         var room = to.Stats.CrewCapacity - to.Crew;
         if (room < count) return new(false, $"{to.Name} has habitat room for {Math.Max(0, room)} more.");

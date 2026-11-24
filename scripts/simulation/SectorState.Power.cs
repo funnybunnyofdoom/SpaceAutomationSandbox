@@ -47,7 +47,7 @@ public sealed partial class SectorState
             craft.NetworkCapacityKJ = 0;
             craft.ConvertedKJThisTick = 0;
             var root = craft;
-            for (var hops = 0; hops < 8 && root.IsDocked && _craftsById.TryGetValue(root.DockedToCraftId, out var host); hops++) root = host;
+            for (var hops = 0; hops < 8 && root.IsDocked && _craftsById.TryGetValue(root.DockedToCraftId, out var host) && host.FactionId == root.FactionId; hops++) root = host; // no drawing on a civilization's station (#89)
             craft.PowerRoot = root;
         }
         foreach (var craft in _crafts) // id order: members are listed deterministically

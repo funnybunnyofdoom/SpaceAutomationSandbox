@@ -113,7 +113,7 @@ public sealed partial class SectorState
         if (craft.Stats.SalvageRateKgPerS <= 0) return new(false, $"{craft.Name} has no salvage arm.");
         if (craft.Stats.CargoCapacityKg <= 0) return new(false, $"{craft.Name} has no cargo bay.");
         if (!_craftsById.TryGetValue(job.DestinationId, out var destination) || destination.Id == craft.Id) return new(false, "The destination must be another craft.");
-        if (destination.Stats.DockingPorts.Count == 0 || destination.IsWreck) return new(false, $"{destination.Name} has no working docking port.");
+        if (destination.Stats.DockingPorts.Count == 0 || destination.IsWreck || !IsPlayers(destination)) return new(false, $"{destination.Name} has no working docking port.");
         job.Active = true;
         job.WaitReason = null;
         job.WreckId = CraftId.None;

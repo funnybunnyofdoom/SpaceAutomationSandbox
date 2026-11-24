@@ -139,7 +139,7 @@ public sealed partial class SectorState
         {
             if (!RaidOn(faction)) continue;
             var gate = _craftsById.GetValueOrDefault(faction.RaidGateId);
-            var alive = _crafts.Where(c => c.FactionId == faction.Id && !c.IsPatrol && !c.IsWreck).ToList();
+            var alive = _crafts.Where(c => c.FactionId == faction.Id && !c.IsPatrol && !c.IsTradeStation && !c.IsWreck).ToList();
             if (alive.Count > 0 && gate is not null && IsGate(gate) && !gate.IsWreck && Tick < faction.RaidEndTick) continue;
             if (gate is not null && IsGate(gate) && !gate.IsWreck)
                 AddEvent(alive.Count == 0 ? $"The {faction.Name} raided {gate.Name}; your defenses drove them off."
@@ -167,6 +167,7 @@ public sealed partial class SectorState
         foreach (var raider in _foreign)
         {
             if (FactionById(raider.FactionId) is not { } faction) { raider.Controls = ShipControls.Idle; continue; }
+            if (raider.IsTradeStation) continue;
             if (raider.IsPatrol) { SteerPatrol(raider, faction); continue; } // #89
             CraftState? target = null;
             var nearest = RaiderEngageM;

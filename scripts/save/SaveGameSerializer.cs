@@ -46,11 +46,12 @@ public static class SaveGameSerializer
     /// (removed craft's ids are never reused, and jobs may still name them); v18 added warp gates and
     /// further star systems (their bodies are ordinary bodies; gates record their link and queue); v19
     /// added research (points, techs done; older saves have everything unlocked) and star types; v20 added
-    /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids); v22 added salvage jobs (#86); v23 added missiles (#87) and shields (#90); v24 added guard, escort and patrol jobs (#88) and civilization patrols (#89).
+    /// swarms (#30) and the swarm a build order is for; v21 added combat (#84: whose craft, wrecks, weapons, shots, raids); v22 added salvage jobs (#86); v23 added missiles (#87) and shields (#90); v24 added guard, escort and patrol jobs (#88) and civilization patrols (#89);
+    /// v25 added trade stations, trade routes and diplomacy (#89).
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 24;
+    public const int SchemaVersion = 25;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -88,6 +89,7 @@ public static class SaveGameSerializer
                         Attitude = f.Attitude, Grievance = f.Grievance, NextEventTick = f.NextEventTick, Warned = sector.FactionWarned(f.Id),
                         RaidGateId = f.RaidGateId.Value, RaidEndTick = f.RaidGateId.IsNone ? 0 : f.RaidEndTick,
                         NextPatrolTick = f.NextPatrolTick, PatrolShipsBuilt = f.PatrolShipsBuilt,
+                        Goodwill = f.Goodwill, TruceUntilTick = f.TruceUntilTick, NextStationTick = f.NextStationTick,
                     }).ToList()
                     : null,
                 Laws = sector.ActiveLaws.Count > 0 ? sector.ActiveLaws.ToList() : null,
@@ -183,6 +185,7 @@ public static class SaveGameSerializer
                     IsWreck = c.IsWreck,
                     IsPatrol = c.IsPatrol,
                     PatrolStop = c.PatrolStop,
+                    IsTradeStation = c.IsTradeStation,
                     HoldFire = c.HoldFire,
                     SalvageProgressKg = c.SalvageProgressKg,
                     ShieldCharge = c.ShieldCharge,
@@ -219,6 +222,12 @@ public static class SaveGameSerializer
                         : null,
                     Job = c.Job switch
                     {
+                        TradeJob tj => new JobDto
+                        {
+                            Kind = tj.Kind, DestinationId = tj.HomeId.Value, PickupId = tj.TraderId.Value, MaterialId = tj.GetMaterial, GiveMaterial = tj.GiveMaterial,
+                            TradeState = tj.State, TradeResumeState = tj.ResumeState, Active = tj.Active, WaitReason = tj.WaitReason,
+                            CompletedCycles = tj.CompletedCycles, DeliveredKg = tj.DeliveredKg, RetryAtTick = tj.RetryAtTick,
+                        },
                         DefendJob dj => new JobDto
                         {
                             Kind = dj.Kind, PickupId = dj.PostId.Value, SourceBodyId = dj.StarId.Value, DestinationId = dj.RearmAt.Value, DefendState = dj.State,
@@ -369,6 +378,7 @@ public static class SaveGameSerializer
                 if (c.PatrolStop < 0) throw new FormatException($"Craft {c.Id} has an invalid patrol.");
                 craft.IsPatrol = c.IsPatrol;
                 craft.PatrolStop = c.PatrolStop;
+                craft.IsTradeStation = c.IsTradeStation;
                 craft.HoldFire = c.HoldFire;
                 if (!(c.SalvageProgressKg >= 0)) throw new FormatException($"Craft {c.Id} has invalid salvage progress.");
                 craft.SalvageProgressKg = c.SalvageProgressKg;
@@ -435,9 +445,9 @@ public static class SaveGameSerializer
             foreach (var f in dto.Factions ?? new List<FactionDto>())
             {
                 if (sector.Bodies.All(b => b.Id.Value != f.HomeStarId)) throw new FormatException($"Civilization {f.Id} claims a missing system.");
-                if (!double.IsFinite(f.Attitude) || !(f.Grievance >= 0)) throw new FormatException($"Civilization {f.Id} has invalid attitude.");
+                if (!double.IsFinite(f.Attitude) || !(f.Grievance >= 0) || !(f.Goodwill >= 0)) throw new FormatException($"Civilization {f.Id} has invalid attitude.");
                 sector.RestoreFaction(f.Id, f.Name ?? $"Civilization {f.Id}", f.Culture ?? "", new BodyId(f.HomeStarId), f.Baseline, f.Attitude, f.Grievance, f.NextEventTick, f.Warned, new CraftId(f.RaidGateId), f.RaidEndTick,
-                    f.NextPatrolTick, f.PatrolShipsBuilt);
+                    f.NextPatrolTick, f.PatrolShipsBuilt, f.Goodwill, f.TruceUntilTick, f.NextStationTick);
             }
             sector.RestoreLaws(dto.Laws ?? new List<string>());
             sector.RestoreEvents((dto.Events ?? new List<EventDto>()).Select(e => new SectorEvent(e.Tick, e.Text ?? "")));
@@ -522,7 +532,18 @@ public static class SaveGameSerializer
                     if (c.YardProgressKg < 0) throw new FormatException($"Craft {c.Id} has negative yard progress.");
                     sector.RestoreYardOrder(restored.Id, new YardOrder(yod.Kind, new CraftId(yod.YardId), target), c.YardProgressKg);
                 }
-                if (c.Job is { Kind: "guard" or "escort" or "patrol" } defend)
+                if (c.Job is { Kind: "trade" } trade)
+                {
+                    if (!catalog.Materials.Contains(trade.MaterialId ?? "") || !catalog.Materials.Contains(trade.GiveMaterial ?? ""))
+                        throw new FormatException($"Craft {c.Id} trades unknown materials.");
+                    // Either station may be gone since: the job waits with that reason.
+                    sector.RestoreJob(restored.Id, new TradeJob(new CraftId(trade.DestinationId), trade.GiveMaterial!, new CraftId(trade.PickupId), trade.MaterialId!)
+                    {
+                        Active = trade.Active, State = trade.TradeState, ResumeState = trade.TradeResumeState, WaitReason = trade.WaitReason,
+                        CompletedCycles = trade.CompletedCycles, DeliveredKg = trade.DeliveredKg, RetryAtTick = trade.RetryAtTick,
+                    });
+                }
+                else if (c.Job is { Kind: "guard" or "escort" or "patrol" } defend)
                 {
                     // What it protects may be gone since: the job waits with that reason.
                     var order = defend.Kind == "patrol" ? new DefendJob(new BodyId(defend.SourceBodyId))
@@ -764,6 +785,16 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int PatrolShipsBuilt { get; set; }
+
+        /// <summary>v25: trade and diplomacy (#89).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double Goodwill { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public long TruceUntilTick { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public long NextStationTick { get; set; }
     }
 
     private sealed class EventDto
@@ -897,6 +928,10 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int PatrolStop { get; set; }
+
+        /// <summary>v25: a civilization's trade station (#89).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsTradeStation { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool HoldFire { get; set; }
@@ -1059,6 +1094,16 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public SurveyJobState SurveyState { get; set; }
+
+        /// <summary>v25: trade routes (#89); the trade station is in <see cref="PickupId"/>.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? GiveMaterial { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public TradeJobState TradeState { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public TradeJobState TradeResumeState { get; set; }
 
         /// <summary>v24: guard, escort and patrol jobs (#88).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

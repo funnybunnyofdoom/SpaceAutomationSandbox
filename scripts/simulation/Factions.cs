@@ -91,6 +91,15 @@ public sealed class Faction
     public long NextPatrolTick { get; internal set; }
     public int PatrolShipsBuilt { get; internal set; }
 
+    /// <summary>Goodwill earned by trade and gifts (#89): added to its target attitude; fades slowly. Saved.</summary>
+    public double Goodwill { get; internal set; }
+
+    /// <summary>Until then it isn't hostile, after peace (#89), and when a lost trade station may be rebuilt. Saved.</summary>
+    public long TruceUntilTick { get; internal set; }
+    public long NextStationTick { get; internal set; }
+
+    public const double MaxGoodwill = 40, GoodwillFadePerMinute = 0.05;
+
     public const double HostileBelow = -30, FriendlyFrom = 30;
     public const double PointsPerStance = 15;
 
@@ -101,7 +110,7 @@ public sealed class Faction
 
     /// <summary>Where its attitude is heading with these laws in force.</summary>
     public double TargetAttitude(IReadOnlyCollection<string> laws) =>
-        Math.Clamp(Baseline + laws.Sum(l => Culture.StanceOn(l)) * PointsPerStance - Grievance, -100, 100);
+        Math.Clamp(Baseline + laws.Sum(l => Culture.StanceOn(l)) * PointsPerStance - Grievance + Goodwill, -100, 100);
 }
 
 /// <summary>Something that happened, for the player's log and status line (#36).</summary>

@@ -92,6 +92,10 @@ public sealed partial class SectorState
                 // A scout surveys on the way in, so the leg ends where it's in range.
                 var from = craft.Position - GetPosition(unsurveyed.Id);
                 return (unsurveyed.Id, CraftId.None, Math.Atan2(from.Y, from.X), SurveyRadius(unsurveyed, craft));
+            case TradeJob { Active: true, State: TradeJobState.ToHome } t1 when _craftsById.TryGetValue(t1.HomeId, out var homeStation):
+                station = homeStation; break;
+            case TradeJob { Active: true, State: TradeJobState.ToTrader } t2 when _craftsById.TryGetValue(t2.TraderId, out var trader):
+                station = trader; break;
             case DefendJob { Active: true, State: DefendState.Rearming } r when _craftsById.TryGetValue(r.RearmAt, out var depot):
                 station = depot; break;
             case DefendJob { Active: true, Mode: not DefendMode.Patrol, State: DefendState.OnStation } g when _craftsById.TryGetValue(g.PostId, out var post) && !post.IsWreck:

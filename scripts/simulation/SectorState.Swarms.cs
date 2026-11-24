@@ -204,7 +204,7 @@ public sealed partial class SectorState
     {
         var swarm = GetSwarm(id);
         if (!_byId.TryGetValue(sourceId, out var source) || !source.IsMineable) return new(false, "The source must be a mineable body.");
-        if (!_craftsById.TryGetValue(destinationId, out var destination) || destination.Stats.DockingPorts.Count == 0)
+        if (!_craftsById.TryGetValue(destinationId, out var destination) || destination.Stats.DockingPorts.Count == 0 || !IsPlayers(destination))
             return new(false, "The destination must have a docking port.");
         if (MineableSurveyed(source, material) <= 0) return new(false, $"Not possible: {NothingToMine(source, material)}.");
         var star = _byId.ContainsKey(swarm.SourceBodyId) ? StarOf(swarm.SourceBodyId)

@@ -35,6 +35,10 @@ public partial class JobPanel : PanelContainer
     private Label _surveyNote = null!;
     private GridContainer _salvageRows = null!;
     private GridContainer _defendRows = null!;
+    private GridContainer _tradeRows = null!;
+    private OptionButton _tradeHome = null!, _tradeGive = null!, _tradeWith = null!, _tradeGet = null!;
+    private List<CraftId> _traders = new();
+    private List<string> _tradeGoods = new();
     private OptionButton _defendWhat = null!;
     private List<CraftId> _posts = new();
     private List<BodyId> _systems = new();
@@ -88,6 +92,7 @@ public partial class JobPanel : PanelContainer
         _kind.AddItem("Guard a station");
         _kind.AddItem("Escort a ship");
         _kind.AddItem("Patrol a system");
+        _kind.AddItem("Trade route with a civilization");
         _kind.ItemSelected += _ => ShowKind();
         kindRow.AddChild(_kind);
         box.AddChild(kindRow);
@@ -129,6 +134,14 @@ public partial class JobPanel : PanelContainer
         };
         box.AddChild(_surveyNote);
 
+        _tradeRows = new GridContainer { Columns = 2 };
+        box.AddChild(_tradeRows);
+        _tradeHome = AddRow(_tradeRows, "Home station");
+        _tradeGive = AddRow(_tradeRows, "Take them");
+        foreach (var m in _materials.Materials) _tradeGive.AddItem(m.Name);
+        _tradeWith = AddRow(_tradeRows, "Trade with");
+        _tradeWith.ItemSelected += _ => RefreshTradeGoods();
+        _tradeGet = AddRow(_tradeRows, "Bring back");
         _defendRows = new GridContainer { Columns = 2 };
         box.AddChild(_defendRows);
         _defendWhat = AddRow(_defendRows, "Protect");
@@ -200,8 +213,10 @@ public partial class JobPanel : PanelContainer
         _serveRows.Visible = _kind.Selected == 2;
         _surveyNote.Visible = _kind.Selected == 3;
         _salvageRows.Visible = _kind.Selected == 4;
-        _defendRows.Visible = _kind.Selected >= 5;
-        if (_kind.Selected >= 5) RefreshPosts();
+        _defendRows.Visible = _kind.Selected is >= 5 and <= 7;
+        if (_kind.Selected is >= 5 and <= 7) RefreshPosts();
+        _tradeRows.Visible = _kind.Selected == 8;
+        if (_kind.Selected == 8) RefreshTraders();
     }
 
     private void RefreshChoices()
@@ -221,8 +236,8 @@ public partial class JobPanel : PanelContainer
                 : $"{body.Name} ({surveyed.Sum(s => s.DepositsKg.Values.Sum()) / 1000.0:0} t of ore in {surveyed.Count} of {body.Sites.Count} sites{(body.BulkKg > 0 ? $", {body.BulkKg / 1e9:0.###} Mt of {body.BulkMaterialId}" : "")})");
         }
 
-        _stations = sector.Crafts.Where(c => c.Stats.DockingPorts.Count > 0 && !c.IsWreck && c.Id != craft?.Id).Select(c => c.Id).ToList();
-        foreach (var option in new[] { _mineDestination, _pickup, _haulDestination, _salvageDestination })
+        _stations = sector.Crafts.Where(c => c.Stats.DockingPorts.Count > 0 && !c.IsWreck && SectorState.IsPlayers(c) && c.Id != craft?.Id).Select(c => c.Id).ToList();
+        foreach (var option in new[] { _mineDestination, _pickup, _haulDestination, _salvageDestination, _tradeHome })
         {
             option.Clear();
             foreach (var id in _stations) option.AddItem($"{sector.GetCraft(id).Name} ({id})");
@@ -261,6 +276,10 @@ public partial class JobPanel : PanelContainer
                 Select(_keepStocked, Array.IndexOf(KeepStocked, haul.KeepStockedKg));
                 RefreshDeposits();
                 break;
+            case TradeJob:
+                _kind.Select(8);
+                RefreshDeposits();
+                break;
             case DefendJob defend:
                 _kind.Select(5 + (int)defend.Mode);
                 RefreshDeposits();
@@ -284,6 +303,33 @@ public partial class JobPanel : PanelContainer
                 break;
         }
         ShowKind();
+    }
+
+    /// <summary>The trade stations there are (#89), and the route's current choices.</summary>
+    private void RefreshTraders()
+    {
+        var sector = _sector();
+        _traders = sector.Crafts.Where(c => c.IsTradeStation && !c.IsWreck).Select(c => c.Id).ToList();
+        _tradeWith.Clear();
+        foreach (var id in _traders) _tradeWith.AddItem(sector.GetCraft(id).Name);
+        if (_traders.Count == 0) _tradeWith.AddItem("(no trade station known)");
+        if (_craft()?.Job is TradeJob job)
+        {
+            Select(_tradeHome, _stations.IndexOf(job.HomeId));
+            Select(_tradeGive, _materials.Materials.ToList().FindIndex(m => m.Id == job.GiveMaterial));
+            Select(_tradeWith, _traders.IndexOf(job.TraderId));
+        }
+        RefreshTradeGoods();
+        if (_craft()?.Job is TradeJob current) Select(_tradeGet, _tradeGoods.IndexOf(current.GetMaterial));
+    }
+
+    private void RefreshTradeGoods()
+    {
+        var sector = _sector();
+        _tradeGoods = _tradeWith.Selected >= 0 && _tradeWith.Selected < _traders.Count && sector.FactionById(sector.GetCraft(_traders[_tradeWith.Selected]).FactionId) is { } faction
+            ? sector.SellsOf(faction).ToList() : new List<string>();
+        _tradeGet.Clear();
+        foreach (var m in _tradeGoods) _tradeGet.AddItem(_materials.Contains(m) ? _materials.Get(m).Name : m);
     }
 
     /// <summary>What the chosen fleet order (#88) can protect: stations, ships or star systems.</summary>
@@ -334,6 +380,7 @@ public partial class JobPanel : PanelContainer
                            + $"{Station(m.DestinationId)}, return at {m.ReturnFraction * 100:0}%",
             HaulJob h => $"Freight: {job.MaterialId} from {Station(h.PickupId)} to {Station(h.DestinationId)}"
                          + (h.KeepStockedKg > 0 ? $", keep {h.KeepStockedKg / 1000} t there" : ""),
+            TradeJob t => $"Trading {t.GiveMaterial} from {Station(t.HomeId)} for {t.GetMaterial} at {Station(t.TraderId)}",
             DefendJob d => d.Mode == DefendMode.Patrol ? $"Patrolling the {sector.Bodies.FirstOrDefault(b => b.Id == d.StarId)?.Name ?? "?"} system, {d.CompletedCycles} fights"
                 : $"{(d.Mode == DefendMode.Guard ? "Guarding" : "Escorting")} {Station(d.PostId)}, {d.CompletedCycles} fights",
             SalvageJob s => $"Salvaging for {Station(s.DestinationId)}: {(s.WreckId.IsNone ? "no wreck picked" : Station(s.WreckId))}, {sector.Crafts.Count(c => c.IsWreck)} wrecks in all",
@@ -361,6 +408,14 @@ public partial class JobPanel : PanelContainer
         var craft = _craft();
         if (craft is null) return;
         if (_kind.Selected == 3) { Show(_sector().StartJob(craft.Id, new SurveyJob())); return; }
+        if (_kind.Selected == 8) // trade routes (#89)
+        {
+            if (_tradeWith.Selected < 0 || _tradeWith.Selected >= _traders.Count || _tradeGet.Selected < 0 || _tradeGet.Selected >= _tradeGoods.Count || _stations.Count == 0)
+                Show(new ActionResult(false, "No trade station to trade with, or no station of yours."));
+            else Show(_sector().StartJob(craft.Id, new TradeJob(_stations[Math.Max(0, _tradeHome.Selected)], _materials.Materials[Math.Max(0, _tradeGive.Selected)].Id,
+                _traders[_tradeWith.Selected], _tradeGoods[_tradeGet.Selected])));
+            return;
+        }
         if (_kind.Selected >= 5) // fleet orders (#88)
         {
             var what = Math.Max(0, _defendWhat.Selected);

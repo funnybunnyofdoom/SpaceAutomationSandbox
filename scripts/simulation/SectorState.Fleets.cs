@@ -27,9 +27,9 @@ public sealed partial class SectorState
         return null;
     }
 
-    /// <summary>Does this craft and the player's side fire on each other? Raiders always; patrols only of hostile civilizations.</summary>
+    /// <summary>Do this craft and the player's side fire on each other? Raiders always; patrols and trade stations only of hostile civilizations.</summary>
     public bool IsEnemy(CraftState craft) =>
-        !IsPlayers(craft) && (!craft.IsPatrol || FactionById(craft.FactionId) is { Disposition: Disposition.Hostile });
+        !IsPlayers(craft) && (!(craft.IsPatrol || craft.IsTradeStation) || FactionById(craft.FactionId) is { Disposition: Disposition.Hostile });
 
     /// <summary>Two civilizations are enemies when their cultures want opposite laws.</summary>
     public static bool AreEnemies(Faction a, Faction b) =>
@@ -61,6 +61,8 @@ public sealed partial class SectorState
         if (faction.Disposition == Disposition.Hostile) return new(false, $"The {faction.Name} are already hostile.");
         faction.Grievance = AttackGrievance;
         faction.Attitude = -100;
+        faction.Goodwill = 0;
+        faction.TruceUntilTick = 0;
         _lastDisposition[faction.Id] = faction.Disposition;
         AddEvent($"You attacked the {faction.Name}. They are now hostile towards you.");
         return new(true, $"Weapons free on the {faction.Name}.");

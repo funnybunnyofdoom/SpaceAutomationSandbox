@@ -104,6 +104,9 @@ public partial class Main : Node2D
     /// <summary>Laws and civilizations (#36).</summary>
     private LawsPanel? _lawsPanel;
 
+    /// <summary>Trade and diplomacy (#89).</summary>
+    private TradePanel? _tradePanel;
+
     /// <summary>Power networks and sources (#75).</summary>
     private PowerPanel? _powerPanel;
 
@@ -192,6 +195,9 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_researchPanel);
             _lawsPanel = new LawsPanel(() => _sector, () => _changedSinceSave = true) { Visible = false }; // #36
             _uiRoot.AddChild(_lawsPanel);
+            _tradePanel = new TradePanel(() => _sector, () => _player, _catalog.Materials, () => _changedSinceSave = true) { Visible = false }; // #89
+            _uiRoot.AddChild(_tradePanel);
+            _lawsPanel.DiplomacyChosen += id => { _lawsPanel.Visible = false; _tradePanel.Open(id); };
             _powerPanel = new PowerPanel(() => _sector, () => _player) { Visible = false }; // #75
             _uiRoot.AddChild(_powerPanel);
             _debugPanel = new DebugPanel(() => _sector, () => _warp.Speed, SetGameSpeed, _catalog.Materials) { Visible = false };
@@ -290,6 +296,7 @@ public partial class Main : Node2D
         if (args.FirstOrDefault(a => a.StartsWith("--shipyard-design=")) is { } designArg && int.TryParse(designArg["--shipyard-design=".Length..], out var designIndex))
             _shipyardPanel?.SelectDesign(designIndex);
         DemoSwarm(args); // #30
+        if (System.Array.IndexOf(args, "--open-trade") >= 0) { if (_lawsPanel != null) _lawsPanel.Visible = false; _tradePanel?.Open(); } // #89, with --demo-civ
         if (System.Array.IndexOf(args, "--open-swarms") >= 0) _swarmPanel?.Open();
         if (System.Array.IndexOf(args, "--open-fleet") >= 0) _fleetPanel?.Open();
         if (System.Array.IndexOf(args, "--open-diagnostics") >= 0) _diagnosticsPanel?.Open();
@@ -695,7 +702,7 @@ public partial class Main : Node2D
             if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1); // settings open above the menu
         }
         _hud.Visible = false;
-        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel })
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel })
             if (panel != null) panel.Visible = false;
         _title.Open(SaveSummary());
     }
@@ -863,6 +870,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Fleet)) Toggle(_fleetPanel, () => _fleetPanel!.Open());
         else if (Pressed(InputActions.Debug)) Toggle(_debugPanel, () => _debugPanel!.Open());
         else if (Pressed(InputActions.Job)) Toggle(_jobPanel, () => _jobPanel!.Open());
+        else if (Pressed(InputActions.Cargo) && _player is { } trader && _sector.DockedTrader(trader) is not null) Toggle(_tradePanel, () => _tradePanel!.Open()); // #89
         else if (Pressed(InputActions.Cargo)) Toggle(_cargoPanel, () => _cargoPanel!.Open());
         else if (Pressed(InputActions.Diagnostics)) Toggle(_diagnosticsPanel, () => _diagnosticsPanel!.Open());
         else if (Pressed(InputActions.Settings)) Toggle(_settingsPanel, () => _settingsPanel!.Open());
@@ -878,7 +886,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
-            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel };
+            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel };
             var anyOpen = _mapMode || _hud.HelpOpen || panels.Any(p => p is { Visible: true });
             if (!anyOpen) OpenPause();
             if (_mapMode) ToggleMap();

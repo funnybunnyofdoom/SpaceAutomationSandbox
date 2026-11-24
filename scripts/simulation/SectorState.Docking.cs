@@ -77,7 +77,7 @@ public sealed partial class SectorState
 
     /// <summary>Indices of the station's docking ports not occupied by any craft.</summary>
     public IReadOnlyList<int> FreePorts(CraftState station) =>
-        Enumerable.Range(0, station.IsWreck ? 0 : station.Stats.DockingPorts.Count)
+        Enumerable.Range(0, station.IsWreck || IsEnemy(station) ? 0 : station.Stats.DockingPorts.Count)
             .Where(i => !_crafts.Any(c => c.DockedToCraftId == station.Id && c.DockPortIndex == i))
             .ToList();
 

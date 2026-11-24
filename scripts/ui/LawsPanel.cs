@@ -86,6 +86,9 @@ public partial class LawsPanel : PanelContainer
         box.AddChild(_events);
     }
 
+    /// <summary>Raised by a civilization's button (#89).</summary>
+    public event System.Action<int>? DiplomacyChosen;
+
     private static Label Heading(string text)
     {
         var label = new Label { Text = text, Modulate = new Color(0.75f, 0.85f, 1f) };
@@ -158,6 +161,10 @@ public partial class LawsPanel : PanelContainer
                 Modulate = DispositionColor(f.Disposition),
             };
             _factions.AddChild(line);
+            var id = f.Id;
+            var deal = new Button { Text = "Trade and diplomacy", FocusMode = FocusModeEnum.None, SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+            deal.Pressed += () => DiplomacyChosen?.Invoke(id);
+            _factions.AddChild(deal);
         }
 
         var recent = sector.Events.Reverse().Take(12)

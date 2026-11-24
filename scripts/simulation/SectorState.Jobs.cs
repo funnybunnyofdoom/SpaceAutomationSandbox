@@ -45,6 +45,7 @@ public sealed partial class SectorState
         if (!_craftsById.TryGetValue(job.DestinationId, out var destination) || destination.Id == craft.Id)
             return new(false, "The destination must be another craft.");
         if (destination.Stats.DockingPorts.Count == 0) return new(false, $"{destination.Name} has no docking port.");
+        if (!IsPlayers(destination)) return new(false, $"{destination.Name} isn't yours.");
 
         job.Active = true;
         job.WaitReason = null;
@@ -94,6 +95,7 @@ public sealed partial class SectorState
             if (craft.Job is { Active: true } routed && StepGateRoute(craft, routed)) { routed.NoteTick(Tick); continue; } // via warp gates (#23)
             switch (craft.Job)
             {
+                case TradeJob { Active: true } trade: StepTradeJob(craft, trade); break;
                 case DefendJob { Active: true } defend: StepDefendJob(craft, defend); break;
                 case SalvageJob { Active: true } salvage: StepSalvageJob(craft, salvage); break;
                 case SurveyJob { Active: true } survey: StepSurveyJob(craft, survey); break;

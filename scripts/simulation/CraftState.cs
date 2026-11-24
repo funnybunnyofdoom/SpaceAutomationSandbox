@@ -216,6 +216,9 @@ public sealed class CraftState
     public bool IsPatrol { get; internal set; }
     public int PatrolStop { get; internal set; }
 
+    /// <summary>A civilization's trade station (#89). Saved.</summary>
+    public bool IsTradeStation { get; internal set; }
+
     /// <summary>Shot to pieces: it drifts with what it holds and does nothing. Saved.</summary>
     public bool IsWreck { get; internal set; }
 

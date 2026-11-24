@@ -11,6 +11,9 @@ public sealed record MaterialDefinition
     public string Id { get; init; } = "";
     public string Name { get; init; } = "";
     public string? PlaceholderColor { get; init; }
+
+    /// <summary>What a kg is worth in trade (#89), before each civilization's own taste; 0 if nobody wants it.</summary>
+    public double Value { get; init; }
 }
 
 /// <summary>All known materials by stable ID, in file order (used for display order).</summary>
@@ -26,6 +29,7 @@ public sealed class MaterialCatalog
         foreach (var material in materials)
         {
             if (string.IsNullOrWhiteSpace(material.Id)) throw new FormatException("Material with empty id.");
+            if (!(material.Value >= 0)) throw new FormatException($"Material '{material.Id}' has a negative value.");
             if (!_byId.TryAdd(material.Id, material)) throw new FormatException($"Duplicate material id '{material.Id}'.");
             _ordered.Add(material);
         }

@@ -21,6 +21,7 @@ public sealed partial class SectorState
         if (!_craftsById.TryGetValue(job.DestinationId, out var destination) || destination.Id == craft.Id)
             return new(false, "The destination must be another craft.");
         if (pickup.Id == destination.Id) return new(false, "Pickup and destination must be different.");
+        if (!IsPlayers(pickup) || !IsPlayers(destination)) return new(false, "Freight goes between your own stations: use a trade route to trade.");
         if (pickup.Stats.DockingPorts.Count == 0) return new(false, $"{pickup.Name} has no docking port.");
         if (destination.Stats.DockingPorts.Count == 0) return new(false, $"{destination.Name} has no docking port.");
 

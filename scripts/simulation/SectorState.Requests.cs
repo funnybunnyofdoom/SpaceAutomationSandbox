@@ -78,6 +78,7 @@ public sealed partial class SectorState
     {
         var station = GetCraft(stationId);
         if (kg < 0) return new(false, "A request can't be negative.");
+        if (!IsPlayers(station)) return new(false, $"{station.Name} isn't yours.");
         if (Parts is { } parts && !parts.Materials.Contains(materialId)) return new(false, $"Unknown material '{materialId}'.");
         if (kg == 0)
             return station.RequestsList.Remove(materialId)
@@ -182,7 +183,7 @@ public sealed partial class SectorState
                 var bestDistance = double.PositiveInfinity;
                 foreach (var source in _crafts)
                 {
-                    if (ReferenceEquals(source, ship) || ReferenceEquals(source, station) || source.Stats.DockingPorts.Count == 0 || source.IsWreck) continue;
+                    if (ReferenceEquals(source, ship) || ReferenceEquals(source, station) || source.Stats.DockingPorts.Count == 0 || source.IsWreck || !IsPlayers(source)) continue;
                     var spare = source.Inventory[material] - WantedKg(source, material)
                                 - outgoing.GetValueOrDefault((source.Id, material));
                     var amount = Math.Min(Math.Min(need, spare), ship.FreeCargoKg);

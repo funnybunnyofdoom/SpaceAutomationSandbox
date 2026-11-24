@@ -276,7 +276,7 @@ public sealed class FactionTests
         }
         Assert.True(far.IsWreck, string.Join(" | ", log));
         for (var i = 0; i < 100; i++) sector.Step();
-        Assert.DoesNotContain(sector.Crafts, c => !SectorState.IsPlayers(c) && !c.IsPatrol && !c.IsWreck); // they leave; their patrol stays (#89)
+        Assert.DoesNotContain(sector.Crafts, c => !SectorState.IsPlayers(c) && !c.IsPatrol && !c.IsTradeStation && !c.IsWreck); // they leave; their patrol stays (#89)
         Assert.Equal(mass, sector.ComputeMassLedger().TotalKg);
     }
 }

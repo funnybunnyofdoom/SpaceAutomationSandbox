@@ -143,6 +143,7 @@ public sealed partial class SectorState
     {
         if (_factions.Count == 0 || Tick % FixedStepClock.TicksPerSecond != 0) return; // once a second is plenty
         StepFleets(); // their patrols (#89)
+        StepTrade(); // their trade stations (#89)
         foreach (var faction in _factions)
         {
             faction.Grievance = Math.Max(0, faction.Grievance - GrievanceFadePerMinute / 60);
@@ -151,6 +152,7 @@ public sealed partial class SectorState
             var step = AttitudeDriftPerMinute / 60;
             faction.Attitude = Math.Abs(target - faction.Attitude) <= step ? target : faction.Attitude + Math.Sign(target - faction.Attitude) * step;
 
+            if (Tick < faction.TruceUntilTick) faction.Attitude = Math.Max(faction.Attitude, TruceAttitude); // peace holds for a while (#89)
             var now = faction.Disposition;
             if (_lastDisposition.TryGetValue(faction.Id, out var before) && before != now)
                 AddEvent($"The {faction.Name} are now {now.ToString().ToLowerInvariant()} towards you.");
@@ -219,10 +221,12 @@ public sealed partial class SectorState
 
     /// <summary>Restores a saved civilization exactly.</summary>
     public Faction RestoreFaction(int id, string name, string cultureId, BodyId homeStarId, double baseline, double attitude, double grievance, long nextEventTick, bool warned,
-        CraftId raidGateId = default, long raidEndTick = 0, long nextPatrolTick = 0, int patrolShipsBuilt = 0)
+        CraftId raidGateId = default, long raidEndTick = 0, long nextPatrolTick = 0, int patrolShipsBuilt = 0,
+        double goodwill = 0, long truceUntilTick = 0, long nextStationTick = 0)
     {
         var faction = new Faction(id, name, cultureId, homeStarId, baseline) { Attitude = attitude, Grievance = grievance, NextEventTick = nextEventTick, RaidGateId = raidGateId, RaidEndTick = raidEndTick,
-            NextPatrolTick = nextPatrolTick, PatrolShipsBuilt = patrolShipsBuilt };
+            NextPatrolTick = nextPatrolTick, PatrolShipsBuilt = patrolShipsBuilt,
+            Goodwill = goodwill, TruceUntilTick = truceUntilTick, NextStationTick = nextStationTick };
         _factions.Add(faction);
         _lastDisposition[id] = faction.Disposition;
         _warned[id] = warned;
