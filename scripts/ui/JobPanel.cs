@@ -46,7 +46,10 @@ public partial class JobPanel : PanelContainer
     private OptionButton _serveMinLoad = null!;
     private OptionButton _source = null!, _mineMaterial = null!, _mineDestination = null!, _returnAt = null!;
     private OptionButton _pickup = null!, _haulMaterial = null!, _haulDestination = null!, _minPickup = null!, _keepStocked = null!;
-    private Label _state = null!;
+    private InfoList _state = null!;
+    private RouteView _route = null!;
+    private readonly List<Button> _kindButtons = new();
+    private Label _kindName = null!;
     private Label _message = null!;
     private List<BodyId> _sources = new();
     private List<string> _deposits = new();
@@ -81,9 +84,10 @@ public partial class JobPanel : PanelContainer
         _title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(_title);
 
-        var kindRow = new HBoxContainer();
-        kindRow.AddChild(new Label { Text = "Job" });
-        _kind = new OptionButton { FocusMode = FocusModeEnum.None };
+        _title.AddThemeColorOverride("font_color", UiTheme.Accent);
+        // The kinds as icons; the list behind them keeps the choice (#103).
+        var kindRow = new HFlowContainer();
+        _kind = new OptionButton { FocusMode = FocusModeEnum.None, Visible = false };
         _kind.AddItem("Mining");
         _kind.AddItem("Freight: fixed route");
         _kind.AddItem("Freight: serve requests");
@@ -93,9 +97,25 @@ public partial class JobPanel : PanelContainer
         _kind.AddItem("Escort a ship");
         _kind.AddItem("Patrol a system");
         _kind.AddItem("Trade route with a civilization");
-        _kind.ItemSelected += _ => ShowKind();
         kindRow.AddChild(_kind);
+        var group = new ButtonGroup();
+        var icons = new[] { "mining", "freight", "cargo", "survey", "salvage", "shield", "fleet", "orbit", "trade" };
+        for (var i = 0; i < icons.Length; i++)
+        {
+            var index = i;
+            var button = new Button
+            {
+                ToggleMode = true, ButtonGroup = group, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(42, 38), Icon = UiIcons.Get(icons[i]),
+                IconAlignment = HorizontalAlignment.Center, ExpandIcon = true, TextureFilter = TextureFilterEnum.Nearest, TooltipText = _kind.GetItemText(i),
+            };
+            button.AddThemeConstantOverride("icon_max_width", 32);
+            button.Pressed += () => { _kind.Select(index); ShowKind(); };
+            kindRow.AddChild(button);
+            _kindButtons.Add(button);
+        }
         box.AddChild(kindRow);
+        box.AddChild(_kindName = UiTheme.Header(""));
+        box.AddChild(_route = new RouteView());
 
         _miningRows = new GridContainer { Columns = 2 };
         box.AddChild(_miningRows);
@@ -138,7 +158,7 @@ public partial class JobPanel : PanelContainer
         box.AddChild(_tradeRows);
         _tradeHome = AddRow(_tradeRows, "Home station");
         _tradeGive = AddRow(_tradeRows, "Take them");
-        foreach (var m in _materials.Materials) _tradeGive.AddItem(m.Name);
+        foreach (var m in _materials.Materials) _tradeGive.AddIconItem(UiIcons.Material(m.Id), m.Name);
         _tradeWith = AddRow(_tradeRows, "Trade with");
         _tradeWith.ItemSelected += _ => RefreshTradeGoods();
         _tradeGet = AddRow(_tradeRows, "Bring back");
@@ -162,7 +182,7 @@ public partial class JobPanel : PanelContainer
         });
 
         var buttons = new HBoxContainer();
-        var start = new Button { Text = "Start job", FocusMode = FocusModeEnum.None, TooltipText = "The craft runs this job on its own until you stop it; the panel shows what it's waiting for" };
+        var start = new Button { Text = "Start job", Icon = UiIcons.Get("ok"), FocusMode = FocusModeEnum.None, TooltipText = "The craft runs this job on its own until you stop it; the panel shows what it's waiting for" };
         start.Pressed += Start;
         buttons.AddChild(start);
         var stop = new Button { Text = "Stop job", FocusMode = FocusModeEnum.None, TooltipText = "Stop the job; the craft stays where it is and you can fly it again" };
@@ -170,8 +190,7 @@ public partial class JobPanel : PanelContainer
         buttons.AddChild(stop);
         box.AddChild(buttons);
 
-        _state = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(410, 0) };
-        box.AddChild(_state);
+        box.AddChild(_state = new InfoList());
         _message = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(410, 0) };
         box.AddChild(_message);
         box.AddChild(new Label
@@ -208,6 +227,8 @@ public partial class JobPanel : PanelContainer
 
     private void ShowKind()
     {
+        for (var i = 0; i < _kindButtons.Count; i++) _kindButtons[i].SetPressedNoSignal(i == _kind.Selected);
+        _kindName.Text = _kind.GetItemText(Math.Max(0, _kind.Selected));
         _miningRows.Visible = _kind.Selected == 0;
         _freightRows.Visible = _kind.Selected == 1;
         _serveRows.Visible = _kind.Selected == 2;
@@ -232,7 +253,7 @@ public partial class JobPanel : PanelContainer
             var body = sector.GetBody(id);
             // Only what the surveyed sites hold counts (#70).
             var surveyed = body.Sites.Where(s => s.Surveyed).ToList();
-            _source.AddItem(!body.AnySiteSurveyed ? $"{body.Name} (unsurveyed)"
+            _source.AddIconItem(UiIcons.Get(UiIcons.BodyIcon(body)), !body.AnySiteSurveyed ? $"{body.Name} (unsurveyed)"
                 : $"{body.Name} ({surveyed.Sum(s => s.DepositsKg.Values.Sum()) / 1000.0:0} t of ore in {surveyed.Count} of {body.Sites.Count} sites{(body.BulkKg > 0 ? $", {body.BulkKg / 1e9:0.###} Mt of {body.BulkMaterialId}" : "")})");
         }
 
@@ -240,10 +261,10 @@ public partial class JobPanel : PanelContainer
         foreach (var option in new[] { _mineDestination, _pickup, _haulDestination, _salvageDestination, _tradeHome })
         {
             option.Clear();
-            foreach (var id in _stations) option.AddItem($"{sector.GetCraft(id).Name} ({id})");
+            foreach (var id in _stations) option.AddIconItem(UiIcons.Get(sector.GetCraft(id).IsShipyard ? "shipyard" : SectorState.IsGate(sector.GetCraft(id)) ? "gate" : "orbit"), $"{sector.GetCraft(id).Name} ({id})");
         }
         _haulMaterial.Clear();
-        foreach (var m in _materials.Materials) _haulMaterial.AddItem(m.Name);
+        foreach (var m in _materials.Materials) _haulMaterial.AddIconItem(UiIcons.Material(m.Id), m.Name);
 
         Select(_source, 0);
         Select(_mineDestination, 0);
@@ -329,7 +350,7 @@ public partial class JobPanel : PanelContainer
         _tradeGoods = _tradeWith.Selected >= 0 && _tradeWith.Selected < _traders.Count && sector.FactionById(sector.GetCraft(_traders[_tradeWith.Selected]).FactionId) is { } faction
             ? sector.SellsOf(faction).ToList() : new List<string>();
         _tradeGet.Clear();
-        foreach (var m in _tradeGoods) _tradeGet.AddItem(_materials.Contains(m) ? _materials.Get(m).Name : m);
+        foreach (var m in _tradeGoods) _tradeGet.AddIconItem(UiIcons.Material(m), _materials.Contains(m) ? _materials.Get(m).Name : m);
     }
 
     /// <summary>What the chosen fleet order (#88) can protect: stations, ships or star systems.</summary>
@@ -352,7 +373,7 @@ public partial class JobPanel : PanelContainer
         // Ore in the surveyed sites (#70) and the body's bulk (#27).
         _deposits = body is { AnySiteSurveyed: true } ? body.MineableMaterials.Where(m => body.SurveyedDeposit(m) > 0).ToList() : new List<string>();
         _mineMaterial.Clear();
-        foreach (var m in _deposits) _mineMaterial.AddItem(_materials.Contains(m) ? _materials.Get(m).Name : m);
+        foreach (var m in _deposits) _mineMaterial.AddIconItem(UiIcons.Material(m), _materials.Contains(m) ? _materials.Get(m).Name : m);
         if (_deposits.Count == 0) _mineMaterial.AddItem(body is { AnySiteSurveyed: false } ? "(unknown: survey it first)" : "(nothing in the surveyed sites)");
         Select(_mineMaterial, 0);
     }
@@ -369,7 +390,8 @@ public partial class JobPanel : PanelContainer
         _title.Text = craft is null ? "JOB" : $"JOB: {craft.Name}  ({InputActions.Key1(InputActions.Job)} to close)";
         if (craft?.Job is not { } job)
         {
-            _state.Text = "No job.";
+            _state.Set(new[] { new HudRow("idle", "No job: choose one and start it.", Severity.Muted) });
+            ShowRoute(craft);
             return;
         }
         var sector = _sector();
@@ -389,12 +411,73 @@ public partial class JobPanel : PanelContainer
                                   + (s.Contract is { } c ? $" (now {c.AmountKg / 1000.0:0.0} t {c.MaterialId}, {Station(c.PickupId)} → {Station(c.DestinationId)})" : ""),
             _ => job.Kind,
         };
-        _state.Text = $"{what}\nState: {job.Status}{(craft.PowerShort && !craft.LegacyFreePower ? "  (NO POWER)" : "")}{(craft.CrewShortReason is { } why ? $"  (STOPPED: {why})" : "")}{(craft.GivingWayTo.IsNone ? "" : "  (giving way to traffic)")}{(craft.Transit is { } leg ? $"  (far away: in transit, arrives in {(leg.ArriveTick - sector.Tick) * FixedStepClock.TickSeconds:0} s)" : "")}\n"
-                      + $"Cycles: {job.CompletedCycles}    Delivered: {job.DeliveredKg / 1000.0:0.0} t    "
-                      + $"Hold: {craft.CargoKg / 1000.0:0.0} / {craft.CargoCapacityKg / 1000.0:0} t"
-                      + (job.History.Count == 0 ? "" : "\nRecent (newest first):\n" + string.Join("\n", job.History.Reverse().Take(6).Select(e =>
-                          $"  {FormatTime(e.Tick)}  {e.Text}")));
-        _state.AddThemeColorOverride("font_color", job.Status.StartsWith("waiting") ? ErrorColor : new Color(1, 1, 1));
+        var waiting = job.Status.StartsWith("waiting");
+        var rows = new List<HudRow>
+        {
+            new(FleetPanel.JobIcon(job.Kind), what),
+            new(!job.Active ? "idle" : waiting ? "wait" : "work", job.Active ? job.Status : $"stopped: {job.Status}", waiting ? Severity.Warning : Severity.Normal),
+        };
+        if (craft.PowerShort && !craft.LegacyFreePower) rows.Add(new("warn", "NO POWER", Severity.Bad));
+        if (craft.CrewShortReason is { } why) rows.Add(new("warn", $"STOPPED: {why}", Severity.Bad));
+        if (!craft.GivingWayTo.IsNone) rows.Add(new("fleet", "giving way to traffic", Severity.Muted));
+        if (craft.Transit is { } leg) rows.Add(new("clock", $"far away: in transit, arrives in {(leg.ArriveTick - sector.Tick) * FixedStepClock.TickSeconds:0} s", Severity.Muted));
+        if (craft.HasCargoLimit && craft.CargoCapacityKg > 0)
+            rows.Add(new("cargo", $"{craft.CargoKg / 1000.0:0.0} / {craft.CargoCapacityKg / 1000.0:0} t in the hold", Severity.Normal, craft.CargoKg / (double)craft.CargoCapacityKg));
+        rows.Add(new("ok", $"{job.CompletedCycles} cycles    {job.DeliveredKg / 1000.0:N1} t delivered", Severity.Muted));
+        foreach (var e in job.History.Reverse().Take(6)) rows.Add(new("message", $"{FormatTime(e.Tick)}  {e.Text}", Severity.Muted));
+        _state.Set(rows);
+        ShowRoute(craft);
+    }
+
+    /// <summary>The running job as a picture; without one, the job being set up.</summary>
+    private void ShowRoute(CraftState? craft)
+    {
+        var sector = _sector();
+        RouteStop Station(CraftId id) => sector.Crafts.FirstOrDefault(c => c.Id == id) is { } c ? new(c.Name, c.Design, "orbit") : new("?", null, "help");
+        RouteStop Body(BodyId id) => sector.Bodies.FirstOrDefault(b => b.Id == id) is { } b ? new(b.Name, null, UiIcons.BodyIcon(b)) : new("?", null, "help");
+        RouteStop Ship() => craft is null ? new("?", null, "fleet") : new(craft.Name, craft.Design, "fleet");
+        CraftId At(OptionButton option, List<CraftId> ids) => option.Selected >= 0 && option.Selected < ids.Count ? ids[option.Selected] : CraftId.None;
+        var stops = new List<RouteStop>();
+        var goods = new List<string>();
+        switch (craft?.Job is { Active: true } running ? running : null)
+        {
+            case MiningJob m: stops.Add(Body(m.SourceBodyId)); goods.Add("mat_" + m.MaterialId); stops.Add(Station(m.DestinationId)); break;
+            case HaulJob h: stops.Add(Station(h.PickupId)); goods.Add("mat_" + h.MaterialId); stops.Add(Station(h.DestinationId)); break;
+            case TradeJob t: stops.Add(Station(t.HomeId)); goods.Add("mat_" + t.GiveMaterial); stops.Add(Station(t.TraderId)); goods.Add("mat_" + t.GetMaterial); stops.Add(Station(t.HomeId)); break;
+            case DefendJob d: stops.Add(Ship()); goods.Add("shield"); stops.Add(d.Mode == DefendMode.Patrol ? Body(d.StarId) : Station(d.PostId)); break;
+            case SalvageJob s: stops.Add(s.WreckId.IsNone ? new("nearest wreck", null, "danger") : Station(s.WreckId)); goods.Add("salvage"); stops.Add(Station(s.DestinationId)); break;
+            case SurveyJob s: stops.Add(Ship()); goods.Add("survey"); stops.Add(s.TargetBodyId.IsNone ? new("next body", null, "planet") : Body(s.TargetBodyId)); break;
+            case ServeRequestsJob { Contract: { } c }: stops.Add(Station(c.PickupId)); goods.Add("mat_" + c.MaterialId); stops.Add(Station(c.DestinationId)); break;
+            case ServeRequestsJob: stops.Add(new("any station", null, "orbit")); goods.Add("cargo"); stops.Add(new("who asks", null, "orbit")); break;
+            default:
+                switch (_kind.Selected)
+                {
+                    case 1:
+                        stops.Add(Station(At(_pickup, _stations)));
+                        goods.Add(_haulMaterial.Selected >= 0 && _haulMaterial.Selected < _materials.Materials.Count ? "mat_" + _materials.Materials[_haulMaterial.Selected].Id : "cargo");
+                        stops.Add(Station(At(_haulDestination, _stations)));
+                        break;
+                    case 2: stops.Add(new("any station", null, "orbit")); goods.Add("cargo"); stops.Add(new("who asks", null, "orbit")); break;
+                    case 3: stops.Add(Ship()); goods.Add("survey"); stops.Add(new("next body", null, "planet")); break;
+                    case 4: stops.Add(new("nearest wreck", null, "danger")); goods.Add("salvage"); stops.Add(Station(At(_salvageDestination, _stations))); break;
+                    case 5 or 6: stops.Add(Ship()); goods.Add("shield"); stops.Add(Station(At(_defendWhat, _posts))); break;
+                    case 7: stops.Add(Ship()); goods.Add("shield"); stops.Add(_defendWhat.Selected >= 0 && _defendWhat.Selected < _systems.Count ? Body(_systems[_defendWhat.Selected]) : new("?", null, "star")); break;
+                    case 8:
+                        stops.Add(Station(At(_tradeHome, _stations)));
+                        goods.Add(_tradeGive.Selected >= 0 && _tradeGive.Selected < _materials.Materials.Count ? "mat_" + _materials.Materials[_tradeGive.Selected].Id : "cargo");
+                        stops.Add(Station(At(_tradeWith, _traders)));
+                        goods.Add(_tradeGet.Selected >= 0 && _tradeGet.Selected < _tradeGoods.Count ? "mat_" + _tradeGoods[_tradeGet.Selected] : "cargo");
+                        stops.Add(Station(At(_tradeHome, _stations)));
+                        break;
+                    default:
+                        stops.Add(_source.Selected >= 0 && _source.Selected < _sources.Count ? Body(_sources[_source.Selected]) : new("?", null, "asteroid"));
+                        goods.Add(_mineMaterial.Selected >= 0 && _mineMaterial.Selected < _deposits.Count ? "mat_" + _deposits[_mineMaterial.Selected] : "mining");
+                        stops.Add(Station(At(_mineDestination, _stations)));
+                        break;
+                }
+                break;
+        }
+        _route.Set(stops, goods);
     }
 
     private static string FormatTime(long tick)

@@ -24,7 +24,8 @@ public partial class TradePanel : PanelContainer
     private readonly Action _changed;
     private OptionButton _faction = null!, _give = null!, _get = null!;
     private SpinBox _tonnes = null!;
-    private Label _state = null!, _quote = null!, _message = null!;
+    private Label _message = null!;
+    private InfoList _state = null!, _quote = null!;
     private Button _trade = null!, _gift = null!, _peace = null!;
     private VBoxContainer _deal = null!;
     private List<int> _factions = new();
@@ -59,6 +60,7 @@ public partial class TradePanel : PanelContainer
         var head = new HBoxContainer();
         var title = new Label { Text = "TRADE AND DIPLOMACY", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         title.AddThemeFontSizeOverride("font_size", 18);
+        title.AddThemeColorOverride("font_color", UiTheme.Accent);
         head.AddChild(title);
         var close = new Button { Text = "Close", FocusMode = FocusModeEnum.None };
         close.Pressed += () => Visible = false;
@@ -67,7 +69,7 @@ public partial class TradePanel : PanelContainer
         _faction = new OptionButton { FocusMode = FocusModeEnum.None };
         _faction.ItemSelected += _ => { RefreshGoods(); Refresh(); };
         box.AddChild(_faction);
-        _state = Text();
+        _state = new InfoList();
         box.AddChild(_state);
 
         _deal = new VBoxContainer();
@@ -87,7 +89,7 @@ public partial class TradePanel : PanelContainer
         _get.ItemSelected += _ => Refresh();
         get.AddChild(_get);
         _deal.AddChild(get);
-        _quote = Text();
+        _quote = new InfoList();
         _deal.AddChild(_quote);
         var buttons = new HBoxContainer();
         _trade = new Button { Text = "Trade", FocusMode = FocusModeEnum.None, TooltipText = "Swap the goods at their prices" };
@@ -143,8 +145,8 @@ public partial class TradePanel : PanelContainer
         _gives = Chosen() is { } f && ship is not null
             ? _materials.Materials.Select(m => m.Id).Where(m => ship.Inventory[m] > 0 && sector.ValueTo(f, m) > 0).ToList() : new List<string>();
         _gets = Chosen() is { } seller ? sector.SellsOf(seller).ToList() : new List<string>();
-        foreach (var m in _gives) _give.AddItem($"{MaterialName(m)} ({ship!.Inventory[m] / 1000.0:0.0##} t aboard)");
-        foreach (var m in _gets) _get.AddItem(MaterialName(m));
+        foreach (var m in _gives) _give.AddIconItem(UiIcons.Material(m), $"{MaterialName(m)} ({ship!.Inventory[m] / 1000.0:0.0##} t aboard)");
+        foreach (var m in _gets) _get.AddIconItem(UiIcons.Material(m), MaterialName(m));
         if (keepGive is not null && _gives.IndexOf(keepGive) is var g and >= 0) _give.Select(g);
         if (keepGet is not null && _gets.IndexOf(keepGet) is var t and >= 0) _get.Select(t);
     }
@@ -154,33 +156,38 @@ public partial class TradePanel : PanelContainer
         _sinceRefresh = 0;
         var sector = _sector();
         _deal.Visible = Chosen() is not null;
-        if (Chosen() is not { } f) { _state.Text = "You haven't met a civilization yet. A warp gate's first jump into a new system may find one."; return; }
+        if (Chosen() is not { } f) { _state.Set(new[] { new HudRow("idle", "You haven't met a civilization yet. A warp gate's first jump into a new system may find one.", Severity.Muted) }); return; }
         var ship = _ship();
         var docked = ship is not null && sector.DockedTrader(ship) == f;
         var station = sector.TradeStationOf(f);
         var hostile = f.Disposition == Disposition.Hostile;
         var system = sector.Bodies.FirstOrDefault(b => b.Id == f.HomeStarId)?.Name ?? "?";
-        _state.Text = $"{f.Name}, a {f.Culture.Name} civilization in the {system} system: {f.Disposition} ({f.Attitude:+0;-0;0})\n"
-                      + $"goodwill {f.Goodwill:0.0} of {Faction.MaxGoodwill:0}, grievance {f.Grievance:0}"
-                      + (sector.Tick < f.TruceUntilTick ? $", truce for {(f.TruceUntilTick - sector.Tick) * FixedStepClock.TickSeconds / 60:0} more min" : "") + "\n"
-                      + (hostile ? $"They want goods worth {SectorState.PeacePrice(f):N0} for peace, from a ship of yours in their system."
-                          : station is null ? "They have no trade station at the moment."
-                          : docked ? SectorState.WillTrade(f) ? "Docked at their trade station." : "They won't trade while wary, but accept gifts."
-                          : $"Dock at {station.Name} to trade or give gifts.");
+        var rows = new List<HudRow> { new("star", $"{f.Name}, a {f.Culture.Name} civilization in the {system} system") };
+        rows.AddRange(CivilizationRows.For(sector, f));
+        rows.Add(hostile ? new("danger", $"They want goods worth {SectorState.PeacePrice(f):N0} for peace, from a ship of yours in their system.", Severity.Warning)
+            : station is null ? new("idle", "They have no trade station at the moment.", Severity.Muted)
+            : docked ? SectorState.WillTrade(f) ? new HudRow("docked", "Docked at their trade station.", Severity.Good) : new HudRow("warn", "They won't trade while wary, but accept gifts.", Severity.Warning)
+            : new("docked", $"Dock at {station.Name} to trade or give gifts.", Severity.Muted));
+        _state.Set(rows);
         _trade.Disabled = !docked || !SectorState.WillTrade(f);
         _gift.Disabled = !docked;
         _peace.Visible = hostile;
-        _quote.Text = "";
-        if (Give() is not { } give || ship is null) { _quote.Text = "Nothing in your hold they want."; return; }
+        if (Give() is not { } give || ship is null) { _quote.Set(new[] { new HudRow("cargo", "Nothing in your hold they want.", Severity.Muted) }); return; }
         if (hostile)
         {
-            _quote.Text = $"Peace would cost {Math.Ceiling(SectorState.PeacePrice(f) / sector.ValueTo(f, give)) / 1000:0.0##} t of {MaterialName(give)}.";
+            var cost = Math.Ceiling(SectorState.PeacePrice(f) / sector.ValueTo(f, give)) / 1000;
+            _quote.Set(new[] { new HudRow("mat_" + give, $"Peace costs {cost:0.##} t of {MaterialName(give)}; you have {ship.Inventory[give] / 1000.0:0.##} t", ship.Inventory[give] / 1000.0 >= cost ? Severity.Good : Severity.Warning, ship.Inventory[give] / 1000.0 / Math.Max(cost, 0.001)) });
             return;
         }
-        if (station is null || Get() is not { } get) return;
+        if (station is null || Get() is not { } get) { _quote.Set(Array.Empty<HudRow>()); return; }
         var kg = Kg(ship, give);
-        _quote.Text = $"{kg / 1000.0:0.0##} t of {MaterialName(give)} gets {sector.BarterQuote(f, station, give, kg, get) / 1000.0:0.0##} t of {MaterialName(get)} "
-                      + $"(they have {station.Inventory[get] / 1000.0:0.0} t). They give {sector.BuyPrice(f, station, give):0.0#} and ask {sector.SellPrice(f, get):0.0#} per kg.";
+        var gets = sector.BarterQuote(f, station, give, kg, get);
+        _quote.Set(new[]
+        {
+            new HudRow("mat_" + give, $"give {kg / 1000.0:0.0##} t of {MaterialName(give)}   at {sector.BuyPrice(f, station, give):0.0#} per kg"),
+            new HudRow("mat_" + get, $"get {gets / 1000.0:0.0##} t of {MaterialName(get)}   at {sector.SellPrice(f, get):0.0#} per kg", gets > 0 ? Severity.Good : Severity.Warning,
+                gets / (double)Math.Max(1, station.Inventory[get]), Tip: $"They have {station.Inventory[get] / 1000.0:0.0} t; the bar is the share you'd take"),
+        });
     }
 
     private void Show(ActionResult result)

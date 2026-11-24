@@ -19,8 +19,11 @@ public partial class LawsPanel : PanelContainer
     private readonly Func<SectorState> _sector;
     private readonly Action _changed;
     private VBoxContainer _laws = null!, _factions = null!;
-    private Label _events = null!, _status = null!;
-    private readonly List<(string LawId, CheckBox Box, Label Views)> _lawRows = new();
+    private Label _status = null!;
+    private InfoList _events = null!;
+    private readonly Dictionary<int, InfoList> _factionRows = new();
+    private string _factionKey = "-";
+    private readonly List<(string LawId, CheckBox Box, InfoList Views)> _lawRows = new();
     private double _sinceRefresh;
     private bool _updating;
 
@@ -70,7 +73,7 @@ public partial class LawsPanel : PanelContainer
             };
             _laws.AddChild(check);
             _laws.AddChild(Dim("   " + law.Effect));
-            var views = Dim("");
+            var views = new InfoList();
             _laws.AddChild(views);
             _lawRows.Add((id, check, views));
         }
@@ -82,7 +85,7 @@ public partial class LawsPanel : PanelContainer
         box.AddChild(_factions);
 
         box.AddChild(Heading("Recent events"));
-        _events = Dim("");
+        _events = new InfoList();
         box.AddChild(_events);
     }
 
@@ -91,9 +94,7 @@ public partial class LawsPanel : PanelContainer
 
     private static Label Heading(string text)
     {
-        var label = new Label { Text = text, Modulate = new Color(0.75f, 0.85f, 1f) };
-        label.AddThemeFontSizeOverride("font_size", 16);
-        return label;
+        return UiTheme.Header(text);
     }
 
     private static Label Dim(string text) => new()
@@ -117,18 +118,6 @@ public partial class LawsPanel : PanelContainer
         Refresh();
     }
 
-    /// <summary>"Hostile (−42, heading to −15)" with a word, not only a colour (#68).</summary>
-    private static string AttitudeText(Faction f, IReadOnlyCollection<string> laws) =>
-        $"{f.Disposition} ({f.Attitude:+0;-0;0}, heading to {f.TargetAttitude(laws):+0;-0;0})";
-
-    private static Color DispositionColor(Disposition d) => d switch
-    {
-        Disposition.Hostile => Palette.Bad,
-        Disposition.Wary => Palette.Warning,
-        Disposition.Friendly => Palette.Good,
-        _ => Colors.White,
-    };
-
     private void Refresh()
     {
         var sector = _sector();
@@ -139,37 +128,48 @@ public partial class LawsPanel : PanelContainer
             var opinions = sector.Factions
                 .Select(f => (f.Name, Stance: f.Culture.StanceOn(lawId)))
                 .Where(o => o.Stance != 0)
-                .Select(o => $"{o.Name} {(o.Stance > 0 ? "like" : "dislike")} it{(Math.Abs(o.Stance) > 1 ? " strongly" : "")}")
+                .Select(o => new HudRow(o.Stance > 0 ? "ok" : "warn", $"{o.Name} {(o.Stance > 0 ? "like" : "dislike")} it{(Math.Abs(o.Stance) > 1 ? " strongly" : "")}", o.Stance > 0 ? Severity.Good : Severity.Warning))
                 .ToList();
-            views.Text = opinions.Count == 0 ? "" : "   " + string.Join("; ", opinions);
+            views.Set(opinions);
             views.Visible = opinions.Count > 0;
         }
         _updating = false;
 
-        foreach (var child in _factions.GetChildren()) child.QueueFree();
-        if (sector.Factions.Count == 0) _factions.AddChild(Dim("None met yet. A warp gate's first jump into a new system may find one."));
+        // Built only when a civilization is met, so its button can be pressed; the rows update in place.
+        var key = string.Join(",", sector.Factions.Select(f => f.Id));
+        if (key != _factionKey)
+        {
+            _factionKey = key;
+            _factionRows.Clear();
+            foreach (var child in _factions.GetChildren()) { _factions.RemoveChild(child); child.QueueFree(); }
+            if (sector.Factions.Count == 0) _factions.AddChild(Dim("None met yet. A warp gate's first jump into a new system may find one."));
+            foreach (var f in sector.Factions)
+            {
+                var rows = new InfoList();
+                _factions.AddChild(rows);
+                _factionRows[f.Id] = rows;
+                var id = f.Id;
+                var deal = new Button { Text = "Trade and diplomacy", Icon = UiIcons.Get("trade"), FocusMode = FocusModeEnum.None, SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+                deal.Pressed += () => DiplomacyChosen?.Invoke(id);
+                _factions.AddChild(deal);
+            }
+        }
         foreach (var f in sector.Factions)
         {
+            if (!_factionRows.TryGetValue(f.Id, out var list)) continue;
             var star = sector.Bodies.FirstOrDefault(b => b.Id == f.HomeStarId)?.Name ?? "?";
-            var line = new Label
-            {
-                Text = $"{f.Name}  ({f.Culture.Name}, {star} system):  {AttitudeText(f, sector.ActiveLaws)}"
-                       + $"\n   {sector.Crafts.Count(c => c.IsPatrol && c.FactionId == f.Id && !c.IsWreck)} patrol ships in their system"
-                       + (sector.Factions.Where(o => SectorState.AreEnemies(f, o)).Select(o => o.Name).ToList() is { Count: > 0 } foes ? $"; enemies of the {string.Join(", ", foes)}" : "")
-                       + (f.Grievance >= 1 ? $"\n   grievance {f.Grievance:0} from mining in their system (fades with time)" : ""),
-                AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(430, 0),
-                Modulate = DispositionColor(f.Disposition),
-            };
-            _factions.AddChild(line);
-            var id = f.Id;
-            var deal = new Button { Text = "Trade and diplomacy", FocusMode = FocusModeEnum.None, SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
-            deal.Pressed += () => DiplomacyChosen?.Invoke(id);
-            _factions.AddChild(deal);
+            var rows = new List<HudRow> { new("star", $"{f.Name}  ({f.Culture.Name}, {star} system)") };
+            rows.AddRange(CivilizationRows.For(sector, f));
+            if (!f.RaidGateId.IsNone) rows.Add(new("danger", $"RAIDING {sector.Crafts.FirstOrDefault(c => c.Id == f.RaidGateId)?.Name ?? "your gate"}", Severity.Bad));
+            rows.Add(new("weapon", $"{sector.Crafts.Count(c => c.IsPatrol && c.FactionId == f.Id && !c.IsWreck)} patrol ships in their system"
+                + (sector.Factions.Where(o => SectorState.AreEnemies(f, o)).Select(o => o.Name).ToList() is { Count: > 0 } foes ? $"; enemies of the {string.Join(", ", foes)}" : ""), Severity.Muted));
+            list.Set(rows);
         }
 
-        var recent = sector.Events.Reverse().Take(12)
-            .Select(e => $"[{TimeText(e.Tick)}] {e.Text}").ToList();
-        _events.Text = recent.Count == 0 ? "Nothing yet." : string.Join("\n", recent);
+        var recent = sector.Events.Reverse().Take(12).Select(e => new HudRow(
+            e.Text.StartsWith("DANGER") || e.Text.Contains("destroyed") ? "danger" : e.Text.Contains("raid") ? "warn" : e.Text.StartsWith("Milestone") ? "milestones" : "message",
+            $"{TimeText(e.Tick)}  {e.Text}", e.Text.StartsWith("DANGER") ? Severity.Bad : Severity.Muted)).ToList();
+        _events.Set(recent.Count == 0 ? new[] { new HudRow("message", "Nothing yet.", Severity.Muted) } : recent.ToArray());
     }
 
     private static string TimeText(long tick)

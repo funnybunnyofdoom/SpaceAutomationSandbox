@@ -23,7 +23,7 @@ public partial class SwarmPanel : PanelContainer
     private VBoxContainer _swarms = null!;
     private double _sinceRefresh;
     private string _candidateKey = "", _swarmKey = "";
-    private readonly Dictionary<SwarmId, Label> _texts = new();
+    private readonly Dictionary<SwarmId, InfoList> _texts = new();
 
     public SwarmPanel(Func<SectorState> sector, Action changed)
     {
@@ -50,6 +50,7 @@ public partial class SwarmPanel : PanelContainer
         var head = new HBoxContainer();
         var title = new Label { Text = "SWARMS", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         title.AddThemeFontSizeOverride("font_size", 18);
+        title.AddThemeColorOverride("font_color", UiTheme.Accent);
         head.AddChild(title);
         var close = new Button { Text = "Close", FocusMode = FocusModeEnum.None };
         close.Pressed += () => Visible = false;
@@ -73,7 +74,7 @@ public partial class SwarmPanel : PanelContainer
         Modulate = new Color(1, 1, 1, dim ? 0.65f : 1f),
     };
 
-    private static Label Heading(string text) => new() { Text = text, Modulate = new Color(0.65f, 0.8f, 1f) };
+    private static Label Heading(string text) => UiTheme.Header(text);
 
     private static Button Action(string text, string tip, Action pressed)
     {
@@ -128,8 +129,10 @@ public partial class SwarmPanel : PanelContainer
             foreach (var c in candidates)
             {
                 var row = new HBoxContainer();
+                if (sector.Crafts.FirstOrDefault(x => x.Id == c.Ships[0]) is { } first) row.AddChild(new DesignPicture { Design = first.Design });
+                row.AddChild(UiTheme.Icon("mat_" + c.MaterialId));
                 var label = Text($"{c.Ships.Count} × {c.DesignName}: {c.MaterialId} from {Body(sector, c.SourceBodyId)} to {Craft(sector, c.DestinationId)}");
-                label.CustomMinimumSize = new Vector2(330, 0);
+                label.CustomMinimumSize = new Vector2(260, 0);
                 label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 row.AddChild(label);
                 row.AddChild(Action("Form swarm", "Run these ships as one swarm (they join the swarm with the same blueprint and job, if there is one)", () => Show(_sector().FormSwarm(c.Ships))));
@@ -152,26 +155,36 @@ public partial class SwarmPanel : PanelContainer
             if (_texts.TryGetValue(swarm.Id, out var label)) Describe(sector, swarm, label);
     }
 
-    private static void Describe(SectorState sector, SwarmState swarm, Label label)
+    private static void Describe(SectorState sector, SwarmState swarm, InfoList list)
     {
         var full = swarm.Rate.KgPerS(swarm);
-        label.Text = $"{swarm.Name}: {swarm.Count:N0} × {swarm.Design.Name}\n"
-                     + $"   {swarm.MaterialId} from {Body(sector, swarm.SourceBodyId)} to {Craft(sector, swarm.DestinationId)}, trip {swarm.Rate.CycleS / 60:0.0} min\n"
-                     + $"   delivering {swarm.DeliveryKgPerS * 3.6:N0} t/h (could do {full * 3.6:N0} t/h), {swarm.DeliveredKg / 1000.0:N0} t so far\n"
-                     + $"   in the holds {swarm.Inventory.TotalKg / 1000.0:N1} / {swarm.CargoCapacityKg / 1000.0:N0} t\n"
-                     + $"   {swarm.Status}"
-                     + (swarm.GrowRemaining > 0 ? $"\n   growing: {swarm.GrowRemaining:N0} more to order at {Craft(sector, swarm.GrowYardId)}" : "")
-                     + (swarm.GrowWaitReason is { } why && swarm.GrowRemaining > 0 ? $"\n   growth waiting: {why}" : "");
-        label.AddThemeColorOverride("font_color", swarm.LimitReason is null ? Colors.White : new Color(1f, 0.8f, 0.5f));
+        var rows = new List<HudRow>
+        {
+            new("swarm", $"{swarm.Name}: {swarm.Count:N0} × {swarm.Design.Name}"),
+            new("mat_" + swarm.MaterialId, $"{swarm.MaterialId} from {Body(sector, swarm.SourceBodyId)} to {Craft(sector, swarm.DestinationId)}, trip {swarm.Rate.CycleS / 60:0.0} min", Severity.Muted),
+            new("freight", $"{swarm.DeliveryKgPerS * 3.6:N0} of {full * 3.6:N0} t/h", swarm.DeliveryKgPerS < 0.5 * full ? Severity.Warning : Severity.Good, full > 0 ? swarm.DeliveryKgPerS / full : 0,
+                Tip: $"Delivering now, of what the ships could do. {swarm.DeliveredKg / 1000.0:N0} t so far"),
+            new("cargo", $"{swarm.Inventory.TotalKg / 1000.0:N1} / {swarm.CargoCapacityKg / 1000.0:N0} t in the holds", Severity.Normal, swarm.Inventory.TotalKg / (double)Math.Max(1, swarm.CargoCapacityKg)),
+            new(swarm.LimitReason is null ? "work" : "wait", swarm.Status, swarm.LimitReason is null ? Severity.Normal : Severity.Warning),
+        };
+        if (swarm.GrowRemaining > 0)
+        {
+            rows.Add(new("shipyard", $"growing: {swarm.GrowRemaining:N0} more to order at {Craft(sector, swarm.GrowYardId)}"));
+            if (swarm.GrowWaitReason is { } why) rows.Add(new("wait", $"growth waiting: {why}", Severity.Warning));
+        }
+        list.Set(rows);
     }
 
     private VBoxContainer MakeSwarm(SectorState sector, SwarmState swarm, List<CraftState> stations)
     {
         var id = swarm.Id;
         var box = new VBoxContainer();
-        var text = Text("");
+        var head = new HBoxContainer();
+        head.AddChild(new DesignPicture { Design = swarm.Design, CustomMinimumSize = new Vector2(64, 64), SizeFlagsVertical = SizeFlags.ShrinkBegin });
+        var text = new InfoList();
         _texts[id] = text;
-        box.AddChild(text);
+        head.AddChild(text);
+        box.AddChild(head);
 
         var yards = stations.Where(s => s.IsShipyard).ToList();
         if (yards.Count > 0)
@@ -208,7 +221,7 @@ public partial class SwarmPanel : PanelContainer
         {
             var job = new HBoxContainer();
             var source = new OptionButton { FocusMode = FocusModeEnum.None };
-            foreach (var b in sources) source.AddItem(b.Name);
+            foreach (var b in sources) source.AddIconItem(UiIcons.Get(UiIcons.BodyIcon(b)), b.Name);
             var material = new OptionButton { FocusMode = FocusModeEnum.None };
             var materials = new List<string>();
             void Materials()
@@ -217,7 +230,7 @@ public partial class SwarmPanel : PanelContainer
                 materials.Clear();
                 materials.AddRange(body.MineableMaterials.Where(m => body.SurveyedDeposit(m) > 0));
                 material.Clear();
-                foreach (var m in materials) material.AddItem(m);
+                foreach (var m in materials) material.AddIconItem(UiIcons.Material(m), m);
                 var now = materials.IndexOf(_sector().Swarms.FirstOrDefault(s => s.Id == id)?.MaterialId ?? "");
                 if (materials.Count > 0) material.Select(Math.Max(0, now));
             }

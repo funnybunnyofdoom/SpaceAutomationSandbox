@@ -19,6 +19,12 @@ public static class UiIcons
     }
 
     public static Texture2D? Material(string id) => Get("mat_" + id);
+
+    /// <summary>The icon name for a body, by its kind.</summary>
+    public static string BodyIcon(Simulation.CelestialBodyState body) => body.Kind switch
+    {
+        Simulation.BodyKind.Star => "star", Simulation.BodyKind.Moon => "moon", Simulation.BodyKind.Asteroid => "asteroid", Simulation.BodyKind.GasGiant => "gas", _ => "planet",
+    };
 }
 
 /// <summary>How serious something shown is. Always has its own icon or words too, never colour alone (#68).</summary>

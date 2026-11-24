@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Godot;
 using SpaceAutomationSandbox.Core;
 using SpaceAutomationSandbox.Simulation;
@@ -21,7 +20,8 @@ public partial class LifePanel : PanelContainer
     private readonly Func<SectorState> _sector;
     private readonly Func<CraftState?> _craft;
     private readonly Action _changed;
-    private Label _worlds = null!, _here = null!, _message = null!;
+    private Label _message = null!;
+    private InfoList _worlds = null!, _here = null!;
     private Button _cull = null!, _load = null!, _release = null!;
     private double _sinceRefresh;
 
@@ -53,7 +53,7 @@ public partial class LifePanel : PanelContainer
         InputActions.TitleWithKey(title, "NATIVE LIFE", InputActions.Life);
         title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(title);
-        _here = Text();
+        _here = new InfoList();
         box.AddChild(_here);
         var buttons = new HBoxContainer();
         _cull = Add(buttons, "Cull here", "Weapons on this anchored craft hunt the site's animals, for biomass; those who care for life resent it",
@@ -63,7 +63,8 @@ public partial class LifePanel : PanelContainer
         box.AddChild(buttons);
         _message = Text();
         box.AddChild(_message);
-        _worlds = Text();
+        box.AddChild(UiTheme.Header("Living worlds"));
+        _worlds = new InfoList();
         box.AddChild(_worlds);
     }
 
@@ -114,27 +115,43 @@ public partial class LifePanel : PanelContainer
         _load.Disabled = craft is null || craft.Stats.PenCapacityKg <= 0;
         _release.Disabled = craft is null || craft.PenKg <= 0;
         var site = craft is null ? null : sector.SiteUnder(craft);
-        _here.Text = craft is null ? "You aren't flying a craft."
-            : (site is null ? $"{craft.Name} isn't on a surface site." : $"{craft.Name} is at {site.Name}: plants {site.Flora * 100:0}%, animals {site.Fauna * 100:0}%.")
-              + (craft.PenKg > 0 ? $"\nIn the pens: {craft.PenKg / 1000.0:0.0##} of {craft.Stats.PenCapacityKg / 1000:0.#} t, {craft.PenAnimal}s." : "");
+        var here = new List<HudRow>();
+        if (craft is null) here.Add(new("idle", "You aren't flying a craft.", Severity.Muted));
+        else if (site is null) here.Add(new("landed", $"{craft.Name} isn't on a surface site.", Severity.Muted));
+        else
+        {
+            here.Add(new("landed", $"{craft.Name} is at {site.Name}"));
+            here.Add(new("life", $"plants {site.Flora * 100:0}%", Severity.Good, site.Flora));
+            here.Add(new("crew", $"animals {site.Fauna * 100:0}%", Severity.Normal, site.Fauna));
+        }
+        if (craft is { PenKg: > 0 }) here.Add(new("cargo", $"pens: {craft.PenKg / 1000.0:0.##} of {craft.Stats.PenCapacityKg / 1000:0.#} t, {craft.PenAnimal}s", Severity.Normal, craft.PenKg / Math.Max(1, craft.Stats.PenCapacityKg)));
+        _here.Set(here);
 
         var found = sector.Bodies.Where(b => b.LifeFound).ToList();
-        if (found.Count == 0) { _worlds.Text = "No living worlds found yet. Survey temperate planets in other systems: about one in eight has life."; return; }
-        var text = new StringBuilder();
+        if (found.Count == 0)
+        {
+            _worlds.Set(new[] { new HudRow("life", "No living worlds found yet. Survey temperate planets in other systems: about one in eight has life.", Severity.Muted) });
+            return;
+        }
+        var rows = new List<HudRow>();
         foreach (var body in found)
         {
             var health = SectorState.HealthOf(body);
-            text.Append($"{body.Name}: {health}\n");
-            if (health == LifeHealth.Lost) { text.Append("   its native life has died out\n\n"); continue; }
-            text.Append($"   plants {body.Sites.Average(s => s.Flora) * 100:0}% on average{(body.FloraHazard == FloraHazard.None ? "" : $", {body.FloraHazard.ToString().ToLowerInvariant()}")}"
-                        + (health == LifeHealth.Thriving ? " (growing faster)" : health == LifeHealth.Stressed ? " (growing slower: let it recover)" : "") + "\n");
-            text.Append(body.HasAnimals ? $"   {body.AnimalName}s: {Temper(body.AnimalTemper)}\n" : "   no animals\n");
+            rows.Add(new(UiIcons.BodyIcon(body), $"{body.Name}: {health}" + (health == LifeHealth.Thriving ? " (growing faster)" : health == LifeHealth.Stressed ? " (growing slower: let it recover)" : ""),
+                health == LifeHealth.Lost ? Severity.Bad : health == LifeHealth.Stressed ? Severity.Warning : health == LifeHealth.Thriving ? Severity.Good : Severity.Normal));
+            if (health == LifeHealth.Lost) { rows.Add(new("danger", "its native life has died out", Severity.Muted)); continue; }
+            var plants = body.Sites.Average(s => s.Flora);
+            rows.Add(new("life", $"plants {plants * 100:0}% on average{(body.FloraHazard == FloraHazard.None ? "" : $", {body.FloraHazard.ToString().ToLowerInvariant()}")}", Severity.Good, plants));
+            rows.Add(body.HasAnimals ? new("crew", $"{body.AnimalName}s: {Temper(body.AnimalTemper)}", Severity.Muted) : new("idle", "no animals", Severity.Muted));
             foreach (var s in body.Sites.Where(s => s.Surveyed))
-                text.Append($"      {SurfaceSite.Letter(s.Index)}: plants {s.Flora * 100:0}%{(s.Fauna > 0 ? $", animals {s.Fauna * 100:0}%{(SectorState.AnimalsAngry(body, s) ? "  ! ANGRY" : "")}" : "")}\n");
+            {
+                var angry = s.Fauna > 0 && SectorState.AnimalsAngry(body, s);
+                rows.Add(new("life", $"{SurfaceSite.Letter(s.Index)}: plants {s.Flora * 100:0}%", Severity.Good, s.Flora));
+                if (s.Fauna > 0) rows.Add(new(angry ? "warn" : "crew", $"{SurfaceSite.Letter(s.Index)}: animals {s.Fauna * 100:0}%{(angry ? "  ANGRY" : "")}", angry ? Severity.Bad : Severity.Normal, s.Fauna));
+            }
             foreach (var c in sector.Crafts.Where(c => c.LandedOnBodyId == body.Id && (c.AnimalStatus is not null || c.RepellerOn)))
-                text.Append($"   {c.Name}: {c.AnimalStatus ?? "repelling animals"}\n");
-            text.Append('\n');
+                rows.Add(new("orbit", $"{c.Name}: {c.AnimalStatus ?? "repelling animals"}"));
         }
-        _worlds.Text = text.ToString();
+        _worlds.Set(rows);
     }
 }

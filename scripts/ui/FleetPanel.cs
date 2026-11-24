@@ -8,27 +8,29 @@ using SpaceAutomationSandbox.Simulation;
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>
-/// Fleet manager (key F) for many craft: a summary (how many are automated, how many are waiting),
-/// search by name or id, filters (ships, stations, automated, waiting, idle), sorting, and per-row
-/// Fly / Target buttons. Rows are rebuilt only when the visible set changes; texts update in place.
+/// Fleet manager (key F, #103): counts to click as filters, search by name or id, sorting, and a row per craft with its picture,
+/// what it's doing or waiting for, and its battery and cargo. Only the rows in view exist, so thousands of craft stay quick.
 /// </summary>
 public partial class FleetPanel : PanelContainer
 {
     private const double RefreshSeconds = 0.5;
-    private static readonly string[] Filters = { "All", "Ships", "Stations", "Automated", "Waiting", "Idle ships" };
+    private const float RowHeight = 74;
+    private static readonly (string Name, string Icon)[] Filters =
+        { ("All", ""), ("Ships", "fleet"), ("Stations", "shipyard"), ("Automated", "work"), ("Waiting", "wait"), ("Idle ships", "idle") };
     private static readonly string[] Sorts = { "Id", "Name", "Distance", "State" };
 
     private readonly Func<SectorState> _sector;
     private readonly Func<CraftId?> _piloted;
-    private Label _title = null!;
-    private Label _summary = null!;
+    private Label _title = null!, _empty = null!;
     private LineEdit _search = null!;
-    private OptionButton _filter = null!;
     private OptionButton _sort = null!;
-    private VBoxContainer _rows = null!;
+    private ScrollContainer _scroll = null!;
+    private Control _canvas = null!;
+    private readonly List<Button> _filterButtons = new();
+    private readonly List<FleetRow> _rows = new();
+    private int _filter;
     private double _sinceRefresh;
-    private List<CraftId> _shown = new();
-    private string _signature = "";
+    private List<CraftState> _shown = new();
 
     /// <summary>Raised when the player picks a craft to fly.</summary>
     public event Action<CraftId>? CraftChosen;
@@ -53,51 +55,65 @@ public partial class FleetPanel : PanelContainer
 
     private void Build()
     {
-        SetAnchorsPreset(LayoutPreset.BottomLeft);
-        OffsetLeft = 12;
-        OffsetRight = 492;
-        OffsetTop = -340; // below the HUD text
+        SetAnchorsPreset(LayoutPreset.RightWide);
+        OffsetLeft = -492;
+        OffsetRight = -12;
+        OffsetTop = 12;
         OffsetBottom = -12;
 
         var box = new VBoxContainer();
-        box.AddThemeConstantOverride("separation", 4);
+        box.AddThemeConstantOverride("separation", 5);
         AddChild(box);
-        _title = new Label();
+        _title = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _title.AddThemeFontSizeOverride("font_size", 18);
+        _title.AddThemeColorOverride("font_color", UiTheme.Accent);
         var head = new HBoxContainer();
-        _title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(_title);
-        var swarms = new Button { Text = "Swarms", FocusMode = FocusModeEnum.None, TooltipText = "Run many identical miners as one swarm" };
+        var swarms = new Button { Text = "Swarms", Icon = UiIcons.Get("swarm"), FocusMode = FocusModeEnum.None, TooltipText = "Run many identical miners as one swarm" };
         swarms.Pressed += () => SwarmsChosen?.Invoke();
         head.AddChild(swarms);
         box.AddChild(head);
-        _summary = new Label { Modulate = new Color(1, 1, 1, 0.75f) };
-        box.AddChild(_summary);
+
+        var filters = new HFlowContainer();
+        box.AddChild(filters);
+        var group = new ButtonGroup();
+        for (var i = 0; i < Filters.Length; i++)
+        {
+            var index = i;
+            var button = new Button
+            {
+                ToggleMode = true, ButtonGroup = group, ButtonPressed = i == 0, FocusMode = FocusModeEnum.None, TooltipText = Filters[i].Name,
+                Icon = Filters[i].Icon.Length > 0 ? UiIcons.Get(Filters[i].Icon) : null, TextureFilter = TextureFilterEnum.Nearest,
+            };
+            button.Pressed += () => { _filter = index; _scroll.ScrollVertical = 0; Refresh(); };
+            filters.AddChild(button);
+            _filterButtons.Add(button);
+        }
 
         var controls = new HBoxContainer();
         box.AddChild(controls);
-        _search = new LineEdit { PlaceholderText = "Search name or id", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _search.TextChanged += _ => Refresh(force: true);
+        _search = new LineEdit { PlaceholderText = "Search name or id", SizeFlagsHorizontal = SizeFlags.ExpandFill, ClearButtonEnabled = true };
+        _search.TextChanged += _ => Refresh();
         controls.AddChild(_search);
-        _filter = new OptionButton { FocusMode = FocusModeEnum.None };
-        foreach (var f in Filters) _filter.AddItem(f);
-        _filter.ItemSelected += _ => Refresh(force: true);
-        controls.AddChild(_filter);
         _sort = new OptionButton { FocusMode = FocusModeEnum.None };
         foreach (var s in Sorts) _sort.AddItem($"by {s}");
-        _sort.ItemSelected += _ => Refresh(force: true);
+        _sort.ItemSelected += _ => Refresh();
         controls.AddChild(_sort);
 
-        var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
-        box.AddChild(scroll);
-        _rows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        scroll.AddChild(_rows);
+        _empty = new Label { Text = "  No craft match.", Modulate = new Color(1, 1, 1, 0.6f), Visible = false };
+        box.AddChild(_empty);
+        _scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        box.AddChild(_scroll);
+        _canvas = new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Pass };
+        _scroll.AddChild(_canvas);
+        _scroll.GetVScrollBar().ValueChanged += _ => ShowRows();
+        _scroll.Resized += ShowRows;
     }
 
     public void Open()
     {
         Visible = true;
-        Refresh(force: true);
+        Refresh();
     }
 
     public override void _Process(double delta)
@@ -108,90 +124,83 @@ public partial class FleetPanel : PanelContainer
     }
 
     private static bool IsShip(CraftState c) => c.Stats.TotalThrustN > 0;
-    private static bool IsWaiting(CraftState c) => c.Job is { Active: true } job && job.Status.StartsWith("waiting");
+    public static bool IsWaiting(CraftState c) => c.Job is { Active: true } job && job.Status.StartsWith("waiting");
 
-    private bool Matches(CraftState c, string search) =>
-        (search.Length == 0 || c.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || c.Id.ToString().Contains(search))
-        && _filter.Selected switch
-        {
-            1 => IsShip(c),
-            2 => !IsShip(c),
-            3 => c.IsAutomated,
-            4 => IsWaiting(c),
-            5 => IsShip(c) && !c.IsAutomated && c.Id != _piloted(),
-            _ => true,
-        };
+    private bool Matches(CraftState c, int filter) => filter switch
+    {
+        1 => IsShip(c),
+        2 => !IsShip(c),
+        3 => c.IsAutomated,
+        4 => IsWaiting(c),
+        5 => IsShip(c) && !c.IsAutomated && c.Id != _piloted(),
+        _ => true,
+    };
 
-    private void Refresh(bool force = false)
+    private CraftState? Pilot(SectorState sector) => _piloted() is { } id ? sector.Crafts.FirstOrDefault(c => c.Id == id) : null;
+
+    private void Refresh()
     {
         _sinceRefresh = 0;
         var sector = _sector();
         var crafts = sector.Crafts.Where(SectorState.IsPlayers).ToList(); // not raiders (#84)
-        var pilot = _piloted() is { } id && crafts.Any(c => c.Id == id) ? sector.GetCraft(id) : null;
-
-        _title.Text = $"FLEET ({crafts.Count})  ({InputActions.Key1(InputActions.Fleet)} to close)";
-        _summary.Text = $"{crafts.Count(IsShip)} ships, {crafts.Count(c => !IsShip(c))} stations   "
-                        + $"{crafts.Count(c => c.IsAutomated)} automated, {crafts.Count(IsWaiting)} waiting"
-                        + (sector.Swarms.Count > 0 ? $"   {sector.Swarms.Count} swarms ({sector.Swarms.Sum(s => s.Count):N0} ships)" : "");
+        var pilot = Pilot(sector);
+        _title.Text = $"FLEET ({crafts.Count:N0})  ({InputActions.Key1(InputActions.Fleet)} to close)"
+                      + (sector.Swarms.Count > 0 ? $"   + {sector.Swarms.Sum(s => s.Count):N0} in swarms" : "");
+        for (var i = 0; i < Filters.Length; i++)
+        {
+            var count = crafts.Count(c => Matches(c, i));
+            _filterButtons[i].Text = Filters[i].Icon.Length == 0 ? $"All {count:N0}" : $"{count:N0}";
+        }
 
         double Distance(CraftState c) => pilot is null ? 0 : pilot.Position.DistanceTo(c.Position);
         var search = _search.Text.Trim();
-        var visible = crafts.Where(c => Matches(c, search));
-        visible = _sort.Selected switch
+        var visible = crafts.Where(c => Matches(c, _filter) && (search.Length == 0 || c.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || c.Id.ToString().Contains(search)));
+        _shown = (_sort.Selected switch
         {
             1 => visible.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase).ThenBy(c => c.Id.Value),
             2 => visible.OrderBy(Distance).ThenBy(c => c.Id.Value),
-            3 => visible.OrderBy(c => State(sector, c)).ThenBy(c => c.Id.Value),
+            3 => visible.OrderBy(State).ThenBy(c => c.Id.Value),
             _ => visible.OrderBy(c => c.Id.Value),
-        };
-        var shown = visible.Select(c => c.Id).ToList();
-
-        var signature = string.Join(",", shown.Select(i => i.Value)) + "|" + _piloted();
-        if (force || signature != _signature)
-        {
-            _signature = signature;
-            _shown = shown;
-            foreach (var child in _rows.GetChildren()) { _rows.RemoveChild(child); child.QueueFree(); }
-            foreach (var craftId in _shown) _rows.AddChild(MakeRow(craftId));
-            if (_shown.Count == 0) _rows.AddChild(new Label { Text = "  No craft match.", Modulate = new Color(1, 1, 1, 0.6f) });
-        }
-
-        // Update texts in place (positions, speeds and job states change all the time).
-        for (var i = 0; i < _shown.Count && i < _rows.GetChildCount(); i++)
-        {
-            var craft = sector.GetCraft(_shown[i]);
-            var row = _rows.GetChild(i);
-            row.GetNode<Label>("Text").Text = Describe(sector, craft, pilot);
-        }
+        }).ToList();
+        _empty.Visible = _shown.Count == 0;
+        var height = _shown.Count * Height;
+        if (!Mathf.IsEqualApprox(_canvas.CustomMinimumSize.Y, height)) _canvas.CustomMinimumSize = new Vector2(0, height);
+        ShowRows();
     }
 
-    private HBoxContainer MakeRow(CraftId id)
+    private float Height => Mathf.Round(RowHeight * GetThemeDefaultFontSize() / 16f);
+
+    /// <summary>Places the rows that are in view; they're reused while scrolling.</summary>
+    private void ShowRows()
     {
-        var row = new HBoxContainer();
-        var you = _piloted() == id;
-        row.AddChild(new Label
+        if (!IsInsideTree() || !Visible) return;
+        var sector = _sector();
+        var pilot = Pilot(sector);
+        var first = Mathf.Max(0, Mathf.FloorToInt(_scroll.ScrollVertical / Height));
+        var count = Mathf.Min(Mathf.CeilToInt(_scroll.Size.Y / Height) + 1, _shown.Count - first);
+        while (_rows.Count < count)
         {
-            Name = "Text", SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipText = true,
-            Modulate = you ? new Color(0.6f, 1f, 0.7f) : new Color(1, 1, 1),
-        });
-        var fly = new Button { Text = you ? "Flying" : "Fly", Disabled = you, FocusMode = FocusModeEnum.None, TooltipText = "Take control of this craft (stations too: docked ships push them as tugs)" };
-        fly.Pressed += () => { CraftChosen?.Invoke(id); Refresh(force: true); };
-        row.AddChild(fly);
-        var target = new Button { Text = "Target", Disabled = you, FocusMode = FocusModeEnum.None, TooltipText = "Target it: the HUD shows distance and speed, and brake matches its motion" };
-        target.Pressed += () => CraftTargeted?.Invoke(id);
-        row.AddChild(target);
-        if (_sector().Crafts.FirstOrDefault(c => c.Id == id) is { } gate && SectorState.IsGate(gate) && gate.Stats.GateLockCount > 0) // #95
-        {
-            var shut = new Button { Text = gate.GateClosed ? "Open gate" : "Close gate", FocusMode = FocusModeEnum.None, TooltipText = "A closed gate lets nothing through, either way" };
-            shut.Pressed += () =>
+            var row = new FleetRow();
+            row.Fly += id => { CraftChosen?.Invoke(id); Refresh(); };
+            row.Target += id => CraftTargeted?.Invoke(id);
+            row.Gate += id =>
             {
-                _sector().SetGateClosed(id, !gate.GateClosed);
-                shut.Text = gate.GateClosed ? "Open gate" : "Close gate";
+                if (_sector().Crafts.FirstOrDefault(c => c.Id == id) is not { } gate) return;
+                _sector().SetGateClosed(id, !gate.GateClosed); // #95
                 Changed?.Invoke();
+                Refresh();
             };
-            row.AddChild(shut);
+            _rows.Add(row);
+            _canvas.AddChild(row);
         }
-        return row;
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            _rows[i].Visible = i < count;
+            if (i >= count) continue;
+            _rows[i].Position = new Vector2(0, (first + i) * Height);
+            _rows[i].Size = new Vector2(_canvas.Size.X, Height - 4);
+            _rows[i].Set(sector, _shown[first + i], pilot);
+        }
     }
 
     public static string Where(SectorState sector, CraftState craft) =>
@@ -200,26 +209,126 @@ public partial class FleetPanel : PanelContainer
         : craft.RailOrbit is { } rail ? $"{(craft.IsShipyard ? "orbiting" : "parked in orbit around")} {sector.GetBody(rail.Parent).Name}"
         : $"flying, {craft.SpeedMps:0} m/s";
 
-    /// <summary>Sort key and one-word state: waiting / working / building / idle.</summary>
-    private static string State(SectorState sector, CraftState c) =>
-        IsWaiting(c) ? "0 waiting" : c.IsAutomated ? "1 working" : c.BuildQueue.Count > 0 ? "2 building" : "3 idle";
+    /// <summary>Sort key: in trouble or waiting first, then working, building, idle.</summary>
+    private static int State(CraftState c) => Trouble(c) is not null ? 0 : IsWaiting(c) ? 1 : c.IsAutomated ? 2 : c.BuildQueue.Count > 0 ? 3 : 4;
 
-    private static string Describe(SectorState sector, CraftState craft, CraftState? pilot)
+    /// <summary>What's wrong with a craft, or null.</summary>
+    public static string? Trouble(CraftState craft) =>
+        craft.IsWreck ? "wreck, adrift"
+        : craft.CrewShortReason is { } why ? $"stopped: {why}"
+        : craft.PowerShort && !craft.LegacyFreePower ? "no power"
+        : craft.PartHealth.Count > 0 || craft.PartsLost > 0 ? $"damaged ({craft.PartHealth.Count + craft.PartsLost} parts)" : null;
+
+    /// <summary>A job's icon, by its kind.</summary>
+    public static string JobIcon(string kind) => kind switch
     {
-        var role = craft.IsShipyard ? "shipyard" : IsShip(craft) ? "ship" : "station";
-        var distance = pilot is null || pilot == craft ? "" : $", {FormatDistance(pilot.Position.DistanceTo(craft.Position))} away";
-        var second = Where(sector, craft);
-        if (craft.IsWreck) return $"{craft.Name}  ({craft.Id}, wreck{distance})\n   {second}   adrift with {craft.CargoKg / 1000.0:0.0} t aboard";
-        if (craft.GateClosed) second += "   GATE CLOSED";
-        if (craft.BuildQueue.Count > 0) second += $"   building {craft.BuildQueue[0].Fraction * 100:0}%";
-        if (craft.PowerShort && !craft.LegacyFreePower) second += "   NO POWER";
-        if (craft.CrewShortReason is { } why) second += $"   STOPPED: {why}";
-        else if (craft.Crew > 0) second += $"   crew {craft.Crew}";
-        if (craft.PartHealth.Count > 0 || craft.PartsLost > 0) second += $"   DAMAGED ({craft.PartHealth.Count + craft.PartsLost} parts)";
-        if (craft.Job is { Active: true } job) second += $"\n   {job.Kind}: {job.Status} ({job.CompletedCycles} cycles)";
-        else if (IsShip(craft) && pilot != craft) second += "   (idle)";
-        return $"{craft.Name}  ({craft.Id}, {role}{distance})\n   {second}";
-    }
+        "mining" => "mining", "freight" or "requests" => "freight", "survey" => "survey", "salvage" => "salvage", "trade" => "trade",
+        "guard" or "escort" or "patrol" => "weapon", _ => "job",
+    };
 
-    private static string FormatDistance(double m) => m >= 1000 ? $"{m / 1000:0.0} km" : $"{m:0} m";
+    private static string FormatDistance(double m) => m >= 1000 ? $"{m / 1000:N1} km" : $"{m:0} m";
+
+    /// <summary>One craft: picture, name, what it's doing, battery and cargo, and its buttons.</summary>
+    private sealed partial class FleetRow : PanelContainer
+    {
+        private readonly DesignPicture _picture = new() { CustomMinimumSize = new Vector2(44, 44) };
+        private readonly Label _name = Line(), _doing = Line();
+        private readonly TextureRect _light = UiTheme.Icon(""), _job = UiTheme.Icon("");
+        private readonly StatBar _battery = new(), _cargo = new();
+        private readonly Button _fly, _target, _gate;
+        private CraftId _id = CraftId.None;
+
+        public event Action<CraftId>? Fly, Target, Gate;
+
+        private static Label Line() => new()
+        {
+            ThemeTypeVariation = "HudText", ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore,
+        };
+
+        public FleetRow()
+        {
+            MouseFilter = MouseFilterEnum.Pass;
+            var back = new StyleBoxFlat { BgColor = new Color(1, 1, 1, 0.04f), ContentMarginLeft = 6, ContentMarginRight = 6, ContentMarginTop = 2, ContentMarginBottom = 2 };
+            back.SetCornerRadiusAll(3);
+            AddThemeStyleboxOverride("panel", back);
+            var row = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+            AddChild(row);
+            row.AddChild(_picture);
+            var middle = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
+            middle.AddThemeConstantOverride("separation", 1);
+            row.AddChild(middle);
+            var top = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+            top.AddChild(_light);
+            top.AddChild(_name);
+            middle.AddChild(top);
+            var second = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+            second.AddChild(_job);
+            second.AddChild(_doing);
+            middle.AddChild(second);
+            var bars = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+            bars.AddChild(_battery);
+            bars.AddChild(_cargo);
+            middle.AddChild(bars);
+            _fly = Button("Fly", "Take control of this craft (stations too: docked ships push them as tugs)", () => Fly?.Invoke(_id));
+            _target = Button("Target", "Target it: the HUD shows distance and speed, and brake matches its motion", () => Target?.Invoke(_id));
+            _gate = Button("", "A closed gate lets nothing through, either way", () => Gate?.Invoke(_id));
+            foreach (var button in new[] { _fly, _target, _gate }) row.AddChild(button);
+        }
+
+        private static Button Button(string text, string tip, Action pressed)
+        {
+            var button = new Button { Text = text, TooltipText = tip, FocusMode = FocusModeEnum.None, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+            button.Pressed += pressed;
+            return button;
+        }
+
+        public void Set(SectorState sector, CraftState craft, CraftState? pilot)
+        {
+            _id = craft.Id;
+            var you = pilot?.Id == craft.Id;
+            _picture.Design = craft.Design;
+            var distance = pilot is null || you ? "" : $"  {FormatDistance(pilot.Position.DistanceTo(craft.Position))}";
+            Put(_name, $"{craft.Name}{(you ? "  (you)" : "")}  {craft.Id}{distance}");
+            _name.Modulate = you ? Palette.Good : Colors.White;
+
+            var trouble = Trouble(craft);
+            var waiting = IsWaiting(craft);
+            Put(_light, trouble is not null ? craft.IsWreck ? "danger" : "warn" : waiting ? "wait" : craft.IsAutomated || craft.BuildQueue.Count > 0 ? "work" : you ? "ok" : "idle");
+            var where = Where(sector, craft);
+            var doing = (trouble is not null ? trouble + ";  " : "")
+                        + (craft.Job is { Active: true } job ? $"{job.Status} ({job.CompletedCycles})"
+                            : craft.BuildQueue.Count > 0 ? $"building {craft.BuildQueue[0].ShipName} {craft.BuildQueue[0].Fraction * 100:0}%"
+                            : craft.GateClosed ? "GATE CLOSED" : where + (craft.Crew > 0 ? $", crew {craft.Crew}" : ""));
+            Put(_doing, doing);
+            _doing.Modulate = UiTheme.Of(craft.IsWreck ? Severity.Bad : trouble is not null || waiting || craft.GateClosed ? Severity.Warning : Severity.Muted);
+            Put(_job, craft.Job is { Active: true } active ? JobIcon(active.Kind) : SectorState.IsGate(craft) ? "gate" : craft.IsShipyard ? "shipyard" : IsShip(craft) ? "fleet" : "orbit");
+            var tip = $"{craft.Name} ({craft.Id})\n{doing}\n{where}";
+            if (TooltipText != tip) TooltipText = tip;
+
+            _battery.Visible = craft.Stats.EnergyCapacityKJ > 0;
+            if (_battery.Visible)
+            {
+                var share = craft.StoredEnergyKJ / craft.Stats.EnergyCapacityKJ;
+                _battery.Set(share, $"power {share * 100:0}%", craft.PowerShort ? Severity.Bad : share < 0.2 ? Severity.Warning : Severity.Normal);
+            }
+            _cargo.Visible = craft.HasCargoLimit ? craft.CargoCapacityKg > 0 : craft.CargoKg > 0;
+            if (_cargo.Visible)
+                _cargo.Set(craft.HasCargoLimit ? craft.CargoKg / (double)craft.CargoCapacityKg : 0,
+                    craft.HasCargoLimit ? $"{craft.CargoKg / 1000.0:0.#} / {craft.CargoCapacityKg / 1000.0:0.#} t" : $"{craft.CargoKg / 1000.0:0.#} t");
+
+            _fly.Text = you ? "Flying" : "Fly";
+            _fly.Disabled = _target.Disabled = you;
+            _gate.Visible = SectorState.IsGate(craft) && craft.Stats.GateLockCount > 0; // #95
+            if (_gate.Visible) _gate.Text = craft.GateClosed ? "Open gate" : "Close gate";
+        }
+
+        private static void Put(Label label, string text) { if (label.Text != text) label.Text = text; }
+
+        private static void Put(TextureRect icon, string name)
+        {
+            var texture = UiIcons.Get(name);
+            if (icon.Texture != texture) icon.Texture = texture;
+        }
+    }
 }

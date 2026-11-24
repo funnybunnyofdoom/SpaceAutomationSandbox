@@ -150,13 +150,8 @@ public partial class Main
             rows.Add(new HudRow("speed", string.Join("   ", parts.Skip(1)), line.Contains("MATCHED") ? Severity.Good : Severity.Normal));
         }
         rows.Add(CycleRow()); // #107
-        return new HudCardData(heading, rows, craft?.Design, craft is not null ? null : body is null ? "target" : BodyIcon(body));
+        return new HudCardData(heading, rows, craft?.Design, craft is not null ? null : body is null ? "target" : UiIcons.BodyIcon(body));
     }
-
-    private static string BodyIcon(CelestialBodyState body) => body.Kind.ToString() switch
-    {
-        "Star" => "star", "Moon" => "moon", "Asteroid" => "asteroid", "GasGiant" => "gas", _ => "planet",
-    };
 
     private HudCardData GoalsCard()
     {

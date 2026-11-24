@@ -953,6 +953,7 @@ public partial class Main : Node2D
         _audioCost.Add(System.Diagnostics.Stopwatch.GetElapsedTime(audioStart).TotalMilliseconds);
         ArrangePanels(); // #96
         UpdateHover(); // #108
+        if (!InMenu) _powerPanel?.Sample(); // #103
         UpdatePanelNav();
         ShowNewEvents(); // civilizations, laws (#36)
         StressFrame(delta);
@@ -1024,7 +1025,8 @@ public partial class Main : Node2D
             if (_framesShown is 11 or 12 && parts[0] != "--point")
                 Input.ParseInputEvent(new InputEventMouseButton { Position = at, GlobalPosition = at, Pressed = _framesShown == 11, ButtonIndex = parts[0] == "--click" ? MouseButton.Left : MouseButton.Right });
         }
-        if (_framesShown != 20) return;
+        var shotAt = OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot-frame=")) is { } frameArg ? int.Parse(frameArg["--screenshot-frame=".Length..]) : 20;
+        if (_framesShown != shotAt) return;
         if (OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--screenshot=")) is not { } arg) return;
         GetViewport().GetTexture().GetImage().SavePng(arg["--screenshot=".Length..]);
         GetTree().Quit();
@@ -1200,7 +1202,7 @@ public partial class Main : Node2D
     }
 
     private static string FormatDistance(double metres) =>
-        System.Math.Abs(metres) >= 1000 ? $"{metres / 1000:0.00} km" : $"{metres:0} m";
+        System.Math.Abs(metres) >= 1e9 ? $"{metres / 1e9:0.00} million km" : System.Math.Abs(metres) >= 1000 ? $"{metres / 1000:0.00} km" : $"{metres:0} m";
 
     /// <summary>More ships than this on screen: only stations and the target are named (#39).</summary>
     private const int MaxNameTags = 40;
