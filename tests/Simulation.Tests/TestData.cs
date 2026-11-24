@@ -30,6 +30,37 @@ internal static class TestData
     public static ShipDesign StarterShipyard() => ShipDesign.FromJson(Read("data/blueprints/starter_shipyard.json"));
 
     /// <summary>Mineable bodies around the home planet (the rocks, the Moon and Ice-1), in id order.</summary>
+    /// <summary>
+    /// The angle around Home (from its centre) of a point this far above its surface that's in full sunlight (#76):
+    /// the side facing the star, turned a little either way if a moon or rock happens to be in the way.
+    /// </summary>
+    public static double SunnyAngle(SectorState sector, double altitudeM)
+    {
+        var home = SectorGenerator.HomePlanet(sector);
+        var centre = sector.GetPosition(home.Id);
+        var toStar = sector.GetPosition(sector.Stars[0].Id) - centre;
+        var facing = System.Math.Atan2(toStar.Y, toStar.X);
+        for (var step = 0; step < 60; step++)
+        {
+            var angle = facing + (step % 2 == 0 ? 1 : -1) * (step + 1) / 2 * 0.05;
+            bool Sunny(double a) => !sector.InShadowAt(centre + new Vector2D(System.Math.Cos(a), System.Math.Sin(a)) * (home.RadiusM + altitudeM));
+            if (Sunny(angle) && Sunny(angle - 0.3) && Sunny(angle + 0.3)) return angle; // a margin either way: the craft moves
+        }
+        return facing;
+    }
+
+    /// <summary>A point above Home, this far above its surface, in full sunlight (#76).</summary>
+    public static Vector2D SunnySideOfHome(SectorState sector, double altitudeM)
+    {
+        var home = SectorGenerator.HomePlanet(sector);
+        var angle = SunnyAngle(sector, altitudeM);
+        return sector.GetPosition(home.Id) + new Vector2D(System.Math.Cos(angle), System.Math.Sin(angle)) * (home.RadiusM + altitudeM);
+    }
+
+    /// <summary>The phase (at time zero) of a circular orbit around Home that's in full sunlight now (#76).</summary>
+    public static double SunnyPhase(SectorState sector, double altitudeM, double periodS) =>
+        SunnyAngle(sector, altitudeM) - 2 * System.Math.PI * sector.TimeS / periodS;
+
     public static System.Collections.Generic.List<CelestialBodyState> HomeRocks(SectorState sector)
     {
         var home = SectorGenerator.HomePlanet(sector).Id;

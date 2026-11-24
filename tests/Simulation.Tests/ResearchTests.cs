@@ -27,7 +27,7 @@ public class ResearchTests
             new DesignCell(new GridPos(1, 0), "solar_panel"),
             new DesignCell(new GridPos(-1, 0), "storage_silo"),
         });
-        var lab = new CraftState(sector.AllocateCraftId(), "Lab", design, design.ComputeStats(Catalog), yard.Position + new Vector2D(0, 2_000), 0)
+        var lab = new CraftState(sector.AllocateCraftId(), "Lab", design, design.ComputeStats(Catalog), TestData.SunnySideOfHome(sector, 30_000), 0) // in sunlight, not Home's shadow (#76)
         {
             Velocity = yard.Velocity,
         };

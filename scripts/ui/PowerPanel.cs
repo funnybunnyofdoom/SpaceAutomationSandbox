@@ -109,7 +109,8 @@ public partial class PowerPanel : PanelContainer
 
         text.AppendLine("   Sources");
         foreach (var m in members.Where(m => m.Stats.PowerGenerationKW > 0))
-            text.AppendLine($"      {m.Name}: solar {Kw(m.SolarKJThisTick)} of {m.Stats.PowerGenerationKW:0} kW ({m.SolarFactor * 100:0}% sunlight)");
+            text.AppendLine($"      {m.Name}: solar {Kw(m.SolarKJThisTick)} of {m.Stats.PowerGenerationKW:0} kW ({m.SolarFactor * 100:0}% sunlight)"
+                            + (m.InShadow ? $"  IN SHADOW (light dimmed to {SectorState.ShadowLight * 100:0}%)" : ""));
         foreach (var m in members)
             foreach (var g in m.Stats.GeneratorList)
             {
@@ -121,6 +122,12 @@ public partial class PowerPanel : PanelContainer
                                     : $"{fuel} left, {Hours(energyLeft / g.KW)} at full output"));
             }
         if (members.All(m => m.Stats.PowerGenerationKW <= 0 && m.Stats.GeneratorList.Count == 0)) text.AppendLine("      none: only batteries");
+
+        foreach (var m in members.Where(m => m.Stats.ConverterList.Count > 0)) // #78
+            foreach (var c in m.Stats.ConverterList)
+                text.AppendLine($"   Converter: {m.Name}: {c.PartId.Replace('_', ' ')} {Kw(m.ConvertedKJThisTick)} of {c.KW:0} kW "
+                                + $"({string.Join(" + ", c.InputsKg.Select(i => $"{i.Value} kg {i.Key}"))} into {string.Join(" + ", c.OutputsKg.Select(o => $"{o.Value} kg {o.Key}"))}; "
+                                + $"spare power only, above {SectorState.ConverterSpareAbove * 100:0}% battery)");
 
         text.AppendLine("   Users (most they draw)");
         foreach (var m in members)

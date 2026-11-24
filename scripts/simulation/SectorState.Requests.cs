@@ -30,14 +30,29 @@ public sealed partial class SectorState
     /// </summary>
     public static long AutoSupplyKg(CraftState station, string materialId)
     {
-        if (station.LegacyNoCrew || station.Crew <= 0 || station.Stats.DockingPorts.Count == 0 || Movable(station)) return 0;
+        if (station.Stats.DockingPorts.Count == 0 || Movable(station)) return 0;
+        var fuel = AutoFuelKg(station, materialId); // generators' fuel (#78), crewed or not
+        if (station.LegacyNoCrew || station.Crew <= 0) return fuel;
         var seconds = AutoSupplyHours * 3600;
-        return materialId switch
+        return fuel + materialId switch
         {
             FoodMaterial => (long)Math.Ceiling(station.Crew * FoodKgPerCrewPerS * seconds),
             WaterMaterial => (long)Math.Ceiling(station.Crew * WaterKgPerCrewPerS * seconds + station.Stats.FoodRateKgPerS * seconds),
             _ => 0,
         };
+    }
+
+    /// <summary>Stations with generators keep this many hours of full-output fuel requested (#78, the creator's choice).</summary>
+    public const double AutoFuelHours = 12;
+
+    /// <summary>Fuel a station's generators burn in <see cref="AutoFuelHours"/> at full output, for one material (whole kg).</summary>
+    public static long AutoFuelKg(CraftState station, string materialId)
+    {
+        double kg = 0;
+        foreach (var gen in station.Stats.GeneratorList)
+            if (gen.BurnsKg.TryGetValue(materialId, out var perBatch))
+                kg += gen.KW * AutoFuelHours * 3600 / gen.KJPerBatch * perBatch;
+        return (long)Math.Ceiling(kg);
     }
 
     /// <summary>What a station wants kept in stock: its own request or its automatic supply request, whichever is more.</summary>
@@ -47,9 +62,12 @@ public sealed partial class SectorState
     /// <summary>Materials a station wants (its requests and automatic supplies), A–Z.</summary>
     private static IEnumerable<string> WantedMaterials(CraftState station)
     {
-        var auto = AutoSupplyKg(station, FoodMaterial) > 0;
-        if (!auto) return station.Requests.Keys;
-        return station.Requests.Keys.Concat(new[] { FoodMaterial, WaterMaterial }).Distinct().OrderBy(m => m, StringComparer.Ordinal);
+        var wanted = station.Requests.Keys.ToList();
+        if (AutoSupplyKg(station, FoodMaterial) > 0) wanted.AddRange(new[] { FoodMaterial, WaterMaterial });
+        foreach (var gen in station.Stats.GeneratorList) // their fuel (#78)
+            foreach (var material in gen.BurnsKg.Keys)
+                if (AutoSupplyKg(station, material) > 0) wanted.Add(material);
+        return wanted.Distinct().OrderBy(m => m, StringComparer.Ordinal);
     }
 
     /// <summary>A serve-requests freighter with nothing to do looks again after this long.</summary>

@@ -56,7 +56,10 @@ public class PowerAndSlagTests
         var station = AddCraft(sector, "Panel", (0, 0, "battery"), (1, 0, "solar_panel"));
         var home = SectorGenerator.HomePlanet(sector);
         var radius = home.RadiusM + 2_000; // a parked orbit: without thrusters it would fall under gravity (#32)
-        sector.PutOnRails(station.Id, new CircularOrbit(home.Id, radius, SectorState.CircularOrbitPeriodS(home, radius, 1_800), 0));
+        // Starting on the sunny side, so Home's shadow (#76) stays out of the way for the first part of the test.
+        var period = SectorState.CircularOrbitPeriodS(home, radius, 1_800);
+        var phase = TestData.SunnyPhase(sector, 2_000, period);
+        sector.PutOnRails(station.Id, new CircularOrbit(home.Id, radius, period, phase));
         station.StoredEnergyKJ = 0;
 
         for (var i = 0; i < 10 * TicksPerSecond; i++) sector.Step();

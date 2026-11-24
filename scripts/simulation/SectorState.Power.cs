@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SpaceAutomationSandbox.Construction;
 
 namespace SpaceAutomationSandbox.Simulation;
 
@@ -43,6 +44,8 @@ public sealed partial class SectorState
             craft.EnergyPoolKJ = 0;
             craft.GeneratedKJThisTick = 0;
             craft.NetworkStartKJ = 0;
+            craft.NetworkCapacityKJ = 0;
+            craft.ConvertedKJThisTick = 0;
             var root = craft;
             for (var hops = 0; hops < 8 && root.IsDocked && _craftsById.TryGetValue(root.DockedToCraftId, out var host); hops++) root = host;
             craft.PowerRoot = root;
@@ -51,12 +54,74 @@ public sealed partial class SectorState
         {
             var root = craft.PowerRoot!;
             root.PowerMembers.Add(craft);
-            craft.SolarFactor = craft.Stats.PowerGenerationKW > 0 ? SolarFactorAt(craft.Position) : 1;
+            craft.InShadow = craft.Stats.PowerGenerationKW > 0 && InShadowAt(craft.Position);
+            craft.SolarFactor = craft.Stats.PowerGenerationKW > 0 ? SolarFactorAt(craft.Position) * (craft.InShadow ? ShadowLight : 1) : 1;
             craft.SolarKJThisTick = craft.Stats.PowerGenerationKW * craft.SolarFactor * FixedStepClock.TickSeconds;
             root.EnergyPoolKJ += craft.StoredEnergyKJ + craft.SolarKJThisTick;
             root.NetworkStartKJ += craft.StoredEnergyKJ;
+            root.NetworkCapacityKJ += craft.Stats.EnergyCapacityKJ;
         }
     }
+
+    /// <summary>Share of sunlight that still reaches a craft in a body's shadow (#76: dimmed, not dark; the creator's choice).</summary>
+    public const double ShadowLight = 0.25;
+
+    /// <summary>True if a body (not the star) is between the point and its system's star (#76).</summary>
+    public bool InShadowAt(Vector2D point)
+    {
+        if (StarAt(point) is not { } star) return false;
+        var sun = GetPosition(star.Id);
+        var positions = AllBodyPositions(TimeS);
+        for (var i = 0; i < _bodies.Count; i++)
+        {
+            var body = _bodies[i];
+            if (body.Kind == BodyKind.Star) continue;
+            var centre = positions[i];
+            // The body must be between the star and the point, and the line between them must pass through it.
+            if (centre.DistanceTo(sun) >= point.DistanceTo(sun)) continue;
+            if (!SegmentClears(sun, point, centre, body.RadiusM)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Converters (#78) run on spare power only: what's in the pool above this share of the network's batteries.</summary>
+    public const double ConverterSpareAbove = 0.9;
+
+    /// <summary>
+    /// Converters (#78, e.g. electrolysers) turn whole batches of materials into others using spare power only:
+    /// energy above <see cref="ConverterSpareAbove"/> of the network's battery capacity, never from generators, so
+    /// they can't turn fuel into fuel. Progress on a batch is kept (saved); materials change form, mass stays exact.
+    /// An electrolyser leaves the water the station's crew and farms need (its supply request).
+    /// </summary>
+    private void StepConverters()
+    {
+        foreach (var craft in _crafts)
+        {
+            if (craft.Stats.ConverterList.Count == 0 || !Operational(craft)) continue;
+            var root = craft.PowerRoot ?? craft;
+            foreach (var conv in craft.Stats.ConverterList)
+            {
+                var spare = root.EnergyPoolKJ - ConverterSpareAbove * root.NetworkCapacityKJ;
+                if (spare <= 0) break;
+                var progress = craft.ConverterProgressKJ.GetValueOrDefault(conv.PartId);
+                if (progress <= 0 && !CanStartConversion(craft, conv)) continue;
+                var use = Math.Min(Math.Min(spare, conv.KW * FixedStepClock.TickSeconds), conv.KJPerBatch - progress);
+                root.EnergyPoolKJ -= use;
+                craft.ConvertedKJThisTick += use;
+                progress += use;
+                if (progress + 1e-9 >= conv.KJPerBatch)
+                {
+                    if (craft.Inventory.TryRemove(conv.InputsKg)) craft.Inventory.Add(conv.OutputsKg);
+                    progress = 0;
+                }
+                if (progress > 0) craft.ConverterProgressKJ[conv.PartId] = progress; else craft.ConverterProgressKJ.Remove(conv.PartId);
+            }
+        }
+    }
+
+    /// <summary>A converter starts a batch only with its inputs in stock beyond what the craft wants kept (its supply requests).</summary>
+    private static bool CanStartConversion(CraftState craft, ConverterStats conv) =>
+        conv.InputsKg.All(i => craft.Inventory[i.Key] - WantedKg(craft, i.Key) >= i.Value);
 
     /// <summary>The craft whose pool another draws from (its network's root, #75); itself before the first tick.</summary>
     public CraftState PowerRootOf(CraftState craft) => craft.PowerRoot ?? craft;
@@ -194,7 +259,7 @@ public sealed partial class SectorState
         var stats = craft.Stats;
         if (stats.EnergyCapacityKJ <= 0 && stats.PowerGenerationKW <= 0 && stats.GeneratorKW <= 0 && stats.TotalPowerUseKW <= 0) return "";
         return $"power {craft.StoredEnergyKJ / 1000:0.0}/{stats.EnergyCapacityKJ / 1000:0} MJ, solar {stats.PowerGenerationKW * craft.SolarFactor:0} kW"
-               + (craft.SolarFactor != 1 ? $" ({craft.SolarFactor * 100:0}% sunlight)" : "")
+               + (craft.SolarFactor != 1 ? $" ({craft.SolarFactor * 100:0}% sunlight{(craft.InShadow ? ", in shadow" : "")})" : "")
                + (stats.GeneratorKW > 0 ? $", generators {craft.GeneratedKJThisTick / FixedStepClock.TickSeconds:0}/{stats.GeneratorKW:0} kW" : "") + ", "
                + $"max use {stats.TotalPowerUseKW:0} kW" + (craft.PowerShort ? "  NO POWER" : "");
     }

@@ -80,6 +80,18 @@ public sealed class CraftState
     /// <summary>On a network root: energy in its members' batteries at the start of this tick (kJ). Not saved.</summary>
     internal double NetworkStartKJ { get; set; }
 
+    /// <summary>On a network root: its members' battery capacity this tick (kJ). Not saved.</summary>
+    internal double NetworkCapacityKJ { get; set; }
+
+    /// <summary>True while a body is between this craft and its star (#76): solar is dimmed. Not saved.</summary>
+    public bool InShadow { get; internal set; }
+
+    /// <summary>Energy put into each converter's current batch so far (kJ), by part id (#78). Saved.</summary>
+    internal SortedDictionary<string, double> ConverterProgressKJ { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Energy this craft's converters used this tick (kJ), for the power panel. Not saved.</summary>
+    public double ConvertedKJThisTick { get; internal set; }
+
     /// <summary>Solar energy this craft made this tick (kJ). Not saved.</summary>
     public double SolarKJThisTick { get; internal set; }
 

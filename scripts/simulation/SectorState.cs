@@ -238,6 +238,7 @@ public sealed partial class SectorState
         StepMining();
         StepBodiesGone(); // a body mined down to its remnant breaks up (#27)
         StepRefining();
+        StepConverters(); // electrolysers on spare power (#78)
         StepResearch(); // labs make research points (#37)
         StepSurvey();
 

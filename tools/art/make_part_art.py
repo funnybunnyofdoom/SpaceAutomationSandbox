@@ -331,6 +331,26 @@ def fuel_generator(a):
     return b, d
 
 
+def electrolyser(a):
+    b, d = panel(), Img()
+    water, gas = (63, 143, 217, 255), (232, 244, 255, 255)
+    d.rect(3, 6, 12, 13, shade(a, 0.5)); d.outline(3, 6, 12, 13, OUT)  # tank
+    d.rect(4, 9, 11, 12, water); d.hline(4, 11, 9, shade(water, 1.3))
+    d.vline(6, 4, 9, RIVET); d.vline(9, 4, 9, RIVET)  # electrodes
+    d.set(6, 3, (255, 90, 80, 255)); d.set(9, 3, (90, 160, 255, 255))
+    for x, y in ((5, 8), (7, 7), (8, 8), (10, 7)): d.set(x, y, gas)  # bubbles
+    return b, d
+
+
+def fuel_cell(a):
+    b, d = panel(), Img()
+    for i, x0 in enumerate((3, 6, 9)):  # stacked cell plates
+        d.rect(x0, 3, x0 + 2, 12, shade(a, 0.6 if i % 2 else 0.8)); d.vline(x0, 3, 12, shade(a, 1.3))
+    d.hline(3, 11, 2, OUT); d.hline(3, 11, 13, OUT)
+    d.vline(12, 4, 11, RIVET); d.set(13, 5, (232, 244, 255, 255)); d.set(13, 9, (63, 143, 217, 255))  # gas in, water out
+    return b, d
+
+
 DRAW = {
     "hull": hull, "cockpit": cockpit, "thruster": thruster, "battery": battery, "solar_panel": solar,
     "cargo": cargo, "drill": drill, "fabricator": fabricator, "anchor_clamp": anchor_clamp,
@@ -343,6 +363,7 @@ DRAW = {
     "fabricator_mk2": lambda a: fabricator(a, 2), "warp_gate": warp_gate, "gate_defense": gate_defense,
     "research_lab": research_lab,
     "fuel_generator": fuel_generator,
+    "electrolyser": electrolyser, "fuel_cell": fuel_cell,
 }
 
 

@@ -141,6 +141,7 @@ public static class SaveGameSerializer
                     LegacyUnlimitedStorage = c.LegacyUnlimitedStorage,
                     StoredEnergyKJ = c.StoredEnergyKJ,
                     GeneratorBankKJ = c.GeneratorBankKJ.Count > 0 ? new SortedDictionary<string, double>(c.GeneratorBankKJ, StringComparer.Ordinal) : null,
+                    ConverterProgressKJ = c.ConverterProgressKJ.Count > 0 ? new SortedDictionary<string, double>(c.ConverterProgressKJ, StringComparer.Ordinal) : null,
                     LegacyFreePower = c.LegacyFreePower,
                     EjectionRemainderKg = c.EjectionRemainderKg,
                     Cruising = c.Cruising,
@@ -309,6 +310,11 @@ public static class SaveGameSerializer
                 {
                     if (!(kj >= 0) || !double.IsFinite(kj)) throw new FormatException($"Craft {c.Id} has an invalid generator store.");
                     if (kj > 0) craft.GeneratorBankKJ[part] = kj;
+                }
+                foreach (var (part, kj) in c.ConverterProgressKJ ?? new SortedDictionary<string, double>()) // #78
+                {
+                    if (!(kj >= 0) || !double.IsFinite(kj)) throw new FormatException($"Craft {c.Id} has invalid converter progress.");
+                    if (kj > 0) craft.ConverterProgressKJ[part] = kj;
                 }
                 if (c.EjectionRemainderKg is < 0 or >= 1) throw new FormatException($"Craft {c.Id} has an ejection remainder of {c.EjectionRemainderKg} kg.");
                 craft.EjectionRemainderKg = c.EjectionRemainderKg;
@@ -698,6 +704,10 @@ public static class SaveGameSerializer
         /// <summary>v19 (later addition, optional, #75): energy left from generator batches already burned, by part id.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public SortedDictionary<string, double>? GeneratorBankKJ { get; set; }
+
+        /// <summary>v19 (later addition, optional, #78): energy put into each converter's current batch, by part id.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public SortedDictionary<string, double>? ConverterProgressKJ { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] // only on craft from pre-v10 saves
         public bool LegacyFreePower { get; set; }

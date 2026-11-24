@@ -29,6 +29,15 @@ public readonly record struct DesignCell(GridPos Pos, string PartId, int Rotatio
 /// <summary>A docking port: one berth. Position is the port cell; facing is where it opens.</summary>
 public readonly record struct DockingPortInfo(GridPos Pos, int Rotation);
 
+/// <summary>All converters of one part type on a craft (#78): their total power use (kW) and one batch, whole kg in and out (same mass).</summary>
+public sealed record ConverterStats(string PartId, double KW, IReadOnlyDictionary<string, long> InputsKg,
+    IReadOnlyDictionary<string, long> OutputsKg, double KJPerBatch)
+{
+    public static ConverterStats From(PartDefinition part, double kw) => new(part.Id, kw,
+        part.ConverterInputsKg!.ToDictionary(kv => kv.Key, kv => (long)kv.Value),
+        part.ConverterOutputsKg!.ToDictionary(kv => kv.Key, kv => (long)kv.Value), part.ConverterKJPerBatch);
+}
+
 /// <summary>
 /// All generators of one part type on a craft (#75): their total power (kW, health included), and the batch they
 /// burn: whole kg in, whole kg left in stock, kJ out. The rest of a batch's mass leaves as exhaust (ejected mass).
@@ -96,8 +105,12 @@ public sealed record ShipStats(
     double ResearchRatePerS = 0,
     double LabPowerKW = 0,
     int GateDefenseCount = 0,
-    IReadOnlyList<GeneratorStats>? Generators = null)
+    IReadOnlyList<GeneratorStats>? Generators = null,
+    IReadOnlyList<ConverterStats>? Converters = null)
 {
+    /// <summary>Converters by part type (#78); empty if none.</summary>
+    public IReadOnlyList<ConverterStats> ConverterList => Converters ?? Array.Empty<ConverterStats>();
+
     /// <summary>Generators by part type (#75); empty if none.</summary>
     public IReadOnlyList<GeneratorStats> GeneratorList => Generators ?? Array.Empty<GeneratorStats>();
 
@@ -175,7 +188,7 @@ public sealed class ShipDesign
 
     private static bool IsStationFacility(PartDefinition p) =>
         p.FabricationRateKgPerS > 0 || p.IsDockingPort || p.CargoCapacityKg > 0 || p.RefiningRateKgPerS > 0
-        || p.CrewCapacity > 0 || p.FoodRateKgPerS > 0 || p.IsWarpGate || p.ResearchRatePerS > 0 || p.IsGateDefense;
+        || p.CrewCapacity > 0 || p.FoodRateKgPerS > 0 || p.IsWarpGate || p.ResearchRatePerS > 0 || p.IsGateDefense || p.GeneratorKW > 0 || p.ConverterKW > 0;
 
     /// <summary>Human-readable problems for the given role; empty means the design is usable in that role.</summary>
     /// <param name="requireConnected">
@@ -261,6 +274,7 @@ public sealed class ShipDesign
         var gates = 0;
         var defenses = 0;
         var generatorKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
+        var converterKW = new SortedDictionary<string, double>(StringComparer.Ordinal);
         double research = 0, labPower = 0;
         var crew = 0;
         int clamps = 0, foundations = 0;
@@ -312,6 +326,7 @@ public sealed class ShipDesign
             if (part.IsWarpGate) gates++;
             if (part.IsGateDefense) defenses++;
             if (part.GeneratorKW > 0) generatorKW[part.Id] = generatorKW.GetValueOrDefault(part.Id) + part.GeneratorKW * h; // #75
+            if (part.ConverterKW > 0) converterKW[part.Id] = converterKW.GetValueOrDefault(part.Id) + part.ConverterKW * h; // #78
             if (part.IsAnchorClamp) clamps++;
             if (part.IsFoundation) foundations++;
             if (part.IsDockingPort) ports.Add(new DockingPortInfo(cell.Pos, cell.Rotation));
@@ -336,7 +351,8 @@ public sealed class ShipDesign
             generation, thrustPower, drillPower, refineryPower, fabricatorPower, ejectorPower, ejection,
             reverse, left, right, reversePower, leftPower, rightPower, crew, food, habitatPower, farmPower,
             (int)Math.Floor(robots + 1e-9), robotPower, gates, research, labPower, defenses,
-            generatorKW.Count == 0 ? null : generatorKW.Select(g => GeneratorStats.From(catalog.Get(g.Key), g.Value)).ToList());
+            generatorKW.Count == 0 ? null : generatorKW.Select(g => GeneratorStats.From(catalog.Get(g.Key), g.Value)).ToList(),
+            converterKW.Count == 0 ? null : converterKW.Select(c => ConverterStats.From(catalog.Get(c.Key), c.Value)).ToList());
     }
 
     /// <summary>Total materials to build every part of the design (unknown parts are skipped).</summary>
