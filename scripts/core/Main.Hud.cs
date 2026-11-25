@@ -84,6 +84,7 @@ public partial class Main
                 p.Inventory[SectorState.AntimatterMaterial] / p.Stats.AntimatterCapacityKg));
         if (p.Stats.QuantumDriveKW > 0)
             rows.Add(new HudRow("speed", $"quantum charge {p.QuantumChargeKJ / SectorState.QuantumChargeNeededKJ(p) * 100:0}%", Severity.Normal, p.QuantumChargeKJ / SectorState.QuantumChargeNeededKJ(p)));
+        if (PointRow(p) is { } point) rows.Add(point); // #122
         // The rest as it was, with an icon: what a bar already says is left out unless something is wrong.
         foreach (var line in Lines(lines))
         {

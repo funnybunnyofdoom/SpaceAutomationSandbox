@@ -285,7 +285,7 @@ public sealed partial class SectorState
         var bestDistance = double.MaxValue;
         foreach (var body in _bodies)
         {
-            if (body.Surveyed || body.Kind == BodyKind.Star) continue;
+            if (body.Surveyed || body.Unscanned || body.Kind == BodyKind.Star) continue;
             var d = GetPosition(body.Id).DistanceTo(from) - body.RadiusM;
             if (d < bestDistance) { best = body; bestDistance = d; }
         }

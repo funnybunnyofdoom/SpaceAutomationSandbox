@@ -224,6 +224,8 @@ public partial class Main : Node2D
             _programPanel.JobsChosen += () => SwapPanel(_programPanel, _jobPanel, () => _jobPanel!.Open());
             _jobPanel!.ProgramsChosen += id => SwapPanel(_jobPanel, _programPanel, () => _programPanel.Open(id));
             _uiRoot.AddChild(_programPanel);
+            _discoveriesPanel = new DiscoveriesPanel(() => _sector, () => _player, ChoosePoint) { Visible = false }; // #122
+            _uiRoot.AddChild(_discoveriesPanel);
             _findPanel = new FindPanel(() => _sector, () => _player, () => Recent, () => CurrentTarget, t => _sector.Exists(t) ? TargetLabel(t) : "", id => _catalog.Materials.Contains(id) ? _catalog.Materials.Get(id).Name : id) { Visible = false }; // #109
             _findPanel.TargetChosen += ChooseTarget;
             _findPanel.FavouriteChosen += RecallFavourite;
@@ -249,7 +251,7 @@ public partial class Main : Node2D
             if (System.Array.IndexOf(startArgs, "--title-pick=new") >= 0) LeaveTitle(StartNewGame);
             if (startArgs.FirstOrDefault(q => q.StartsWith("--window=")) is { } asked && asked["--window=".Length..].Split('x') is [var across, var down]) GetWindow().Size = new Vector2I(int.Parse(across), int.Parse(down)); // dev
             if (System.Array.IndexOf(startArgs, "--title-pick=races") >= 0 && _catalog.Races.Races.FirstOrDefault(r => System.Array.IndexOf(startArgs, "--race=" + r.Id) >= 0) is { } raceArg) { _uiRoot.MoveChild(_raceCreator, _uiRoot.GetChildCount() - 1); _raceCreator.Open(raceArg); } // dev (#117)
-            if (System.Array.IndexOf(startArgs, "--title-pick=setup") >= 0) { _uiRoot.MoveChild(_newGame, _uiRoot.GetChildCount() - 1); _newGame.Open(); } // #62 check
+            if (System.Array.IndexOf(startArgs, "--title-pick=setup") >= 0) { _uiRoot.MoveChild(_newGame, _uiRoot.GetChildCount() - 1); _newGame.Open(); if (System.Array.IndexOf(startArgs, "--advanced") >= 0) _newGame.ShowAdvanced(); } // #62 check
             if (System.Array.IndexOf(startArgs, "--title-pick=continue") >= 0) ContinueFromTitle();
             return;
         }
@@ -335,6 +337,7 @@ public partial class Main : Node2D
         if (args.FirstOrDefault(x => x.StartsWith("--window=")) is { } size && size["--window=".Length..].Split('x') is [var w, var h]) // dev: test small windows (#96)
             GetWindow().Size = new Vector2I(int.Parse(w), int.Parse(h));
         if (System.Array.IndexOf(args, "--open-programs") >= 0) DemoProgram(); // #120
+        if (args.FirstOrDefault(a => a.StartsWith("--open-discoveries")) is { } discover) DemoPoints(discover.Split('=').Last()); // #122
         if (System.Array.IndexOf(args, "--open-find") >= 0) _findPanel?.Open(); // #109
         if (System.Array.IndexOf(args, "--open-log") >= 0) _logPanel?.Open(); // #100
         if (System.Array.IndexOf(args, "--open-milestones") >= 0) _milestonesPanel?.Open(); // #38
@@ -349,6 +352,7 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-research") >= 0) _researchPanel?.Open();
         if (System.Array.IndexOf(args, "--open-power") >= 0) _powerPanel?.Open(); // #75
         if (System.Array.IndexOf(args, "--open-pause") >= 0) OpenPause();
+        if (System.Array.IndexOf(args, "--open-pause") >= 0) { OpenPause(); _pause.ShowWorld(); } // dev (#119)
         if (System.Array.IndexOf(args, "--open-saves=save") >= 0) { OpenPause(); _pause.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Save); }
         if (System.Array.IndexOf(args, "--open-saves=load") >= 0) { OpenPause(); _pause.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Load); }
         if (System.Array.IndexOf(args, "--open-galaxy") >= 0) { if (!_mapMode) ToggleMap(); _galaxyView = true; }
@@ -507,12 +511,13 @@ public partial class Main : Node2D
         _raceCreator.Changed += () => { if (_catalog is { } c) c.WithRaces(RaceLibrary.Load(c)); };
         _raceCreator.Closed += id => _newGame.Return(id);
         _newGame.CreatorChosen += race => { _uiRoot.MoveChild(_raceCreator, _uiRoot.GetChildCount() - 1); _raceCreator.Open(race); };
-        _newGame.StartChosen += (name, seed, goals, supplies, race) => LeaveTitle(() => { StartNewGame(seed, name, supplies, race); _goalsOn = goals; });
+        _newGame.StartChosen += (name, seed, goals, supplies, race, options) => LeaveTitle(() => { StartNewGame(seed, name, supplies, race, options); _goalsOn = goals; });
         _newGame.BackChosen += ShowTitle;
         _pause = new PauseMenu();
         _pause.ResumeChosen += ResumeFromPause;
         _pause.SaveChosen += () => { _pause.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Save); };
         _pause.LoadChosen += () => { _pause.Visible = false; _saveScreen.Open(SaveLoadScreen.ScreenMode.Load); };
+        _pause.WorldChanged += () => _changedSinceSave = true; // #119
         _pause.SettingsChosen += () => { _settingsPanel!.Open(); EnterPanelNav(_settingsPanel, fromMenu: true); };
         _pause.HelpChosen += () => { ResumeFromPause(); _hud.ToggleHelp(); };
         _pause.GoalsToggled += () => { _goalsOn = !_goalsOn; _changedSinceSave = true; ResumeFromPause(); }; // #65
@@ -555,7 +560,7 @@ public partial class Main : Node2D
         _pausedBeforeMenu = _warp.Paused;
         _warp.Paused = true;
         if (_sector is not null) _pause.Portrait = RaceLibrary.Portrait(_sector.Race);
-        _pause.Open(_sector is null ? "" : $"{_gameName}   ·   seed {_sector.Seed}   ·   played {(int)(_playTimeS / 3600)} h {(int)(_playTimeS / 60) % 60} min", _goalsOn);
+        _pause.Open(_sector is null ? "" : $"{_gameName}   ·   seed {_sector.Seed}   ·   played {(int)(_playTimeS / 3600)} h {(int)(_playTimeS / 60) % 60} min", _goalsOn, _sector?.Options);
     }
 
     /// <summary>Back to the pause menu from a screen opened from it (the game stays paused as it was).</summary>
@@ -705,6 +710,7 @@ public partial class Main : Node2D
             var recipes = RecipeCatalog.FromJson(Godot.FileAccess.GetFileAsString(RecipesPath), materials);
             var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath), materials, recipes)
                 .WithResearch(ResearchCatalog.FromJson(Godot.FileAccess.GetFileAsString(ResearchPath)));
+            catalog.WithPoints(PointLibrary.Load(catalog)); // #122
             catalog.WithRaces(RaceLibrary.Load(catalog)); // #97, #116
             var design = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterDesignPath));
             var shipyard = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterShipyardPath));
@@ -762,7 +768,7 @@ public partial class Main : Node2D
         }
         OpenMenuScene(); // #98
         _hud.Visible = false;
-        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel, _findPanel, _programPanel })
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel })
             if (panel != null) panel.Visible = false;
         _title.Open(SaveSummary());
     }
@@ -786,7 +792,7 @@ public partial class Main : Node2D
     /// <summary>A new game from a seed (#62); the default seed for command-line starts.</summary>
     private void StartNewGame() => StartNewGame(NewGame.DefaultSeed, "New game");
 
-    private void StartNewGame(ulong seed, string name, StartingSupplies supplies = StartingSupplies.Standard, RaceDefinition? race = null)
+    private void StartNewGame(ulong seed, string name, StartingSupplies supplies = StartingSupplies.Standard, RaceDefinition? race = null, WorldOptions? options = null)
     {
         _gameName = name;
         _goalsOn = false;
@@ -801,7 +807,7 @@ public partial class Main : Node2D
             return;
         }
 
-        var game = NewGame.Create(seed, _catalog, _starterDesign, _starterShipyard, supplies, race);
+        var game = NewGame.Create(seed, _catalog, _starterDesign, _starterShipyard, supplies, race, options ?? WorldOptions.Usual()); // #119
         _sector = game.Sector;
         ShowRace(_sector.Race);
         _lastEventShown = null; // events from before don't show as new (#36)
@@ -945,6 +951,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Laws)) Toggle(_lawsPanel, () => _lawsPanel!.Open());
         else if (Pressed(InputActions.Log)) Toggle(_logPanel, () => _logPanel!.Open());
         else if (Pressed(InputActions.Milestones)) Toggle(_milestonesPanel, () => _milestonesPanel!.Open());
+        else if (Pressed(InputActions.Discoveries)) Toggle(_discoveriesPanel, () => _discoveriesPanel!.Open());
         else if (Pressed(InputActions.Life)) Toggle(_lifePanel, () => _lifePanel!.Open());
         else if (Pressed(InputActions.Power)) Toggle(_powerPanel, () => _powerPanel!.Open());
         else if (Pressed(InputActions.Map)) ToggleMap();
@@ -958,7 +965,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
-            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _logPanel, _findPanel, _programPanel };
+            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel };
             var anyOpen = _mapMode || _hud.HelpOpen || panels.Any(p => p is { Visible: true });
             if (!anyOpen) OpenPause();
             if (_mapMode) ToggleMap();
@@ -1316,6 +1323,7 @@ public partial class Main : Node2D
         FlushBatch();
         DrawCombat(); // #84
         DrawSystemMap(renderTimeS); // #104
+        DrawPoints(renderTimeS); // #122
         DrawEdgeArrows(renderTimeS); // #101
         DrawHover(renderTimeS); // #108
         // Name tags, not when zoomed far out; in a crowd only stations and the target get one, so the text stays readable and cheap.

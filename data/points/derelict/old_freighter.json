@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "id": "old_freighter",
+  "name": "Old freighter",
+  "cells": [
+    {"x": 0, "y": -2, "part": "cockpit"},
+    {"x": -1, "y": -1, "part": "solar_panel"},
+    {"x": 0, "y": -1, "part": "hull"},
+    {"x": 1, "y": -1, "part": "solar_panel"},
+    {"x": -2, "y": 0, "part": "cargo"},
+    {"x": -1, "y": 0, "part": "cargo"},
+    {"x": 0, "y": 0, "part": "hull"},
+    {"x": 1, "y": 0, "part": "cargo"},
+    {"x": 2, "y": 0, "part": "cargo"},
+    {"x": -2, "y": 1, "part": "cargo"},
+    {"x": -1, "y": 1, "part": "cargo"},
+    {"x": 0, "y": 1, "part": "hull"},
+    {"x": 1, "y": 1, "part": "cargo"},
+    {"x": 2, "y": 1, "part": "cargo"},
+    {"x": -1, "y": 2, "part": "hull"},
+    {"x": 0, "y": 2, "part": "battery"},
+    {"x": 1, "y": 2, "part": "hull"},
+    {"x": -1, "y": 3, "part": "thruster_mk2"},
+    {"x": 1, "y": 3, "part": "thruster_mk2"}
+  ]
+}

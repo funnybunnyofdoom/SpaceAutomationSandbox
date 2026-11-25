@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "id": "derelict",
+  "name": "Derelict craft",
+  "type": "derelict",
+  "description": "An abandoned ship or station, with whatever it still holds. Repair and claim it, or take it apart.",
+  "perSystem": {
+    "rare": 0.5,
+    "normal": 1.5,
+    "often": 3.5
+  },
+  "detectM": 12000,
+  "hintM": 30000,
+  "minOrbitM": 22000,
+  "maxOrbitM": 70000,
+  "useM": 150,
+  "names": [
+    "Long Wait",
+    "Second Chance",
+    "Grey Heron",
+    "Sixpence",
+    "Lantern",
+    "Far Harvest",
+    "Patience",
+    "Old Marrow",
+    "Quiet Hand",
+    "Last Tally"
+  ],
+  "claimKg": {
+    "metal": 400,
+    "electronics": 40
+  },
+  "damaged": 0.55,
+  "missing": 0.12,
+  "cargo": [
+    {
+      "material": "metal",
+      "minKg": 0,
+      "maxKg": 4000
+    },
+    {
+      "material": "electronics",
+      "minKg": 0,
+      "maxKg": 1500
+    },
+    {
+      "material": "fuel",
+      "minKg": 0,
+      "maxKg": 600
+    },
+    {
+      "material": "composites",
+      "minKg": 0,
+      "maxKg": 1200
+    },
+    {
+      "material": "superconductors",
+      "minKg": 0,
+      "maxKg": 150
+    }
+  ]
+}

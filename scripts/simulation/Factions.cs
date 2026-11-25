@@ -130,6 +130,6 @@ public sealed class Faction
 
 /// <summary>Something that happened, for the player's log and status line (#36).</summary>
 /// <summary>What an event is about, for the log's filters (#100). Saved as a number: add new ones at the end.</summary>
-public enum EventKind { Other, Danger, Civilization, Life, Fleet, Milestone, Message }
+public enum EventKind { Other, Danger, Civilization, Life, Fleet, Milestone, Message, Discovery }
 
 public sealed record SectorEvent(long Tick, string Text, EventKind Kind = EventKind.Other, TargetRef Target = default);

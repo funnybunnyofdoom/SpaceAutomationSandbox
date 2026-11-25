@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "ruin",
+  "name": "Ruins",
+  "type": "ruin",
+  "description": "What somebody built, long ago. Land beside them and study them.",
+  "perSystem": {
+    "rare": 0.5,
+    "normal": 1.5,
+    "often": 3
+  },
+  "detectM": 3000,
+  "hintM": 6000,
+  "useM": 600,
+  "studySeconds": 20,
+  "minResearch": 30,
+  "maxResearch": 80,
+  "maxTechCost": 150,
+  "names": [
+    "Broken Terraces",
+    "Sunken Halls",
+    "The Needles",
+    "Salt Galleries",
+    "The Orchard",
+    "Nine Doors",
+    "Stone Choir",
+    "The Long Wall"
+  ]
+}

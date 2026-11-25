@@ -50,3 +50,7 @@ The files here are **built-in** designs and are read-only from the game. `starte
 `cells` is a list of `{ "x", "y", "part" }` on a square grid. Each cell is `ShipDesign.CellSizeM` (4 m) across. **Forward is −y**: the nose sits at the smallest y. Each cell holds one part. Optional `"rot"`: 0–3 quarter turns clockwise (schema 2; omitted when 0). At 0 a part faces forward: a thruster pushes forward and a docking port opens forward. A thruster pushes the way it faces: rot 0 forward, 2 backward (reverse), 1 right, 3 left (strafe). `surface_depot.json` is a built-in fixed structure (foundations).
 
 Validation (`ShipDesign.Validate`) reports, rather than throws: unknown part IDs, a count of control sources other than one, zero forward thrust, and parts that aren't edge-connected to the rest (#35: a design must be one piece).
+
+## Points of interest (`points/<id>/`)
+
+A kind is a folder with `kind.json` (`schemaVersion` 1, `id` the folder's name, `type` `derelict`, `ruin` or `anomaly`): how many a system has (`perSystem`), how near a ship finds it (`detectM`) and uses it (`useM`), how wide its hint on the map is (`hintM`), its orbit's height (not ruins), names, and what it gives. A derelict's other files are its designs. A folder that can't be used is left out with a warning saying why.

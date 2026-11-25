@@ -55,6 +55,8 @@ public partial class MapPanel : PanelContainer
 
     public bool Shows(CraftState craft) => !_hidden.Contains(SectorState.IsGate(craft) && !craft.IsWreck ? "gate" : craft.Stats.TotalThrustN > 0 || craft.IsWreck ? "fleet" : "orbit");
 
+    public bool ShowsDiscoveries => !_hidden.Contains("discovery");
+
     public bool ShowsRoutes => !_hidden.Contains("freight");
 
     private void Build()
@@ -79,7 +81,7 @@ public partial class MapPanel : PanelContainer
 
         var filters = new HFlowContainer();
         box.AddChild(filters);
-        foreach (var (icon, name) in new[] { ("planet", "Planets"), ("moon", "Moons"), ("asteroid", "Asteroids"), ("orbit", "Stations"), ("gate", "Warp gates"), ("fleet", "Ships and wrecks"), ("freight", "Routes") })
+        foreach (var (icon, name) in new[] { ("planet", "Planets"), ("moon", "Moons"), ("asteroid", "Asteroids"), ("orbit", "Stations"), ("gate", "Warp gates"), ("fleet", "Ships and wrecks"), ("freight", "Routes"), ("discovery", "Points of interest") })
         {
             var button = new Button
             {
@@ -160,7 +162,7 @@ public partial class MapPanel : PanelContainer
 
         var bodies = sector.Bodies.Where(b => viewed is not null && (b.Id == viewed.Id || sector.StarOf(b.Id)?.Id == viewed.Id)).ToList();
         var stations = sector.Crafts.Where(c => c.Stats.DockingPorts.Count > 0 && Shows(c) && sector.StarAt(c.Position)?.Id == viewed?.Id).Select(c => c.Id).ToList();
-        var key = $"{viewed?.Id}|{bodies.Count}|{string.Join(",", stations)}";
+        var key = $"{viewed?.Id}|{bodies.Count}|{sector.Points.Count(p => p.Found && !sector.TargetOf(p).IsNone)}|{string.Join(",", stations)}";
         if (key != _layoutKey) Rebuild(sector, viewed, bodies, stations, key);
         foreach (var (row, text) in _labels) row.Set(text());
 
@@ -201,6 +203,24 @@ public partial class MapPanel : PanelContainer
             foreach (var child in bodies.Where(b => b.Orbit?.Parent == body.Id && b.Kind != BodyKind.Star)) AddBody(child, depth + 1);
         }
         AddBody(star, 0);
+
+        // Points of interest found here (#122).
+        var points = sector.Points.Where(p => p.Found && ShowsDiscoveries && sector.StarOf(p.Parent)?.Id == star.Id && !sector.TargetOf(p).IsNone && Found(p.Name)).ToList();
+        if (points.Count > 0) _rows.AddChild(UiTheme.Header("Points of interest"));
+        foreach (var point in points)
+        {
+            var id = point.Id;
+            AddRow(0, () =>
+            {
+                var s = _sector();
+                if (s.PointById(id) is not { } p || s.TargetOf(p) is not { IsNone: false } target || s.PointPosition(p, s.TimeS) is not { } place) return new HudRow("idle", "(gone)", Severity.Muted);
+                return new HudRow(DiscoveriesPanel.Icon(s.KindOf(p)), $"{p.Name}{Far(s, place, 0)}", p.Done ? Severity.Muted : Severity.Normal, Tip: p.Done ? p.Result : "", Link: target);
+            }, () =>
+            {
+                if (_sector().PointById(id) is not { } p || _sector().TargetOf(p) is not { IsNone: false } target) return;
+                if (target.Craft.IsNone) _targetBody(target.Body); else _targetCraft(target.Craft);
+            });
+        }
 
         var named = stations.Select(id => sector.GetCraft(id)).Where(c => Found(c.Name)).ToList();
         if (named.Count > 0) _rows.AddChild(UiTheme.Header("Stations"));

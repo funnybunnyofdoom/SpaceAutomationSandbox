@@ -34,6 +34,7 @@ public partial class Main
                 () => _player?.Job is { Active: true } job && job.Status.StartsWith("waiting") ? job.Status : null),
             new TopBarItem("map", "Map", InputActions.Map, () => FromBar(_mapPanel, ToggleMap), () => _mapMode),
             Panel("find", "Find", InputActions.Find, _findPanel, () => _findPanel!.Open(), () => _player is null ? "Fly a craft first" : null),
+            Panel("discovery", "Discoveries", InputActions.Discoveries, _discoveriesPanel, () => _discoveriesPanel!.Open(), badge: () => PointsToDecide() is > 0 and var n ? $"{n} to decide here" : null),
             Panel("research", "Research", InputActions.Research, _researchPanel, () => _researchPanel!.Open(), badge: () =>
                 _sector.ResearchPoints > 0 && _catalog!.Research.Techs.Count(t => !_sector.IsTechUnlocked(t.Id) && _sector.ResearchBlocker(t.Id) is null) is > 0 and var n ? $"{n} can be researched" : null),
             Panel("power", "Power", InputActions.Power, _powerPanel, () => _powerPanel!.Open(),

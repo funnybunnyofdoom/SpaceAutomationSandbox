@@ -137,7 +137,7 @@ public sealed partial class SectorState
         var bestKey = (Elsewhere: true, Distance: double.MaxValue);
         foreach (var wreck in _crafts)
         {
-            if (!wreck.IsWreck || wreck.IsLanded || wreck.Id == craft.Id || LastPartKg(wreck) > craft.CargoCapacityKg) continue;
+            if (!wreck.IsWreck || IsUndecided(wreck) || wreck.IsLanded || wreck.Id == craft.Id || LastPartKg(wreck) > craft.CargoCapacityKg) continue;
             var elsewhere = StarAt(wreck.Position)?.Id != here;
             if (elsewhere && GateHop(craft, wreck.Position, out _) is null) continue;
             var key = (elsewhere, wreck.Position.DistanceTo(craft.Position));

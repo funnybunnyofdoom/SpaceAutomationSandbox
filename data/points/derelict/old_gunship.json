@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "id": "old_gunship",
+  "name": "Old gunship",
+  "cells": [
+    {"x": 0, "y": -1, "part": "autocannon"},
+    {"x": -1, "y": 0, "part": "armour_plate"},
+    {"x": 0, "y": 0, "part": "cockpit"},
+    {"x": 1, "y": 0, "part": "armour_plate"},
+    {"x": -1, "y": 1, "part": "hull"},
+    {"x": 0, "y": 1, "part": "hull"},
+    {"x": 1, "y": 1, "part": "hull"},
+    {"x": -1, "y": 2, "part": "cargo"},
+    {"x": 0, "y": 2, "part": "battery"},
+    {"x": 1, "y": 2, "part": "cargo"},
+    {"x": -1, "y": 3, "part": "thruster_mk2"},
+    {"x": 1, "y": 3, "part": "thruster_mk2"}
+  ]
+}

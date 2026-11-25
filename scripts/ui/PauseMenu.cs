@@ -1,5 +1,6 @@
 using System;
 using Godot;
+using SpaceAutomationSandbox.Simulation;
 
 namespace SpaceAutomationSandbox.UI;
 
@@ -28,6 +29,18 @@ public partial class PauseMenu : Control
     private Button _resume = null!;
     private Label _about = null!;
     private Button _goals = null!;
+    private PanelContainer _worldPanel = null!;
+    private readonly WorldOptionsBox _world = new(beside: false); // #119
+
+    /// <summary>The world's options were changed.</summary>
+    public event Action? WorldChanged;
+
+    /// <summary>Dev: shows the world's options.</summary>
+    public void ShowWorld()
+    {
+        _worldPanel.Visible = true;
+        _world.Expand();
+    }
 
     public PauseMenu()
     {
@@ -66,8 +79,13 @@ public partial class PauseMenu : Control
         Item(box, "Help", () => HelpChosen?.Invoke());
         _goals = Item(box, "Show goal list", () => GoalsToggled?.Invoke());
         Item(box, "Restart goal list", () => GoalsRestarted?.Invoke());
+        Item(box, "World options", () => { _worldPanel.Visible = !_worldPanel.Visible; if (_worldPanel.Visible) _world.Expand(); }); // #119
         Item(box, "Quit to main menu", () => QuitToMenuChosen?.Invoke());
         Item(box, "Quit to desktop", () => QuitToDesktopChosen?.Invoke());
+        _worldPanel = new PanelContainer { Visible = false, SizeFlagsVertical = SizeFlags.ShrinkCenter, CustomMinimumSize = new Vector2(380, 0) };
+        _worldPanel.AddChild(_world);
+        _world.Changed += () => WorldChanged?.Invoke();
+        across.AddChild(_worldPanel);
     }
 
     private static Button Item(VBoxContainer box, string text, Action pressed)
@@ -83,8 +101,10 @@ public partial class PauseMenu : Control
     public void FocusFirst() => _resume.GrabFocus();
 
     /// <summary>Shows the menu; <paramref name="about"/> is the game's name, seed and play time.</summary>
-    public void Open(string about = "", bool goalsOn = false)
+    public void Open(string about = "", bool goalsOn = false, WorldOptions? world = null)
     {
+        _world.Set(world ?? new WorldOptions());
+        _worldPanel.Visible = false;
         _goals.Text = goalsOn ? "Hide goal list" : "Show goal list";
         _about.Text = about;
         Visible = true;

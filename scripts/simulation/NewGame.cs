@@ -85,7 +85,7 @@ public static class NewGame
     }
 
     public static NewGameResult Create(ulong seed, PartCatalog catalog, ShipDesign starterShip, ShipDesign starterShipyard,
-        StartingSupplies supplies = StartingSupplies.Standard, RaceDefinition? race = null)
+        StartingSupplies supplies = StartingSupplies.Standard, RaceDefinition? race = null, WorldOptions? options = null)
     {
         race ??= catalog.Races.Default;
         starterShip = race.Ship ?? starterShip; // #116
@@ -100,6 +100,8 @@ public static class NewGame
         sector.Recipes = catalog.Recipes;
         sector.Parts = catalog;
         sector.Race = race;
+        if (options is not null) sector.Options = options.Copy(); // #119
+        sector.PlacePoints(sector.Stars[0], 0);
         if (race.Tech.Count > 0) sector.RestoreResearch(0, race.Tech, allUnlocked: false);
         var primary = SectorGenerator.HomePlanet(sector);
 

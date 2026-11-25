@@ -46,7 +46,7 @@ public sealed partial class SectorState
         for (var i = 0; i < _bodies.Count; i++)
         {
             var body = _bodies[i];
-            if (body.Surveyed || body.Kind == BodyKind.Star) continue;
+            if (body.Surveyed || body.Unscanned || body.Kind == BodyKind.Star) continue;
             var centre = BodyPositionAt(i, TimeS);
             var distance = centre.DistanceTo(craft.Position);
             if (distance - body.RadiusM > SurveyRangeM) continue;

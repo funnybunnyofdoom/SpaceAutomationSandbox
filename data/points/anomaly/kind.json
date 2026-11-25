@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "id": "anomaly",
+  "name": "Anomaly",
+  "type": "anomaly",
+  "description": "Something strange, out in space. Scan it from close by.",
+  "perSystem": {
+    "rare": 0.7,
+    "normal": 2,
+    "often": 4
+  },
+  "detectM": 15000,
+  "hintM": 35000,
+  "minOrbitM": 24000,
+  "maxOrbitM": 90000,
+  "useM": 1200,
+  "studySeconds": 15,
+  "minResearch": 20,
+  "maxResearch": 60,
+  "names": [
+    "Cold Ember",
+    "The Drum",
+    "Glass Heart",
+    "Murmur",
+    "Hollow Star",
+    "The Knot",
+    "Pale Lure",
+    "Ringing Stone",
+    "Witchlight",
+    "The Splinter"
+  ],
+  "outcomes": [
+    {
+      "find": "ore",
+      "weight": 2,
+      "text": "It's a pocket of rich ore: drills can work it.",
+      "ore": [
+        {
+          "material": "copper_ore",
+          "minKg": 150000,
+          "maxKg": 400000
+        },
+        {
+          "material": "exotic_ore",
+          "minKg": 5000,
+          "maxKg": 20000
+        }
+      ]
+    },
+    {
+      "find": "ore",
+      "weight": 1,
+      "text": "It's thick with uranium ore: drills can work it.",
+      "ore": [
+        {
+          "material": "uranium_ore",
+          "minKg": 20000,
+          "maxKg": 60000
+        },
+        {
+          "material": "iron_ore",
+          "minKg": 100000,
+          "maxKg": 250000
+        }
+      ]
+    },
+    {
+      "find": "energy",
+      "weight": 2,
+      "text": "A field of energy surrounds it: ships near it charge.",
+      "chargeKW": 600,
+      "rangeM": 3000
+    },
+    {
+      "find": "research",
+      "weight": 2,
+      "text": "Nothing known behaves like this. It's worth studying."
+    }
+  ]
+}

@@ -55,7 +55,8 @@ public static class SaveMigrations
         [33] = ("v34 added races: older games are Human", (_, _) => { }),
         [34] = ("v35 added races of the player's own: older games have none", (_, _) => { }),
         [35] = ("v36 gave civilizations races: those in older games get one that fits, and see you as before", (_, _) => { }),
-        [36] = ("v37 added programs: older games have none", (_, _) => { }),
+        [36] = ("older games have none", (_, _) => { }),
+        [37] = ("v38 added world options and points of interest: older games have them off", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

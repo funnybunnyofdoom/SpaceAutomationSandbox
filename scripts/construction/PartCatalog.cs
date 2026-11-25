@@ -212,6 +212,15 @@ public sealed class PartCatalog
         return this;
     }
 
+    /// <summary>What there is to find (#122).</summary>
+    public PointCatalog Points { get; private set; } = PointCatalog.Empty;
+
+    public PartCatalog WithPoints(PointCatalog points)
+    {
+        Points = points;
+        return this;
+    }
+
     public ResearchCatalog Research { get; private set; } = ResearchCatalog.Empty;
 
     /// <summary>Attaches the tech tree (checked against these parts). Returns this catalog.</summary>

@@ -24,8 +24,12 @@ internal static class TestData
     public static PartCatalog Catalog()
     {
         var catalog = PartCatalog.FromJson(Read("data/parts/parts.json"), Materials(), Recipes()).WithResearch(Research());
-        return catalog.WithRaces(Races(catalog));
+        return catalog.WithRaces(Races(catalog)).WithPoints(Points(catalog));
     }
+
+    public static PointCatalog Points(PartCatalog catalog) => PointCatalog.Load(Directory.GetDirectories(Path.Combine(RepoRoot.Value, "data", "points"))
+        .Select(d => new PointSource(Path.GetFileName(d), File.ReadAllText(Path.Combine(d, "kind.json")),
+            Directory.GetFiles(d, "*.json").Where(f => Path.GetFileName(f) != "kind.json").OrderBy(f => f, System.StringComparer.Ordinal).Select(File.ReadAllText).ToList())), catalog);
 
     public static RaceCatalog Races(PartCatalog catalog)
     {

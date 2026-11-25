@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "id": "old_miner",
+  "name": "Old mining ship",
+  "cells": [
+    {"x": -1, "y": -1, "part": "drill_mk2"},
+    {"x": 1, "y": -1, "part": "drill_mk2"},
+    {"x": -1, "y": 0, "part": "hull"},
+    {"x": 0, "y": 0, "part": "cockpit"},
+    {"x": 1, "y": 0, "part": "hull"},
+    {"x": -1, "y": 1, "part": "cargo"},
+    {"x": 0, "y": 1, "part": "battery"},
+    {"x": 1, "y": 1, "part": "cargo"},
+    {"x": -1, "y": 2, "part": "cargo"},
+    {"x": 0, "y": 2, "part": "hull"},
+    {"x": 1, "y": 2, "part": "cargo"},
+    {"x": -1, "y": 3, "part": "thruster_mk2"},
+    {"x": 1, "y": 3, "part": "thruster_mk2"}
+  ]
+}

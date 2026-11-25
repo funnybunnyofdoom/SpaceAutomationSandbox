@@ -99,6 +99,9 @@ public sealed class CelestialBodyState
     public bool LifeFound { get; internal set; }
     public bool LifeSampled { get; internal set; }
 
+    /// <summary>An anomaly not scanned yet (#122): surveys pass it by.</summary>
+    internal bool Unscanned { get; set; }
+
     internal IReadOnlyList<SurfaceSite> SiteList => _sites;
 
     /// <summary>Native animals live here now, what they're called, and when they damage machines (#93). Saved.</summary>

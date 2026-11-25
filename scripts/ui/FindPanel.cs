@@ -32,7 +32,7 @@ public partial class FindPanel : PanelContainer
     private readonly Func<string, string> _materialName;
     private readonly LineEdit _search;
     private readonly OptionButton _system, _owner, _job, _ore;
-    private readonly Button _ports, _attention, _recentOnly;
+    private readonly Button _ports, _attention, _recentOnly, _discoveries;
     private readonly Button[] _slots = new Button[SectorState.FavouriteSlots];
     private readonly Label _count;
     private readonly ScrollContainer _scroll;
@@ -106,7 +106,8 @@ public partial class FindPanel : PanelContainer
         _ports = Filter("docked", "With a free docking port");
         _attention = Filter("warn", "Yours, waiting or with something wrong");
         _recentOnly = Filter("clock", "Recent targets");
-        foreach (var button in new[] { _ports, _attention, _recentOnly })
+        _discoveries = Filter("discovery", "Points of interest"); // #122
+        foreach (var button in new[] { _ports, _attention, _discoveries, _recentOnly })
         {
             button.Toggled += _ => Refresh();
             kinds.AddChild(button);
@@ -211,7 +212,7 @@ public partial class FindPanel : PanelContainer
         var found = sector.Find(pilot, new TargetQuery
         {
             Text = _search.Text, Kind = _kind, Star = Chosen(_system) is { } star ? new BodyId(uint.Parse(star)) : null, Owner = Chosen(_owner) is { } owner ? int.Parse(owner) : null,
-            Job = _job.Selected > 0 ? Jobs[_job.Selected - 1] : null, Ore = Ore, FreePort = _ports.ButtonPressed, Attention = _attention.ButtonPressed,
+            Job = _job.Selected > 0 ? Jobs[_job.Selected - 1] : null, Ore = Ore, FreePort = _ports.ButtonPressed, Attention = _attention.ButtonPressed, Discovery = _discoveries.ButtonPressed,
         });
         if (_recentOnly.ButtonPressed)
         {
@@ -312,13 +313,19 @@ public partial class FindPanel : PanelContainer
             {
                 TargetKind.Stations => SectorState.IsGate(craft!) ? "gate" : "shipyard", TargetKind.Ships => "fleet", TargetKind.Enemies => "danger", TargetKind.Wrecks => "salvage", _ => "trade",
             });
-            if (_icon.Texture != icon) _icon.Texture = icon;
             if (_name.Text != description) _name.Text = description;
             var star = found.Star is { } id ? sector.GetBody(id).Name : "?";
             var way = found.Jumps < 0 ? $"{star} system: no warp gate route"
                 : $"{MapPanel.Distance(found.DistanceM)}, ~{MapPanel.TravelTime(found.DistanceM)}"
                   + (found.Jumps == 0 ? "" : $"  in the {star} system: {found.Jumps} jump{(found.Jumps == 1 ? "" : "s")}, first {(sector.Exists(new TargetRef(found.FirstGate, BodyId.None)) ? sector.GetCraft(found.FirstGate).Name : "gate")}");
             if (craft is not null && SectorState.AttentionReason(craft) is { } wrong) way += $";  {wrong}";
+            foreach (var point in sector.Points) // #122
+                if (point.Found && sector.TargetOf(point) == found.Target)
+                {
+                    way += $";  {(point.Orbit is null ? point.Name : sector.KindOf(point)?.Name.ToLowerInvariant())}{(point.Done ? $": {point.Result}" : "")}";
+                    icon = UiIcons.Get(DiscoveriesPanel.Icon(sector.KindOf(point)));
+                }
+            if (_icon.Texture != icon) _icon.Texture = icon;
             if (_way.Text != way) _way.Text = way;
             _way.Modulate = UiTheme.Of(craft is not null && SectorState.AttentionReason(craft) is not null ? Severity.Warning : Severity.Muted);
             var tip = description + "\n" + way + (body?.OriginalName is { } was ? $"\nOriginally {was}" : "");

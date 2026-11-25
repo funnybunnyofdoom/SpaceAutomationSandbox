@@ -40,7 +40,7 @@ public partial class LogPanel : PanelContainer
     private static readonly (EventKind? Kind, string Name, string Icon)[] Filters =
     {
         (null, "Everything", "map"), (EventKind.Danger, "Danger", "danger"), (EventKind.Civilization, "Civilizations", "trade"), (EventKind.Life, "Native life", "life"),
-        (EventKind.Fleet, "Your craft", "fleet"), (EventKind.Milestone, "Milestones", "milestones"), (EventKind.Message, "Messages (this session)", "message"),
+        (EventKind.Fleet, "Your craft", "fleet"), (EventKind.Milestone, "Milestones", "milestones"), (EventKind.Discovery, "Discoveries", "discovery"), (EventKind.Message, "Messages (this session)", "message"),
     };
 
     private readonly Func<SectorState> _sector;
@@ -101,7 +101,7 @@ public partial class LogPanel : PanelContainer
         var seconds = (long)(e.Tick * FixedStepClock.TickSeconds);
         var icon = e.Kind switch
         {
-            EventKind.Danger => "danger", EventKind.Civilization => "trade", EventKind.Life => "life", EventKind.Fleet => "fleet", EventKind.Milestone => "milestones", _ => "message",
+            EventKind.Danger => "danger", EventKind.Civilization => "trade", EventKind.Life => "life", EventKind.Fleet => "fleet", EventKind.Milestone => "milestones", EventKind.Discovery => "discovery", _ => "message",
         };
         return new HudRow(icon, $"{seconds / 3600}:{seconds / 60 % 60:00}:{seconds % 60:00}  {e.Text}", e.Kind == EventKind.Danger ? Severity.Bad : e.Kind == EventKind.Message ? Severity.Muted : Severity.Normal,
             Tip: e.Target.IsNone ? "" : "Click to go there", Link: e.Target.IsNone ? null : e.Target);

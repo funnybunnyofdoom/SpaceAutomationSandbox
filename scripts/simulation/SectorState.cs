@@ -47,7 +47,7 @@ public sealed partial class SectorState
         if (_byId.ContainsKey(body.Id)) throw new InvalidOperationException($"Duplicate {body.Id}.");
         if (body.Orbit is { } orbit && !_byId.ContainsKey(orbit.Parent))
             throw new InvalidOperationException($"{body.Id} orbits unknown parent {orbit.Parent}; add parents first.");
-        if (body.Id.Value >= _nextBodyId) _nextBodyId = body.Id.Value + 1;
+        if (body.Id.Value >= _nextBodyId && body.Id.Value < PointBodyIdBase) _nextBodyId = body.Id.Value + 1;
 
         _bodies.Add(body);
         _bodies.Sort((a, b) => a.Id.Value.CompareTo(b.Id.Value));
@@ -251,6 +251,7 @@ public sealed partial class SectorState
         StepConverters(); // electrolysers on spare power (#78)
         StepResearch(); // labs make research points (#37)
         StepSurvey();
+        StepPoints(); // points of interest (#122)
 
         // Shipyards advance after movement, so a finished craft is placed against the yard's new position.
         StepRepairs(); // the fabricator repairs before it builds (#3)

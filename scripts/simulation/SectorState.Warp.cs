@@ -169,6 +169,7 @@ public sealed partial class SectorState
         var before = ComputeMassLedger().DepositsKg;
         var (star, planet) = SectorGenerator.GenerateSystem(this, index);
         DiscoveredKg += ComputeMassLedger().DepositsKg - before; // new world: the ledger stays balanced
+        PlacePoints(star, index); // #122
         MaybeMeetCivilization(star, index); // a civilization may claim it (#36)
         var far = new CraftState(AllocateCraftId(), $"{star.Name} gate", gate.Design, gate.Design.ComputeStats(Parts), GetPosition(planet.Id), 0);
         AddCraft(far);

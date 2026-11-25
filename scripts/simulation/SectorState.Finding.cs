@@ -19,6 +19,9 @@ public sealed record TargetQuery
     public string? Ore { get; init; }
     public bool FreePort { get; init; }
 
+    /// <summary>Points of interest that have been found (#122).</summary>
+    public bool Discovery { get; init; }
+
     /// <summary>Yours, waiting or with something wrong.</summary>
     public bool Attention { get; init; }
 }
@@ -110,7 +113,8 @@ public sealed partial class SectorState
         if ((query.Kind is null or TargetKind.Bodies) && query is { Owner: null, Job: null, FreePort: false, Attention: false })
             foreach (var body in _bodies)
             {
-                if (text.Length > 0 && !body.Name.Contains(text, StringComparison.OrdinalIgnoreCase) && body.OriginalName?.Contains(text, StringComparison.OrdinalIgnoreCase) != true) continue;
+                if (text.Length > 0 && !body.Name.Contains(text, StringComparison.OrdinalIgnoreCase) && body.OriginalName?.Contains(text, StringComparison.OrdinalIgnoreCase) != true && !RuinNamed(body.Id, text)) continue;
+                if (query.Discovery && !HasPoint(TargetRef.Of(body))) continue;
                 if (query.Ore is { } ore && !HasSurveyed(body, ore)) continue;
                 Add(TargetRef.Of(body), GetPosition(body.Id), body.RadiusM, body.Kind == BodyKind.Star ? body.Id : StarOf(body.Id)?.Id);
             }
@@ -123,6 +127,7 @@ public sealed partial class SectorState
                 if (query.Owner is { } owner && craft.FactionId != owner) continue;
                 if (query.Job is { } job && (craft.Job is not { Active: true } doing || doing.Kind != job)) continue;
                 if (query.FreePort && (craft.IsWreck || IsEnemy(craft) || craft.IsDocked || occupied.GetValueOrDefault(craft.Id) >= craft.Stats.DockingPorts.Count)) continue;
+                if (query.Discovery && !HasPoint(TargetRef.Of(craft))) continue;
                 if (query.Attention && AttentionReason(craft) is null) continue;
                 BodyId? star = null;
                 var nearest = double.MaxValue;
@@ -131,6 +136,19 @@ public sealed partial class SectorState
                 Add(TargetRef.Of(craft), craft.Position, craft.CollisionRadiusM, star);
             }
         return found.OrderBy(f => f.Jumps < 0).ThenBy(f => f.DistanceM).ThenBy(f => f.Target.Craft.Value).ThenBy(f => f.Target.Body.Value).ToList();
+    }
+
+    private bool HasPoint(TargetRef target)
+    {
+        foreach (var point in _points) if (point.Found && TargetOf(point) == target) return true;
+        return false;
+    }
+
+    private bool RuinNamed(BodyId body, string text)
+    {
+        foreach (var point in _points)
+            if (point.Found && point.Orbit is null && point.Parent == body && point.Name.Contains(text, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     private static bool HasSurveyed(CelestialBodyState body, string ore)

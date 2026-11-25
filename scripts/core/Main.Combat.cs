@@ -21,7 +21,7 @@ public partial class Main
         craft.IsWreck ? WreckColor : SectorState.IsPlayers(craft) ? MarkerColor : _sector.IsEnemy(craft) ? Palette.Bad : NeutralColor;
 
     /// <summary>Name tags say what it is in words too, not by colour alone (#68).</summary>
-    private string CraftTag(CraftState craft) => craft.IsWreck ? $"{craft.Name} (wreck)" : SectorState.IsPlayers(craft) ? craft.Name
+    private string CraftTag(CraftState craft) => craft.IsWreck ? $"{craft.Name} ({(_sector.PointAt(TargetRef.Of(craft)) is null ? "wreck" : "derelict")})" : SectorState.IsPlayers(craft) ? craft.Name
         : _sector.IsEnemy(craft) ? $"! {craft.Name}" : $"{craft.Name} ({_sector.FactionById(craft.FactionId)?.Disposition.ToString().ToLowerInvariant() ?? "unknown"})";
 
     private void DrawCombat()

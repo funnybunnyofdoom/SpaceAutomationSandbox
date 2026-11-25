@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "id": "old_scout",
+  "name": "Old survey ship",
+  "cells": [
+    {"x": 0, "y": -1, "part": "cockpit"},
+    {"x": -1, "y": 0, "part": "solar_panel"},
+    {"x": 0, "y": 0, "part": "hull"},
+    {"x": 1, "y": 0, "part": "solar_panel"},
+    {"x": -1, "y": 1, "part": "cargo"},
+    {"x": 0, "y": 1, "part": "repair_drones"},
+    {"x": 1, "y": 1, "part": "cargo"},
+    {"x": -1, "y": 2, "part": "hull"},
+    {"x": 0, "y": 2, "part": "battery"},
+    {"x": 1, "y": 2, "part": "hull"},
+    {"x": -1, "y": 3, "part": "thruster"},
+    {"x": 1, "y": 3, "part": "thruster"}
+  ]
+}

@@ -54,7 +54,7 @@ public static class SaveGameSerializer
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 37;
+    public const int SchemaVersion = 38;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -105,6 +105,14 @@ public static class SaveGameSerializer
                 LargeDesigns = sector.LargeDesigns,
                 Race = sector.Race.Id == RaceCatalog.HumanId || sector.Race.IsCustom ? null : sector.Race.Id,
                 CustomRace = sector.Race.IsCustom ? JsonSerializer.SerializeToNode(sector.Race, RaceFiles.Options) : null,
+                Options = sector.Options.Amounts.Count > 0 ? new SortedDictionary<string, WorldAmount>(sector.Options.Amounts.ToDictionary(o => o.Key, o => o.Value), StringComparer.Ordinal) : null,
+                Points = sector.Points.Count > 0
+                    ? sector.Points.Select(p => new PointDto
+                    {
+                        Id = p.Id, Kind = p.KindId, Name = p.Name, ParentId = p.Parent.Value, RadiusM = p.Orbit?.RadiusM ?? 0, PeriodS = p.Orbit?.PeriodS ?? 0, PhaseRad = p.Orbit?.PhaseAtZeroRad ?? 0, BearingRad = p.BearingRad, Roll = p.Roll,
+                        Found = p.Found, StudyTicks = p.StudyTicks, Studied = p.Studied, Done = p.Done, Result = p.Result.Length > 0 ? p.Result : null, FieldKept = p.FieldKept, CraftId = p.CraftId.Value, BodyId = p.BodyId.Value,
+                    }).ToList()
+                    : null,
                 Programs = sector.Programs.Count > 0 ? sector.Programs.Select(p => new ProgramDto { Id = p.Id, Name = p.Name, Steps = JsonSerializer.SerializeToNode(p.Steps, JobProgram.JsonOptions) }).ToList() : null,
                 Favourites = sector.Favourites.Any(f => f is not null)
                     ? sector.Favourites.Select((f, i) => (f, i)).Where(x => x.f is not null).Select(x => new FavouriteDto { Slot = x.i + 1, CraftId = x.f!.Target.Craft.Value, BodyId = x.f.Target.Body.Value, Name = x.f.Name }).ToList()
@@ -527,7 +535,7 @@ public static class SaveGameSerializer
             }
             sector.RestoreLaws(dto.Laws ?? new List<string>());
             sector.RestoreEvents((dto.Events ?? new List<EventDto>()).Select(e => new SectorEvent(e.Tick, e.Text ?? "",
-                e.Kind >= 0 && e.Kind <= (int)EventKind.Message ? (EventKind)e.Kind : EventKind.Other, new TargetRef(new CraftId(e.CraftId), new BodyId(e.BodyId)))));
+                e.Kind >= 0 && e.Kind <= (int)EventKind.Discovery ? (EventKind)e.Kind : EventKind.Other, new TargetRef(new CraftId(e.CraftId), new BodyId(e.BodyId)))));
             foreach (var (material, kg) in dto.EjectedKg ?? new SortedDictionary<string, long>())
             {
                 if (!catalog.Materials.Contains(material)) throw new FormatException($"Unknown ejected material '{material}'.");
@@ -565,6 +573,16 @@ public static class SaveGameSerializer
             }
             sector.MilestonesStarted = dto.MilestonesStarted;
             sector.LargeDesigns = dto.LargeDesigns;
+            foreach (var (id, amount) in dto.Options ?? new SortedDictionary<string, WorldAmount>()) sector.Options[id] = amount; // #119
+            foreach (var p in dto.Points ?? new List<PointDto>()) // #122; what it's about may be gone since
+            {
+                if (!double.IsFinite(p.BearingRad) || !double.IsFinite(p.PhaseRad) || p.StudyTicks < 0 || p.RadiusM < 0 || p.RadiusM > 0 && !(p.PeriodS > 0)) throw new FormatException($"Point of interest {p.Id} has an invalid place.");
+                var parent = new BodyId(p.ParentId);
+                sector.RestorePoint(new PointOfInterest(p.Id, p.Kind ?? "", p.Name ?? "", parent, p.RadiusM > 0 ? new CircularOrbit(parent, p.RadiusM, p.PeriodS, p.PhaseRad) : null, p.BearingRad, p.Roll)
+                {
+                    Found = p.Found, StudyTicks = p.StudyTicks, Studied = p.Studied, Done = p.Done, Result = p.Result ?? "", FieldKept = p.FieldKept, CraftId = new CraftId(p.CraftId), BodyId = new BodyId(p.BodyId),
+                });
+            }
             foreach (var p in dto.Programs ?? new List<ProgramDto>()) // #120
             {
                 var steps = p.Steps?.Deserialize<List<ProgramStep>>(JobProgram.JsonOptions);
@@ -888,6 +906,13 @@ public static class SaveGameSerializer
         /// <summary>v34: who the player is (#97); omitted for Human.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Race { get; set; }
+
+        /// <summary>v38: what the world has more or less of (#119), and points of interest (#122).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public SortedDictionary<string, WorldAmount>? Options { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<PointDto>? Points { get; set; }
 
         /// <summary>v37: programs (#120).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -1337,6 +1362,31 @@ public static class SaveGameSerializer
         public string? RecipeId { get; set; }
         public SortedDictionary<string, long>? InputsKg { get; set; }
         public double ProgressKg { get; set; }
+    }
+
+    private sealed class PointDto
+    {
+        public int Id { get; set; }
+        public string? Kind { get; set; }
+        public string? Name { get; set; }
+        public uint ParentId { get; set; }
+
+        /// <summary>Its orbit; 0 for a ruin.</summary>
+        public double RadiusM { get; set; }
+        public double PeriodS { get; set; }
+        public double PhaseRad { get; set; }
+        public double BearingRad { get; set; }
+        public ulong Roll { get; set; }
+        public bool Found { get; set; }
+        public int StudyTicks { get; set; }
+        public bool Studied { get; set; }
+        public bool Done { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Result { get; set; }
+        public bool FieldKept { get; set; }
+        public uint CraftId { get; set; }
+        public uint BodyId { get; set; }
     }
 
     private sealed class ProgramDto

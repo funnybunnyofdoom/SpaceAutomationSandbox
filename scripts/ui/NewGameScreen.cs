@@ -16,7 +16,7 @@ public partial class NewGameScreen : Control
 {
     /// <summary>Start a game with this name and seed.</summary>
     /// <summary>Start a game with this name and seed; the bool is the goal list for new players (#65); then the starting supplies.</summary>
-    public event Action<string, ulong, bool, StartingSupplies, RaceDefinition>? StartChosen;
+    public event Action<string, ulong, bool, StartingSupplies, RaceDefinition, WorldOptions>? StartChosen;
     public event Action? BackChosen;
 
     /// <summary>Make a race from this one, or change it if it's the player's (#117).</summary>
@@ -26,6 +26,8 @@ public partial class NewGameScreen : Control
     private Label _seedInfo = null!;
     private CheckBox _goals = null!;
     private OptionButton _supplies = null!;
+    private readonly WorldOptionsBox _world = new(); // #119
+    private WorldOptions _options = WorldOptions.Usual();
     private readonly Random _random = new();
     private readonly Func<RaceCatalog> _races;
     private readonly Func<RaceDefinition, IReadOnlyList<string>> _describe;
@@ -116,6 +118,7 @@ public partial class NewGameScreen : Control
         _goals = new CheckBox { Text = "Goal list for new players", ButtonPressed = true, TooltipText = "A checklist of the core loop on the left of the screen. Turn it off or restart it from the pause menu." };
         grid.AddChild(_goals);
 
+        box.AddChild(_world);
         box.AddChild(_raceProblems); // not in the grid: hidden, it would shift it
         var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
         buttons.AddThemeConstantOverride("separation", 8);
@@ -134,6 +137,7 @@ public partial class NewGameScreen : Control
     {
         _name.Text = "New game";
         _supplies.Select((int)StartingSupplies.Standard);
+        _world.Set(_options = WorldOptions.Usual());
         _seed.Text = RandomSeed().ToString();
         ShowSeed();
         ListRaces();
@@ -141,6 +145,9 @@ public partial class NewGameScreen : Control
         _name.GrabFocus();
         _name.SelectAll();
     }
+
+    /// <summary>Dev: opens the advanced options.</summary>
+    public void ShowAdvanced() => _world.Expand();
 
     /// <summary>Back from the race creator: what was typed stays, and the race made there is chosen.</summary>
     public void Return(string? raceId)
@@ -200,7 +207,7 @@ public partial class NewGameScreen : Control
         var seedText = _seed.Text.Trim();
         var seed = seedText.Length == 0 ? RandomSeed() : NewGame.SeedFromText(seedText);
         Visible = false;
-        StartChosen?.Invoke(name.Length > 0 ? name : "New game", seed, _goals.ButtonPressed, (StartingSupplies)_supplies.Selected, _race);
+        StartChosen?.Invoke(name.Length > 0 ? name : "New game", seed, _goals.ButtonPressed, (StartingSupplies)_supplies.Selected, _race, _options);
     }
 
     private void Back()

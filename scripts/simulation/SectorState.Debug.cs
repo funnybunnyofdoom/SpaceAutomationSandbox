@@ -48,6 +48,27 @@ public sealed partial class SectorState
         DebugAddedKg += kg;
     }
 
+    /// <summary>DEBUG: finds points of interest (#122), as if by this craft.</summary>
+    public void DebugFindPoints(CraftId by, Func<PointOfInterest, bool> which)
+    {
+        foreach (var point in _points.Where(p => !p.Found && which(p)).ToList())
+            if (KindOf(point) is { } kind) FindPoint(GetCraft(by), point, kind);
+    }
+
+    /// <summary>DEBUG: puts a craft beside a point of interest, or lands it there.</summary>
+    public void DebugGoToPoint(CraftId craftId, int pointId)
+    {
+        if (PointById(pointId) is not { } point || KindOf(point) is not { } kind || PointPosition(point, TimeS) is not { } at) return;
+        var craft = GetCraft(craftId);
+        var parent = GetBody(point.Parent);
+        var away = at - GetPosition(parent.Id);
+        var up = away * (1 / away.Length);
+        craft.Position = craft.PreviousPosition = at + up * (kind.Type == Construction.PointType.Anomaly ? 600 : 110);
+        craft.Velocity = point.Orbit is { } orbit ? RailVelocityAt(orbit, TimeS) : GetVelocityAt(parent.Id, TimeS);
+        craft.HeadingRad = craft.PreviousHeadingRad = Math.Atan2(up.X, -up.Y);
+        if (kind.Type == Construction.PointType.Ruin) RestoreLanding(craft.Id, parent.Id, up * (parent.RadiusM + 15));
+    }
+
     /// <summary>CHEAT: marks every body surveyed.</summary>
     public void DebugSurveyAll()
     {
