@@ -259,6 +259,12 @@ public sealed class CraftState
     /// <summary>The player's order not to fire. Saved.</summary>
     public bool HoldFire { get; set; }
 
+    /// <summary>Its job goes on through hazards (#123) instead of sheltering. Saved.</summary>
+    public bool KeepWorking { get; set; }
+
+    /// <summary>Where it's sheltering, or going to. Saved.</summary>
+    public CraftId ShelterAt { get; internal set; }
+
     /// <summary>Flying itself to its target (#108): 0 no, 1 turning to it, 2 cruising. Saved.</summary>
     public int FlyToPhase { get; internal set; }
 

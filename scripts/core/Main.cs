@@ -337,6 +337,7 @@ public partial class Main : Node2D
         if (args.FirstOrDefault(x => x.StartsWith("--window=")) is { } size && size["--window=".Length..].Split('x') is [var w, var h]) // dev: test small windows (#96)
             GetWindow().Size = new Vector2I(int.Parse(w), int.Parse(h));
         if (System.Array.IndexOf(args, "--open-programs") >= 0) DemoProgram(); // #120
+        if (args.FirstOrDefault(a => a.StartsWith("--hazard=")) is { } happens) DemoHazard(happens.Split('=').Last()); // #123
         if (args.FirstOrDefault(a => a.StartsWith("--open-discoveries")) is { } discover) DemoPoints(discover.Split('=').Last()); // #122
         if (System.Array.IndexOf(args, "--open-find") >= 0) _findPanel?.Open(); // #109
         if (System.Array.IndexOf(args, "--open-log") >= 0) _logPanel?.Open(); // #100
@@ -1324,6 +1325,7 @@ public partial class Main : Node2D
         DrawCombat(); // #84
         DrawSystemMap(renderTimeS); // #104
         DrawPoints(renderTimeS); // #122
+        DrawHazards(renderTimeS); // #123
         DrawEdgeArrows(renderTimeS); // #101
         DrawHover(renderTimeS); // #108
         // Name tags, not when zoomed far out; in a crowd only stations and the target get one, so the text stays readable and cheap.

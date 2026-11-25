@@ -165,7 +165,7 @@ public partial class PowerPanel : PanelContainer
             void Source(CraftState m, string icon, string what, double now, double most, string note = "", string tip = "", Severity severity = Severity.Normal)
                 => sources.Add(new(icon, $"{Of(m, what)}  {now:N0} / {most:N0} kW{note}", severity, most > 0 ? now / most : 0, Tip: tip, Link: several ? TargetRef.Of(m) : null));
             foreach (var m in members.Where(m => m.Stats.PowerGenerationKW > 0))
-                Source(m, "star", "solar", Kw(m.SolarKJThisTick), m.Stats.PowerGenerationKW, m.InShadow ? "  in shadow" : "",
+                Source(m, "star", "solar", Kw(m.SolarKJThisTick), m.Stats.PowerGenerationKW, m.InShadow ? "  in shadow" : m.SolarFactor == 0 ? "  solar flare" : "",
                     $"{m.SolarFactor * 100:0}% sunlight here{(m.InShadow ? $"; a body's shadow dims it to {SectorState.ShadowLight * 100:0}%" : "")}", m.InShadow ? Severity.Warning : Severity.Normal);
             foreach (var m in members.Where(m => m.Stats.StellarHeatKW > 0)) // #77
                 Source(m, "star", "stellar heat", Kw(m.StellarHeatKJThisTick), m.Stats.StellarHeatKW, m.StellarHeatKJThisTick <= 0 ? "  too far" : "",

@@ -194,6 +194,12 @@ public partial class FleetPanel : PanelContainer
             row.Fly += id => { CraftChosen?.Invoke(id); Refresh(); };
             row.Target += id => CraftTargeted?.Invoke(id);
             row.Rename += id => RenameChosen?.Invoke(id);
+            row.Shelter += id => // #123
+            {
+                if (_sector().Crafts.FirstOrDefault(c => c.Id == id) is not { } ship) return;
+                ship.KeepWorking = !ship.KeepWorking;
+                Changed?.Invoke();
+            };
             row.Gate += id =>
             {
                 if (_sector().Crafts.FirstOrDefault(c => c.Id == id) is not { } gate) return;
@@ -246,10 +252,10 @@ public partial class FleetPanel : PanelContainer
         private readonly Label _name = Line(), _doing = Line();
         private readonly TextureRect _light = UiTheme.Icon(""), _job = UiTheme.Icon("");
         private readonly StatBar _battery = new(), _cargo = new();
-        private readonly Button _fly, _target, _gate, _rename;
+        private readonly Button _fly, _target, _gate, _rename, _shelter;
         private CraftId _id = CraftId.None;
 
-        public event Action<CraftId>? Fly, Target, Gate, Rename;
+        public event Action<CraftId>? Fly, Target, Gate, Rename, Shelter;
 
         private static Label Line() => new()
         {
@@ -277,6 +283,9 @@ public partial class FleetPanel : PanelContainer
             _rename = Button("", "Rename", () => Rename?.Invoke(_id));
             (_rename.Icon, _rename.Flat, _rename.TextureFilter) = (UiIcons.Get("tool_draw"), true, TextureFilterEnum.Nearest);
             row.AddChild(_rename);
+            _shelter = Button("", "", () => Shelter?.Invoke(_id));
+            (_shelter.Icon, _shelter.Flat, _shelter.TextureFilter) = (UiIcons.Get("shield"), true, TextureFilterEnum.Nearest);
+            row.AddChild(_shelter);
             middle.AddChild(top);
             var second = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
             second.AddChild(_job);
@@ -334,6 +343,9 @@ public partial class FleetPanel : PanelContainer
                     craft.HasCargoLimit ? $"{craft.CargoKg / 1000.0:0.#} / {craft.CargoCapacityKg / 1000.0:0.#} t" : $"{craft.CargoKg / 1000.0:0.#} t");
 
             _rename.Visible = !craft.IsWreck;
+            _shelter.Visible = craft.IsAutomated && (sector.Options[WorldOptions.SolarFlares] != WorldAmount.Off || sector.Options[WorldOptions.MeteorShowers] != WorldAmount.Off); // #123
+            _shelter.Modulate = new Color(1, 1, 1, craft.KeepWorking ? 0.3f : 1);
+            _shelter.TooltipText = craft.KeepWorking ? "Keeps working through flares and meteors. Click: shelter from them" : "Shelters from flares and meteors. Click: keep working";
             _fly.Text = you ? "Flying" : "Fly";
             _fly.Disabled = _target.Disabled = you;
             _gate.Visible = SectorState.IsGate(craft) && craft.Stats.GateLockCount > 0; // #95

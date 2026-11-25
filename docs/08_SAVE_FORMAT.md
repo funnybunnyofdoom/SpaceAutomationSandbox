@@ -1,4 +1,4 @@
-# 08 — Save format (schema 38)
+# 08 — Save format (schema 39)
 
 The code is `scripts/save/SaveGameSerializer.cs` and `scripts/save/SaveStore.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs` and `SaveStoreTests.cs`.
 
@@ -140,6 +140,7 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 36 | `factions[].race`, `raceView`, and `sector.civilizationRaces` (copies of the player's own races that civilizations are) (#118). Civilizations in older saves get a race that fits their culture; how they see the player doesn't change. |
 | 37 | `sector.programs[]` (`id`, `name`, `steps`) and jobs of kind `program` (`program`: the program's id, the step it's at, since when, and the mining under way) (#120). Older saves have none. |
 | 38 | `sector.options` (world options that aren't off, by id, #119) and `sector.points[]` (points of interest, hidden ones too: kind, name, place, `roll`, what's been found and done, and the craft or body it became, #122). Older saves have neither: everything off. |
+| 39 | `sector.hazards` (forecast and under way, when the next are due, rocks in flight), a comet's ellipse (`eccentricity`, `periapsisRad` of an orbit), and a craft's `keepWorking` and `shelterAtId` (#123). Older saves have no hazards and their options off. |
 | 18 | Warp gates and further star systems: `gateLinkId`, `gateReadyTick`, `jumpRequestTick`, `jumps` per craft; `sector.discoveredKg` | An older save has one system and no gates; nothing changes. |
 | 17 (later additions, optional) | Kits record `originalCraftId` and `requestsKg` (a packed station comes back as itself, #24). Bodies record `originalMassKg` once mining has changed their mass, and `nextBodyId` is saved (#27); jobs may name bodies that are gone | Older kits are new kits: they deploy with a fresh id. Older bodies take their current mass as the starting mass. |
 | 17 | Refit, dismantle and pack orders (`yardOrder`, `yardProgressKg` per craft) and `sector.nextCraftId`. Jobs may now name craft that no longer exist (they were dismantled) | Nothing changes; the craft id counter follows from the craft. |

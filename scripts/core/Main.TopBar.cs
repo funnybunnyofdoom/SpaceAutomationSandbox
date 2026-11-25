@@ -32,7 +32,8 @@ public partial class Main
             Panel("trade", "Trade", null, _tradePanel, () => _tradePanel!.Open(), () => _player is { } p && _sector.DockedTrader(p) is not null ? null : "Dock at a civilization's trade station"),
             Panel("job", "Job", InputActions.Job, _jobPanel, () => _jobPanel!.Open(), () => _player is null ? "Fly a craft first" : null,
                 () => _player?.Job is { Active: true } job && job.Status.StartsWith("waiting") ? job.Status : null),
-            new TopBarItem("map", "Map", InputActions.Map, () => FromBar(_mapPanel, ToggleMap), () => _mapMode),
+            new TopBarItem("map", "Map", InputActions.Map, () => FromBar(_mapPanel, ToggleMap), () => _mapMode, null,
+                () => _sector.Alerts().FirstOrDefault(a => a.Kind == AlertKind.Hazard)?.Text, () => TargetAlerts(AlertKind.Hazard)), // #123
             Panel("find", "Find", InputActions.Find, _findPanel, () => _findPanel!.Open(), () => _player is null ? "Fly a craft first" : null),
             Panel("discovery", "Discoveries", InputActions.Discoveries, _discoveriesPanel, () => _discoveriesPanel!.Open(), badge: () => PointsToDecide() is > 0 and var n ? $"{n} to decide here" : null),
             Panel("research", "Research", InputActions.Research, _researchPanel, () => _researchPanel!.Open(), badge: () =>

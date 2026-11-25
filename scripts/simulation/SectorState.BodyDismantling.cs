@@ -55,11 +55,17 @@ public sealed partial class SectorState
     private void RemoveBody(CelestialBodyState body)
     {
         ReachMilestone("dismantled"); // #38
-        var velocity = GetVelocityAt(body.Id, TimeS);
         // The remnant scatters as debris: whole kg into the ledger, as the bulk material.
         var remnant = body.WholeMassKg;
         if (remnant > 0) _ejectedKg[body.BulkMaterialId] = _ejectedKg.GetValueOrDefault(body.BulkMaterialId) + remnant;
+        DetachFrom(body);
+        _bodiesGone.Add(body.Name);
+    }
 
+    /// <summary>Takes a body out of the sector; what was on it or around it floats free.</summary>
+    private void DetachFrom(CelestialBodyState body)
+    {
+        var velocity = GetVelocityAt(body.Id, TimeS);
         foreach (var craft in _crafts)
         {
             if (craft.LandedOnBodyId == body.Id)
@@ -84,6 +90,5 @@ public sealed partial class SectorState
         _bodies.Remove(body);
         _byId.Remove(body.Id);
         ResetMotionCache();
-        _bodiesGone.Add(body.Name);
     }
 }

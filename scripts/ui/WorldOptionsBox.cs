@@ -10,9 +10,9 @@ public partial class WorldOptionsBox : VBoxContainer
 {
     private static readonly string[] Amounts = { "Off", "Rare", "Normal", "Often" };
 
-    private readonly Button _header = new() { Alignment = HorizontalAlignment.Left, ToggleMode = true };
+    private readonly Button _header = new() { Alignment = HorizontalAlignment.Left, ToggleMode = true, ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
     private readonly VBoxContainer _rows = new() { Visible = false };
-    private readonly Button _reset = new() { Text = "Back to the usual" };
+    private readonly Button _reset = new() { Text = "Reset", TooltipText = "Back to the usual" };
     private readonly List<(WorldOption Option, OptionButton Choice)> _choices = new();
     private WorldOptions _options = WorldOptions.Usual();
 
@@ -26,7 +26,11 @@ public partial class WorldOptionsBox : VBoxContainer
     {
         AddThemeConstantOverride("separation", 6);
         _header.Toggled += open => { _rows.Visible = open; Show_(); };
-        AddChild(_header);
+        var top = new HBoxContainer();
+        _header.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        top.AddChild(_header);
+        top.AddChild(_reset);
+        AddChild(top);
         AddChild(_rows);
         foreach (var option in WorldOptions.All)
         {
@@ -44,14 +48,12 @@ public partial class WorldOptionsBox : VBoxContainer
             });
             _choices.Add((option, choice));
         }
-        _reset.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
         _reset.Pressed += () =>
         {
             foreach (var option in WorldOptions.All) _options[option.Id] = WorldAmount.Normal;
             Show_();
             Changed?.Invoke();
         };
-        _rows.AddChild(_reset);
     }
 
     /// <summary>Shows (and changes) these; closed again.</summary>

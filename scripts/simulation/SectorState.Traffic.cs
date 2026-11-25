@@ -112,7 +112,7 @@ public sealed partial class SectorState
 
     /// <summary>A craft whose job is waiting (holding position).</summary>
     private static bool IsHolding(CraftState craft) =>
-        craft.ServiceAt.IsNone && craft.YardOrder is null // going for repairs or a refit: moving, whatever its job's state (#3, #56)
+        craft.ServiceAt.IsNone && craft.ShelterAt.IsNone && craft.YardOrder is null // going for repairs or a refit: moving, whatever its job's state (#3, #56)
         && (craft.Job is ProgramJob { Active: true, Holding: true } || craft.Flown is { Active: true } and (MiningJob { State: MiningJobState.Waiting } or HaulJob { State: HaulJobState.Waiting }
             or ServeRequestsJob { State: HaulJobState.Waiting } or SurveyJob { State: SurveyJobState.Waiting } or SalvageJob { State: SalvageJobState.Waiting }
             or DefendJob { State: DefendState.Waiting } or TradeJob { State: TradeJobState.Waiting }));

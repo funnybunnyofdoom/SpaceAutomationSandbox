@@ -32,7 +32,7 @@ public sealed record FoundTarget(TargetRef Target, double DistanceM, int Jumps, 
 /// <summary>What a smart key offers (#110), best first, and why; nothing: why not.</summary>
 public sealed record TargetChoice(IReadOnlyList<TargetRef> Targets, string Why);
 
-public enum AlertKind { Raid, Power, Crew, Waiting }
+public enum AlertKind { Raid, Hazard, Power, Crew, Waiting }
 
 /// <summary>Something that needs the player.</summary>
 public sealed record Alert(AlertKind Kind, TargetRef Target, string Text);
@@ -179,6 +179,9 @@ public sealed partial class SectorState
         foreach (var faction in _factions)
             if (RaidOn(faction) && _craftsById.TryGetValue(faction.RaidGateId, out var gate))
                 alerts.Add(new(AlertKind.Raid, TargetRef.Of(gate), $"The {faction.Name} are raiding {gate.Name}."));
+        foreach (var hazard in _hazards) // #123
+            if (Dangerous(hazard) && HazardText(hazard) is { } coming && Concerns(hazard))
+                alerts.Add(new(AlertKind.Hazard, new TargetRef(CraftId.None, hazard.Body.IsNone ? hazard.Star : hazard.Body), coming + "."));
         foreach (var craft in _crafts)
         {
             if (!IsPlayers(craft) || craft.IsWreck || AttentionReason(craft) is not { } why) continue;
@@ -275,7 +278,7 @@ public sealed partial class SectorState
             if (why != "" && DockTargets(from) is { Targets.Count: > 0 } docks) return why is null ? docks : docks with { Why = $"{why}: {docks.Why}" };
         }
         if (WorkTargets(from, ore) is { Targets.Count: > 0 } work) return work;
-        var alerts = Alerts().Where(a => a.Target.Craft != from.Id).ToList();
+        var alerts = Alerts().Where(a => a.Kind != AlertKind.Hazard && a.Target.Craft != from.Id).ToList();
         if (alerts.Count > 0) return new(alerts.Select(a => a.Target).Distinct().ToList(), "needs you");
         if (!from.IsDocked && DockTargets(from) is { Targets.Count: > 0 } dock) return dock;
         var bodies = TargetsOf(from, TargetKind.Bodies, 20).Targets;

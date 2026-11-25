@@ -23,7 +23,7 @@ public static class UiIcons
     /// <summary>The icon name for a body, by its kind.</summary>
     public static string BodyIcon(Simulation.CelestialBodyState body) => body.Kind switch
     {
-        Simulation.BodyKind.Star => "star", Simulation.BodyKind.Moon => "moon", Simulation.BodyKind.Asteroid => "asteroid", Simulation.BodyKind.GasGiant => "gas", _ => "planet",
+        Simulation.BodyKind.Star => "star", Simulation.BodyKind.Moon => "moon", Simulation.BodyKind.Asteroid => Simulation.SectorState.IsComet(body) ? "comet" : "asteroid", Simulation.BodyKind.GasGiant => "gas", _ => "planet",
     };
 }
 

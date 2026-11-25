@@ -36,7 +36,7 @@ public partial class Main
 
     private HudCardData StatusCard(string text)
     {
-        var rows = Lines(text).Select(l => Row(l) is { Icon: "idle" } plain ? plain with { Icon = "message" } : Row(l)).ToList();
+        var rows = HazardRows().Concat(Lines(text).Select(l => Row(l) is { Icon: "idle" } plain ? plain with { Icon = "message" } : Row(l))).ToList(); // #123
         return rows.Count == 0 ? HudCardData.None : new HudCardData("Messages", rows);
     }
 

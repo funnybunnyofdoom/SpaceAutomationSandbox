@@ -104,6 +104,7 @@ public sealed partial class SectorState
         {
             if (craft.Transit is not null || TryStartTransit(craft)) { craft.Job?.NoteTick(Tick); continue; }
             if (craft.Job is { Active: true } held && StepYardOrder(craft, held)) { held.NoteTick(Tick); continue; } // refits pause the job (#56)
+            if (craft.Job is { Active: true } exposed && StepShelter(craft, exposed)) { exposed.NoteTick(Tick); continue; } // hazards (#123)
             if (craft.Job is { Active: true } active && StepService(craft, active)) { active.NoteTick(Tick); continue; } // repairs first (#3)
             if (craft.Job is { Active: true } routed && StepGateRoute(craft, routed)) { routed.NoteTick(Tick); continue; } // via warp gates (#23)
             switch (craft.Job)

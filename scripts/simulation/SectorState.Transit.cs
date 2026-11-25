@@ -84,7 +84,7 @@ public sealed partial class SectorState
     private (BodyId Body, CraftId Craft, double Angle, double Radius)? TravelTargetForJob(CraftState craft)
     {
         CraftState? station = null;
-        var yardId = craft.YardOrder?.YardId ?? craft.ServiceAt; // going to a yard for a refit (#56) or repairs (#3)
+        var yardId = !craft.ShelterAt.IsNone ? craft.ShelterAt : craft.YardOrder?.YardId ?? craft.ServiceAt; // going to a yard for a refit (#56) or repairs (#3)
         if (!yardId.IsNone && _craftsById.TryGetValue(yardId, out var yard)) station = yard;
         else switch (craft.Flown)
         {

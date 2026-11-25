@@ -464,6 +464,7 @@ public sealed partial class SectorState
             if (c.DockClaimStation == craft.Id) { c.DockClaimStation = CraftId.None; c.DockClaimPort = 0; }
             if (c.Transit?.TargetCraft == craft.Id) c.Transit = null;
             if (c.ServiceAt == craft.Id) c.ServiceAt = CraftId.None;
+            if (c.ShelterAt == craft.Id) c.ShelterAt = CraftId.None;
             if (c.YardOrder?.YardId == craft.Id) { c.YardOrder = null; c.YardProgressKg = 0; }
             c.BrakeAgainst = CraftId.None;
         }

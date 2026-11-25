@@ -50,6 +50,7 @@ public sealed partial class SectorState
             for (var hops = 0; hops < 8 && root.IsDocked && _craftsById.TryGetValue(root.DockedToCraftId, out var host) && host.FactionId == root.FactionId; hops++) root = host; // no drawing on a civilization's station (#89)
             craft.PowerRoot = root;
         }
+        var flares = AnyFlare();
         foreach (var craft in _crafts) // id order: members are listed deterministically
         {
             var root = craft.PowerRoot!;
@@ -57,6 +58,7 @@ public sealed partial class SectorState
             var sunlit = craft.Stats.PowerGenerationKW > 0 || craft.Stats.StellarHeatKW > 0;
             craft.InShadow = sunlit && InShadowAt(craft.Position);
             craft.SolarFactor = sunlit ? SolarFactorAt(craft.Position) * (craft.InShadow ? ShadowLight : 1) : 1;
+            if (flares && sunlit && !craft.InShadow && IsFlaring(craft.Position)) craft.SolarFactor = 0; // #123: panels stop
             craft.StellarHeatKJThisTick = craft.Stats.StellarHeatKW * StellarHeatShare(craft.SolarFactor) * FixedStepClock.TickSeconds; // #77
             craft.SolarKJThisTick = craft.Stats.PowerGenerationKW * craft.SolarFactor * FixedStepClock.TickSeconds;
             craft.GeothermalKJThisTick = craft.Stats.GeothermalKW > 0 && GeothermalHeat(craft) is null

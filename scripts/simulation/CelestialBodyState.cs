@@ -216,6 +216,15 @@ public sealed class CelestialBodyState
         materialId == SectorState.BiomassMaterial ? _sites.Sum(s => BiomassKg(s)) :
         (_deposits.TryGetValue(materialId, out var kg) ? kg : 0) + (materialId == BulkMaterialId ? BulkKg : 0);
 
+    /// <summary>Ore that came from outside (#123): into the site at a bearing, and the body's mass.</summary>
+    internal void AddMeteorite(string materialId, long kg, double bearingRad)
+    {
+        if (kg <= 0 || SiteAt(bearingRad) is not { } site) return;
+        site.Deposits[materialId] = site.Deposits.GetValueOrDefault(materialId) + kg;
+        _deposits[materialId] = _deposits.GetValueOrDefault(materialId) + kg;
+        MassKg += kg;
+    }
+
     /// <summary>Removes up to <paramref name="kg"/> of a material from anywhere: the sites in order, then the bulk (tests and scenarios).</summary>
     internal long Extract(string materialId, long kg)
     {

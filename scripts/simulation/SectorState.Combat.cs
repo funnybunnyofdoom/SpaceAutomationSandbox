@@ -504,6 +504,7 @@ public sealed partial class SectorState
         craft.YardOrder = null;
         craft.YardProgressKg = 0;
         craft.ServiceAt = CraftId.None;
+        craft.ShelterAt = CraftId.None;
         craft.JumpRequestTick = 0;
         craft.RequestsList.Clear();
         craft.WeaponReadyTicks.Clear();

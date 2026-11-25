@@ -147,6 +147,7 @@ def pick(d): line(d, 3, 12, 9, 6, C); line(d, 4, 12, 10, 6, C); d.rect(9, 3, 12,
 def replace(d): d.rect(2, 2, 6, 6, C); d.rect(9, 9, 13, 13, W); d.hline(8, 12, 4, Y); d.vline(12, 4, 7, Y); d.hline(3, 7, 11, Y); d.vline(3, 8, 11, Y)
 def edit_program(d):
     for y in (3, 7, 11): d.rect(2, y, 3, y + 1, C); d.hline(6, 13, y, W); d.hline(6, 10, y + 1, G)
+def comet(d): line(d, 9, 9, 2, 2, C); line(d, 8, 9, 3, 5, G); line(d, 10, 8, 6, 3, G); d.disc(10, 10, 3, W)
 def discovery(d): d.hline(6, 9, 2, Y); d.hline(5, 6, 3, Y); d.hline(9, 10, 3, Y); d.vline(10, 4, 6, Y); d.vline(5, 4, 4, Y); d.hline(8, 9, 7, Y); d.vline(7, 8, 10, Y); d.vline(8, 8, 10, Y); d.rect(7, 12, 8, 13, C)
 def ruin(d):
     d.hline(2, 13, 13, G); d.hline(3, 12, 12, W)
@@ -164,7 +165,7 @@ def fit(d):
 
 MENU = {"undo": undo, "redo": redo, "mirror_h": mirror_h, "mirror_v": mirror_v, "tool_draw": tool_draw, "tool_line": tool_line, "tool_rect": tool_rect,
         "tool_outline": tool_outline, "tool_fill": tool_fill, "tool_select": tool_select, "copy": copy, "paste": paste, "cut": cut, "trash": trash,
-        "turn": turn, "pick": pick, "replace": replace, "fit": fit, "find": find, "discovery": discovery, "ruin": ruin, "edit_program": edit_program, "favourite": favourite,
+        "turn": turn, "pick": pick, "replace": replace, "fit": fit, "find": find, "discovery": discovery, "ruin": ruin, "comet": comet, "edit_program": edit_program, "favourite": favourite,
         "pause": pause, "editor": editor, "shipyard": shipyard, "fleet": fleet, "swarm": swarm, "cargo": cargo, "trade": trade, "job": job,
         "map": map_icon, "research": research, "power": power, "laws": laws, "life": life, "milestones": milestones, "settings": settings,
         "help": help_icon, "debug": debug, "diagnostics": diagnostics, "battery": battery, "hull": hull, "shield": shield, "speed": speed,

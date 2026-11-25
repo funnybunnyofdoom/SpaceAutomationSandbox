@@ -54,7 +54,7 @@ public static class SaveGameSerializer
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 38;
+    public const int SchemaVersion = 39;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -106,6 +106,18 @@ public static class SaveGameSerializer
                 Race = sector.Race.Id == RaceCatalog.HumanId || sector.Race.IsCustom ? null : sector.Race.Id,
                 CustomRace = sector.Race.IsCustom ? JsonSerializer.SerializeToNode(sector.Race, RaceFiles.Options) : null,
                 Options = sector.Options.Amounts.Count > 0 ? new SortedDictionary<string, WorldAmount>(sector.Options.Amounts.ToDictionary(o => o.Key, o => o.Value), StringComparer.Ordinal) : null,
+                Hazards = sector.Hazards.Count > 0 || sector.HazardNext.Count > 0 || sector.NextHazardId > 1
+                    ? new HazardsDto
+                    {
+                        NextId = sector.NextHazardId,
+                        Next = sector.HazardNext.Select(n => new HazardNextDto { StarId = n.Key.Star, Kind = n.Key.Kind, Tick = n.Value }).ToList(),
+                        Now = sector.Hazards.Select(h => new HazardDto
+                        {
+                            Id = h.Id, Kind = h.Kind, StarId = h.Star.Value, BodyId = h.Body.Value, StartTick = h.StartTick, EndTick = h.EndTick, Roll = h.Roll, Begun = h.Begun, Warned = h.Warned, FallenKg = h.FallenKg,
+                        }).ToList(),
+                        Meteors = sector.Meteors.Select(m => new MeteorDto { X = m.Position.X, Y = m.Position.Y, Vx = m.Velocity.X, Vy = m.Velocity.Y, ExpireTick = m.ExpireTick }).ToList(),
+                    }
+                    : null,
                 Points = sector.Points.Count > 0
                     ? sector.Points.Select(p => new PointDto
                     {
@@ -232,6 +244,8 @@ public static class SaveGameSerializer
                     RanchRemainderKg = c.RanchRemainderKg,
                     CullRemainderKg = c.CullRemainderKg,
                     HoldFire = c.HoldFire,
+                    KeepWorking = c.KeepWorking,
+                    ShelterAtId = c.ShelterAt.Value,
                     SalvageProgressKg = c.SalvageProgressKg,
                     ShieldCharge = c.ShieldCharge,
                     ShieldHitTick = c.ShieldHitTick >= 0 ? c.ShieldHitTick : null,
@@ -457,6 +471,8 @@ public static class SaveGameSerializer
                 craft.RanchRemainderKg = c.RanchRemainderKg;
                 craft.CullRemainderKg = c.CullRemainderKg;
                 craft.HoldFire = c.HoldFire;
+                craft.KeepWorking = c.KeepWorking;
+                craft.ShelterAt = new CraftId(c.ShelterAtId); // checked each tick: it may be gone
                 if (!(c.SalvageProgressKg >= 0)) throw new FormatException($"Craft {c.Id} has invalid salvage progress.");
                 craft.SalvageProgressKg = c.SalvageProgressKg;
                 if (!(c.ShieldCharge >= 0)) throw new FormatException($"Craft {c.Id} has an invalid shield charge.");
@@ -574,6 +590,21 @@ public static class SaveGameSerializer
             sector.MilestonesStarted = dto.MilestonesStarted;
             sector.LargeDesigns = dto.LargeDesigns;
             foreach (var (id, amount) in dto.Options ?? new SortedDictionary<string, WorldAmount>()) sector.Options[id] = amount; // #119
+            if (dto.Hazards is { } hazards) // #123
+            {
+                sector.RestoreHazardState(hazards.NextId);
+                foreach (var n in hazards.Next ?? new List<HazardNextDto>()) sector.RestoreHazardNext(new BodyId(n.StarId), n.Kind, n.Tick);
+                foreach (var h in hazards.Now ?? new List<HazardDto>())
+                {
+                    if (sector.Bodies.All(b => b.Id.Value != h.StarId) || h.EndTick < h.StartTick || h.Kind == HazardKind.MeteorShower && h.BodyId == 0) throw new FormatException($"Hazard {h.Id} has an invalid place or time.");
+                    sector.RestoreHazard(new Hazard(h.Id, h.Kind, new BodyId(h.StarId), new BodyId(h.BodyId), h.StartTick, h.EndTick, h.Roll) { Begun = h.Begun, Warned = h.Warned, FallenKg = h.FallenKg });
+                }
+                foreach (var m in hazards.Meteors ?? new List<MeteorDto>())
+                {
+                    if (!double.IsFinite(m.X) || !double.IsFinite(m.Y) || !double.IsFinite(m.Vx) || !double.IsFinite(m.Vy)) throw new FormatException("A meteor has an invalid place.");
+                    sector.RestoreMeteor(new Meteor { Position = new Vector2D(m.X, m.Y), Velocity = new Vector2D(m.Vx, m.Vy), ExpireTick = m.ExpireTick });
+                }
+            }
             foreach (var p in dto.Points ?? new List<PointDto>()) // #122; what it's about may be gone since
             {
                 if (!double.IsFinite(p.BearingRad) || !double.IsFinite(p.PhaseRad) || p.StudyTicks < 0 || p.RadiusM < 0 || p.RadiusM > 0 && !(p.PeriodS > 0)) throw new FormatException($"Point of interest {p.Id} has an invalid place.");
@@ -773,7 +804,7 @@ public static class SaveGameSerializer
                 throw new FormatException($"Bodies {string.Join(", ", pending.Select(b => b.Id))} orbit missing or circular parents.");
             foreach (var b in ready)
             {
-                var orbit = b.Orbit is { } o ? new CircularOrbit(new BodyId(o.ParentId), o.RadiusM, o.PeriodS, o.PhaseAtZeroRad) : null;
+                var orbit = b.Orbit is { } o ? OrbitFromDto(o) : null;
                 sector.AddBody(new CelestialBodyState(new BodyId(b.Id), b.Name ?? "", b.Kind, b.MassKg, b.DensityKgPerM3, b.IsMineable, orbit,
                     b.DepositsKg, b.OriginalMassKg > 0 ? b.OriginalMassKg : null));
                 sector.GetBody(new BodyId(b.Id)).StarClass = b.StarClass;
@@ -817,9 +848,12 @@ public static class SaveGameSerializer
     private static VecDto Vec(Vector2D v) => new() { X = v.X, Y = v.Y };
 
     private static OrbitDto OrbitToDto(CircularOrbit o) =>
-        new() { ParentId = o.Parent.Value, RadiusM = o.RadiusM, PeriodS = o.PeriodS, PhaseAtZeroRad = o.PhaseAtZeroRad };
+        new() { ParentId = o.Parent.Value, RadiusM = o.RadiusM, PeriodS = o.PeriodS, PhaseAtZeroRad = o.PhaseAtZeroRad, Eccentricity = o.Eccentricity, PeriapsisRad = o.PeriapsisRad };
 
-    private static CircularOrbit OrbitFromDto(OrbitDto o) => new(new BodyId(o.ParentId), o.RadiusM, o.PeriodS, o.PhaseAtZeroRad);
+    private static CircularOrbit OrbitFromDto(OrbitDto o) =>
+        o.Eccentricity is >= 0 and < 0.99 && double.IsFinite(o.PeriapsisRad)
+            ? new(new BodyId(o.ParentId), o.RadiusM, o.PeriodS, o.PhaseAtZeroRad) { Eccentricity = o.Eccentricity, PeriapsisRad = o.PeriapsisRad }
+            : throw new FormatException("An orbit is invalid.");
 
     private static DesignDto DesignToDto(ShipDesign d) => new()
     {
@@ -906,6 +940,10 @@ public static class SaveGameSerializer
         /// <summary>v34: who the player is (#97); omitted for Human.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Race { get; set; }
+
+        /// <summary>v39: hazards (#123).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public HazardsDto? Hazards { get; set; }
 
         /// <summary>v38: what the world has more or less of (#119), and points of interest (#122).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -1103,6 +1141,13 @@ public static class SaveGameSerializer
         public double RadiusM { get; set; }
         public double PeriodS { get; set; }
         public double PhaseAtZeroRad { get; set; }
+
+        /// <summary>v39: a comet's ellipse (#123).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double Eccentricity { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double PeriapsisRad { get; set; }
     }
 
     private sealed class CraftDto
@@ -1231,6 +1276,13 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool HoldFire { get; set; }
+
+        /// <summary>v39: hazards (#123).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool KeepWorking { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint ShelterAtId { get; set; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double SalvageProgressKg { get; set; }
@@ -1362,6 +1414,44 @@ public static class SaveGameSerializer
         public string? RecipeId { get; set; }
         public SortedDictionary<string, long>? InputsKg { get; set; }
         public double ProgressKg { get; set; }
+    }
+
+    private sealed class HazardsDto
+    {
+        public int NextId { get; set; }
+        public List<HazardNextDto>? Next { get; set; }
+        public List<HazardDto>? Now { get; set; }
+        public List<MeteorDto>? Meteors { get; set; }
+    }
+
+    private sealed class HazardNextDto
+    {
+        public uint StarId { get; set; }
+        public HazardKind Kind { get; set; }
+        public long Tick { get; set; }
+    }
+
+    private sealed class HazardDto
+    {
+        public int Id { get; set; }
+        public HazardKind Kind { get; set; }
+        public uint StarId { get; set; }
+        public uint BodyId { get; set; }
+        public long StartTick { get; set; }
+        public long EndTick { get; set; }
+        public ulong Roll { get; set; }
+        public bool Begun { get; set; }
+        public bool Warned { get; set; }
+        public long FallenKg { get; set; }
+    }
+
+    private sealed class MeteorDto
+    {
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Vx { get; set; }
+        public double Vy { get; set; }
+        public long ExpireTick { get; set; }
     }
 
     private sealed class PointDto

@@ -12,13 +12,20 @@ public sealed class PointTests
 {
     private static readonly PartCatalog Catalog = TestData.Catalog();
 
-    private static NewGameResult Game(WorldAmount amount = WorldAmount.Often, ulong seed = 5) => Create(seed, WorldOptions.Every(amount));
+    private static NewGameResult Game(WorldAmount amount = WorldAmount.Often, ulong seed = 5) => Create(seed, Only(amount));
 
     private static NewGameResult Create(ulong seed, WorldOptions? options)
     {
         var game = NewGame.Create(seed, Catalog, TestData.StarterShip(), TestData.StarterShipyard(), options: options);
         game.Sector.GetCraft(game.PlayerCraftId).Inventory.Add("fuel", 100);
         return game;
+    }
+
+    private static WorldOptions Only(WorldAmount amount)
+    {
+        var options = new WorldOptions();
+        options[WorldOptions.PointsOfInterest] = amount;
+        return options;
     }
 
     private static SectorState Again(SectorState sector, CraftId player) => SaveGameSerializer.FromJson(SaveGameSerializer.ToJson(sector, player), Catalog).Sector;

@@ -237,6 +237,7 @@ public sealed partial class SectorState
         }
 
         EndFlyTo();
+        StepHazards(endS); // flares, meteors and comets (#123)
         if (docked != null) UpdateDocked(docked);
         StepCombat(endS); // weapons, shots and wrecks (#84, #85)
         ResolveCraftCollisions(); // after everything moved (#34)

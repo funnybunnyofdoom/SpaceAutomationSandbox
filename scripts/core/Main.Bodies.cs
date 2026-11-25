@@ -107,6 +107,19 @@ public partial class Main
             // A star's place among the stars isn't an orbit to draw.
             if (body.Kind == BodyKind.Star || body.Orbit is not { } orbit) continue;
             var orbitPx = (float)orbit.RadiusM * _pixelsPerMetre;
+            if (orbit.Eccentricity > 0)
+            {
+                if (orbitPx is <= 3f or >= 200_000f) continue;
+                var centre = ToPixels(_sector.GetPositionAt(orbit.Parent, renderTimeS));
+                var path = new Vector2[257];
+                for (var i = 0; i < path.Length; i++)
+                {
+                    var off = orbit.PathPoint(System.Math.Tau * i / (path.Length - 1));
+                    path[i] = centre + new Vector2((float)off.X, (float)off.Y) * _pixelsPerMetre;
+                }
+                _backdrop.DrawPolyline(path, OrbitColor);
+                continue;
+            }
             if (orbitPx is > 3f and < 200_000f)
                 _backdrop.DrawArc(ToPixels(_sector.GetPositionAt(orbit.Parent, renderTimeS)), orbitPx, 0, Mathf.Tau, 512, OrbitColor);
         }
