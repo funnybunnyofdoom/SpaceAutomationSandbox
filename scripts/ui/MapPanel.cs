@@ -137,7 +137,7 @@ public partial class MapPanel : PanelContainer
         return seconds < 90 ? $"{seconds:0} s" : $"{seconds / 60:0} min";
     }
 
-    private static string Distance(double m) => m >= 1_000_000 ? $"{m / 1e6:0.00} Mm" : m >= 1000 ? $"{m / 1000:0} km" : $"{m:0} m";
+    public static string Distance(double m) => m >= 1_000_000 ? $"{m / 1e6:0.00} Mm" : m >= 1000 ? $"{m / 1000:0} km" : $"{m:0} m";
 
     private void Refresh()
     {

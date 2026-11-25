@@ -51,6 +51,16 @@ public static class InputActions
     public const string Cargo = "open_cargo";
     public const string Job = "open_job";
     public const string Debug = "open_debug";
+    public const string Find = "find_target";
+    public const string TargetSmart = "target_smart";
+    public const string TargetEnemy = "target_enemy";
+    public const string TargetDock = "target_dock";
+    public const string TargetGate = "target_gate";
+    public const string TargetWork = "target_work";
+    public const string TargetAlert = "target_alert";
+    public const string TargetBack = "target_back";
+    public static string FavouriteRecall(int slot) => $"favourite_{slot + 1}";
+    public static string FavouriteStore(int slot) => $"favourite_keep_{slot + 1}";
     public const string Rename = "rename_craft";
     public const string ClosePanels = "close_panels";
     public const string QuickSave = "game_quicksave";
@@ -104,6 +114,7 @@ public static class InputActions
         (Deploy, "Deploy a kit", "Flying"), (Jump, "Warp jump (docked at a gate)", "Flying"), (HoldFire, "Hold fire / weapons free", "Flying"), (Quantum, "Quantum jump to the target", "Flying"),
         (TargetCycle, "Next target of the kind", "Targets and view"), (TargetPrevious, "Previous target of the kind", "Targets and view"), (TargetKindNext, "Next kind of target", "Targets and view"),
         (TargetAhead, "Target what's ahead", "Targets and view"), (TargetClear, "Clear target", "Targets and view"), (TargetNearest, "Target the nearest body", "Targets and view"),
+        (Find, "Find", "Targets and view"), (TargetSmart, "Smart target (what matters now)", "Targets and view"), (TargetEnemy, "Target attacker / enemy", "Targets and view"), (TargetDock, "Target a free docking port", "Targets and view"), (TargetGate, "Target a warp gate", "Targets and view"), (TargetWork, "Target work (wreck or ore)", "Targets and view"), (TargetAlert, "Target what needs you", "Targets and view"), (TargetBack, "Last target", "Targets and view"),
         (ZoomIn, "Zoom in", "Targets and view"), (ZoomOut, "Zoom out", "Targets and view"), (Map, "Map", "Targets and view"),
         (Editor, "Blueprint editor", "Panels"), (Shipyard, "Shipyard", "Panels"), (Fleet, "Fleet", "Panels"), (Cargo, "Cargo", "Panels"),
         (Job, "Job", "Panels"), (Research, "Research", "Panels"), (Laws, "Laws and civilizations", "Panels"), (Power, "Power", "Panels"), (Life, "Native life", "Panels"), (Log, "Message log", "Panels"), (Milestones, "Milestones", "Panels"), (Settings, "Settings", "Panels"), (Debug, "Debug menu", "Panels"),
@@ -141,6 +152,12 @@ public static class InputActions
         (EditFlip, "Mirror the selection", "Blueprint editor"),
         (EditFlipFront, "Mirror the selection front to back", "Blueprint editor"),
         (EditDelete, "Delete the selection", "Blueprint editor"),
+        ("favourite_1", "Target favourite 1", "Favourites"), ("favourite_2", "Target favourite 2", "Favourites"), ("favourite_3", "Target favourite 3", "Favourites"),
+        ("favourite_4", "Target favourite 4", "Favourites"), ("favourite_5", "Target favourite 5", "Favourites"), ("favourite_6", "Target favourite 6", "Favourites"),
+        ("favourite_7", "Target favourite 7", "Favourites"), ("favourite_8", "Target favourite 8", "Favourites"), ("favourite_9", "Target favourite 9", "Favourites"),
+        ("favourite_keep_1", "Keep the target as favourite 1", "Favourites"), ("favourite_keep_2", "Keep the target as favourite 2", "Favourites"), ("favourite_keep_3", "Keep the target as favourite 3", "Favourites"),
+        ("favourite_keep_4", "Keep the target as favourite 4", "Favourites"), ("favourite_keep_5", "Keep the target as favourite 5", "Favourites"), ("favourite_keep_6", "Keep the target as favourite 6", "Favourites"),
+        ("favourite_keep_7", "Keep the target as favourite 7", "Favourites"), ("favourite_keep_8", "Keep the target as favourite 8", "Favourites"), ("favourite_keep_9", "Keep the target as favourite 9", "Favourites"),
     };
 
     private static readonly Dictionary<string, InputEvent[]> Defaults = new(StringComparer.Ordinal);
@@ -195,6 +212,19 @@ public static class InputActions
         Add(Milestones, 0.5f, Keys(Key.Period)); // #38
         Add(MenuBar, 0.5f, Keys(Key.F10)); // #106
         Add(PanelFocus, 0.5f, Keys(Key.Quoteleft), Pad(JoyButton.Back)); // #68
+        Add(Find, 0.5f, Keys(Key.Slash)); // #109, #110
+        Add(TargetSmart, 0.5f, Keys(Key.Apostrophe), Pad(JoyButton.LeftStick)); // #109, #110
+        Add(TargetEnemy, 0.5f, Keys(Key.Insert)); // #109, #110
+        Add(TargetDock, 0.5f, Keys(Key.Home)); // #109, #110
+        Add(TargetGate, 0.5f, new InputEventKey { PhysicalKeycode = Key.Home, ShiftPressed = true }); // #109, #110
+        Add(TargetWork, 0.5f, Keys(Key.End)); // #109, #110
+        Add(TargetAlert, 0.5f, Keys(Key.Enter)); // #109, #110
+        Add(TargetBack, 0.5f, Keys(Key.Backspace)); // #109, #110
+        for (var i = 0; i < 9; i++)
+        {
+            Add(FavouriteRecall(i), 0.5f, Keys(Key.Key1 + i));
+            Add(FavouriteStore(i), 0.5f, new InputEventKey { PhysicalKeycode = Key.Key1 + i, CtrlPressed = true });
+        }
         // The blueprint editor's own (#112).
         Add(EditUndo, 0.5f, new InputEventKey { PhysicalKeycode = Key.Z, CtrlPressed = true });
         Add(EditRedo, 0.5f, new InputEventKey { PhysicalKeycode = Key.Y, CtrlPressed = true });

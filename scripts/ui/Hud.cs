@@ -177,10 +177,11 @@ public partial class Hud : Control
             Flying
                thrust: {K(InputActions.Thrust)}      reverse: {K(InputActions.Reverse)}      turn: {K(InputActions.TurnLeft)} / {K(InputActions.TurnRight)}      strafe: {K(InputActions.StrafeLeft)} / {K(InputActions.StrafeRight)}
                brake (matches the target's motion): {K(InputActions.Brake)}
-               cruise drive: {K(InputActions.Cruise)}      anchor / release: {K(InputActions.Anchor)}      dock / undock: {K(InputActions.Dock)}      deploy a kit: {K(InputActions.Deploy)}
-               warp jump (docked at a gate): {K(InputActions.Jump)}
+               cruise drive: {K(InputActions.Cruise)}      anchor / release: {K(InputActions.Anchor)}      dock / undock: {K(InputActions.Dock)}      deploy a kit: {K(InputActions.Deploy)}      warp jump (docked at a gate): {K(InputActions.Jump)}
                next target: {K(InputActions.TargetCycle)}      previous: {K(InputActions.TargetPrevious)}      other kind: {K(InputActions.TargetKindNext)}      ahead: {K(InputActions.TargetAhead)}      clear: {K(InputActions.TargetClear)}
                click: target      right click: target, fly to      target nearest body: {K(InputActions.TargetNearest)}      zoom: {K(InputActions.ZoomIn)} / {K(InputActions.ZoomOut)}
+               smart target: {K(InputActions.TargetSmart)}      enemy: {K(InputActions.TargetEnemy)}      dock: {K(InputActions.TargetDock)}      gate: {K(InputActions.TargetGate)}      work: {K(InputActions.TargetWork)}      needs you: {K(InputActions.TargetAlert)}
+               find: {K(InputActions.Find)}      last target: {K(InputActions.TargetBack)}      favourites: {K(InputActions.FavouriteRecall(0))} to {K(InputActions.FavouriteRecall(8))}, {K(InputActions.FavouriteStore(0))} to {K(InputActions.FavouriteStore(8))} keep the target
 
             Panels  (they open on the right; {K(InputActions.ClosePanels)} closes them)
                blueprint editor: {K(InputActions.Editor)}      shipyard: {K(InputActions.Shipyard)}      fleet: {K(InputActions.Fleet)}      cargo: {K(InputActions.Cargo)}      job: {K(InputActions.Job)}      map: {K(InputActions.Map)}
@@ -193,7 +194,6 @@ public partial class Hud : Control
 
             Using panels with keys or a controller: {K(InputActions.PanelFocus)} (controller: {InputActions.PadText(InputActions.PanelFocus)}) moves into the open panel;
                arrows / d-pad move, Enter / A choose, {K(InputActions.PanelFocus)} or B back to flying.
-
             Menu bar: {K(InputActions.MenuBar)} hides or shows it.      HUD: click a heading to fold its card away; point at a bar for details.
             """;
     }

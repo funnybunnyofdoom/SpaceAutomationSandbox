@@ -328,7 +328,19 @@ public sealed class CelestialBodyState
         get => !IsMineable || _sites.All(s => s.Surveyed);
         internal set { foreach (var site in _sites) site.Surveyed = value; }
     }
-    public string Name { get; }
+    public string Name { get; private set; }
+
+    /// <summary>What it was called before the player named it (#109), or null.</summary>
+    public string? OriginalName { get; private set; }
+
+    /// <summary>Gives it a name of the player's, or (null) its own back. Its sites go by it too.</summary>
+    internal void Rename(string? name)
+    {
+        var own = OriginalName ?? Name;
+        OriginalName = name is null || name == own ? null : own;
+        Name = name ?? own;
+        foreach (var site in _sites) site.Rename(Name);
+    }
     public BodyKind Kind { get; }
 
     /// <summary>Gross natural-body mass. Mining is the only thing that changes it (see <see cref="Extract"/>).</summary>

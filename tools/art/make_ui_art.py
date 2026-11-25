@@ -145,6 +145,10 @@ def trash(d): d.rect(4, 5, 11, 13, G); d.hline(3, 12, 4, W); d.hline(6, 9, 2, W)
 def turn(d): d.ring(8, 8, 4, 5.4, W); d.rect(8, 2, 13, 7, CLEAR); up(d, 12, 4, 3, C)
 def pick(d): line(d, 3, 12, 9, 6, C); line(d, 4, 12, 10, 6, C); d.rect(9, 3, 12, 6, W); d.set(2, 13, Y)
 def replace(d): d.rect(2, 2, 6, 6, C); d.rect(9, 9, 13, 13, W); d.hline(8, 12, 4, Y); d.vline(12, 4, 7, Y); d.hline(3, 7, 11, Y); d.vline(3, 8, 11, Y)
+def find(d): d.ring(7, 7, 3, 4.4, C); line(d, 10, 10, 13, 13, W); line(d, 10, 11, 12, 13, W)
+def favourite(d):
+    for y, (a, b) in enumerate([(7, 8), (7, 8), (6, 9), (2, 13), (3, 12), (4, 11), (4, 11), (4, 11), (3, 12), (3, 5), (2, 4)], 2): d.hline(a, b, y, Y)
+    d.hline(10, 12, 11, Y); d.hline(11, 13, 12, Y)
 def fit(d):
     for x, y, dx, dy in ((2, 2, 1, 1), (13, 2, -1, 1), (2, 13, 1, -1), (13, 13, -1, -1)):
         for i in range(4): d.set(x + dx * i, y, W); d.set(x, y + dy * i, W)
@@ -153,7 +157,7 @@ def fit(d):
 
 MENU = {"undo": undo, "redo": redo, "mirror_h": mirror_h, "mirror_v": mirror_v, "tool_draw": tool_draw, "tool_line": tool_line, "tool_rect": tool_rect,
         "tool_outline": tool_outline, "tool_fill": tool_fill, "tool_select": tool_select, "copy": copy, "paste": paste, "cut": cut, "trash": trash,
-        "turn": turn, "pick": pick, "replace": replace, "fit": fit,
+        "turn": turn, "pick": pick, "replace": replace, "fit": fit, "find": find, "favourite": favourite,
         "pause": pause, "editor": editor, "shipyard": shipyard, "fleet": fleet, "swarm": swarm, "cargo": cargo, "trade": trade, "job": job,
         "map": map_icon, "research": research, "power": power, "laws": laws, "life": life, "milestones": milestones, "settings": settings,
         "help": help_icon, "debug": debug, "diagnostics": diagnostics, "battery": battery, "hull": hull, "shield": shield, "speed": speed,

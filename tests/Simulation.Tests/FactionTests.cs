@@ -61,7 +61,7 @@ public sealed class FactionTests
     }
 
     /// <summary>A gate with a far end in a second system, and a ship sent through (docked at the far gate).</summary>
-    private static (SectorState Sector, CraftState Near, CraftState Far, CelestialBodyState Star, CraftState Ship) OpenedSystem(int farDefenses = 0)
+    internal static (SectorState Sector, CraftState Near, CraftState Far, CelestialBodyState Star, CraftState Ship) OpenedSystem(int farDefenses = 0)
     {
         var game = TestData.NewGame();
         var sector = game.Sector;

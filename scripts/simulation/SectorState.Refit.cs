@@ -452,7 +452,7 @@ public sealed partial class SectorState
     /// Removes a craft from the sector (dismantled or packed). Its id is never reused. References to it
     /// are cleared; jobs elsewhere that used it see it missing and wait with that reason.
     /// </summary>
-    private void RemoveCraft(CraftState craft)
+    internal void RemoveCraft(CraftState craft)
     {
         _crafts.Remove(craft);
         _craftsById.Remove(craft.Id);

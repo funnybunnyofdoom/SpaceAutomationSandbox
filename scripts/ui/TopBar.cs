@@ -6,7 +6,7 @@ using SpaceAutomationSandbox.Core;
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>One button of the menu bar. <c>Blocked</c> gives why it can't be used now; <c>Badge</c> what needs attention; null for neither.</summary>
-public sealed record TopBarItem(string Icon, string Name, string? Action, Action Press, Func<bool> IsOpen, Func<string?>? Blocked = null, Func<string?>? Badge = null);
+public sealed record TopBarItem(string Icon, string Name, string? Action, Action Press, Func<bool> IsOpen, Func<string?>? Blocked = null, Func<string?>? Badge = null, Action? Attend = null);
 
 /// <summary>
 /// The menu bar (#106): a row of icon buttons at the top centre, one per menu or panel, so everything can be reached with the
@@ -40,6 +40,13 @@ public partial class TopBar : PanelContainer
                 item.Press();
                 button.SetPressedNoSignal(item.IsOpen());
             };
+            if (item.Attend is { } attend) // #110
+                button.GuiInput += e =>
+                {
+                    if (e is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right }) return;
+                    attend();
+                    button.AcceptEvent();
+                };
             var mark = UiTheme.Icon("warn", 12);
             mark.SetAnchorsPreset(LayoutPreset.TopRight);
             mark.OffsetLeft = -13;
@@ -85,7 +92,7 @@ public partial class TopBar : PanelContainer
             var badge = blocked is null ? item.Badge?.Invoke() : null;
             var key = item.Action is { } action ? InputActions.Key1(action) : "";
             button.Disabled = blocked is not null;
-            button.TooltipText = item.Name + (key.Length > 0 ? $"  ({key})" : "") + (blocked is not null ? $"\n{blocked}" : "") + (badge is not null ? $"\n! {badge}" : "");
+            button.TooltipText = item.Name + (key.Length > 0 ? $"  ({key})" : "") + (blocked is not null ? $"\n{blocked}" : "") + (badge is not null ? $"\n! {badge}{(item.Attend is null ? "" : "  (right click: target it)")}" : "");
             mark.Visible = badge is not null;
         }
     }

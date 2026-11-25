@@ -1,4 +1,4 @@
-# 08 — Save format (schema 32)
+# 08 — Save format (schema 33)
 
 The code is `scripts/save/SaveGameSerializer.cs` and `scripts/save/SaveStore.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs` and `SaveStoreTests.cs`.
 
@@ -133,6 +133,7 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 30 | `crafts[].flyToPhase` (#108). Older saves: none under way. |
 | 31 | `sector.events[].kind`, `craftId`, `bodyId` (#100): what an event is about; at most 300 events. Older events are plain ones. |
 | 32 | `sector.largeDesigns` (#111). Older saves: opens once a Fabricator Mk3 works. |
+| 33 | `sector.favourites[]` (`slot` 1 to 9, `craftId` or `bodyId`, `name`; the target may be gone) and `bodies[].givenName` (#109). Older saves have none. |
 | 18 | Warp gates and further star systems: `gateLinkId`, `gateReadyTick`, `jumpRequestTick`, `jumps` per craft; `sector.discoveredKg` | An older save has one system and no gates; nothing changes. |
 | 17 (later additions, optional) | Kits record `originalCraftId` and `requestsKg` (a packed station comes back as itself, #24). Bodies record `originalMassKg` once mining has changed their mass, and `nextBodyId` is saved (#27); jobs may name bodies that are gone | Older kits are new kits: they deploy with a fresh id. Older bodies take their current mass as the starting mass. |
 | 17 | Refit, dismantle and pack orders (`yardOrder`, `yardProgressKg` per craft) and `sector.nextCraftId`. Jobs may now name craft that no longer exist (they were dismantled) | Nothing changes; the craft id counter follows from the craft. |

@@ -62,6 +62,9 @@ public sealed class GameSettings
     /// <summary>The menu bar is shown (#106).</summary>
     public bool MenuBar { get; set; } = true;
 
+    /// <summary>Target the next enemy by itself when one is destroyed (#110).</summary>
+    public bool TargetNextEnemy { get; set; }
+
     /// <summary>Text size choices (#68), on top of the interface scale.</summary>
     public static readonly float[] TextScales = { 1f, 1.15f, 1.3f, 1.5f };
 
@@ -87,6 +90,7 @@ public sealed class GameSettings
         if (file.HasSectionKey("display", "window_position")) settings.WindowPosition = file.GetValue("display", "window_position").AsVector2I();
         foreach (var title in file.GetValue("hud", "collapsed", "").AsString().Split(',', StringSplitOptions.RemoveEmptyEntries))
             settings.HudCollapsed.Add(title);
+        settings.TargetNextEnemy = file.GetValue("targets", "next_enemy", false).AsBool();
         settings.MenuBar = file.GetValue("hud", "menu_bar", true).AsBool();
         foreach (var bus in AudioBuses)
         {
@@ -114,6 +118,7 @@ public sealed class GameSettings
         if (WindowPosition is { } position) file.SetValue("display", "window_position", position);
         file.SetValue("hud", "collapsed", string.Join(",", HudCollapsed));
         file.SetValue("hud", "menu_bar", MenuBar);
+        file.SetValue("targets", "next_enemy", TargetNextEnemy);
         foreach (var bus in AudioBuses)
         {
             file.SetValue("audio", $"{bus.ToLowerInvariant()}_volume", Volume[bus]);

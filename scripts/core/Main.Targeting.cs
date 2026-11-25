@@ -170,7 +170,14 @@ public partial class Main
         var distance = _player is not { } p ? "" : "  " + FormatDistance(Math.Max(0, !target.Craft.IsNone
             ? _sector.GetCraft(target.Craft).Position.DistanceTo(p.Position) - _sector.GetCraft(target.Craft).CollisionRadiusM
             : _sector.GetPosition(target.Body).DistanceTo(p.Position) - _sector.GetBody(target.Body).RadiusM));
-        if (target.Craft.IsNone) return $"{Describe(_sector.GetBody(target.Body))}{distance}";
+        if (target.Craft.IsNone && _sector.GetBody(target.Body).OriginalName is { } was) distance += $"  (originally {was})"; // #109
+        return TargetLabel(target) + distance;
+    }
+
+    /// <summary>What it is, without how far.</summary>
+    private string TargetLabel(TargetRef target)
+    {
+        if (target.Craft.IsNone) return Describe(_sector.GetBody(target.Body));
         var craft = _sector.GetCraft(target.Craft);
         var kind = _sector.KindOf(craft) switch
         {
@@ -180,7 +187,7 @@ public partial class Main
             TargetKind.Wrecks => "wreck",
             _ => craft.IsTradeStation ? "trade station" : "other ship",
         };
-        return $"{craft.Name} ({kind}){distance}";
+        return $"{craft.Name} ({kind})";
     }
 
     /// <summary>The mouse may point into the world: no menu or editor, and not over a panel.</summary>

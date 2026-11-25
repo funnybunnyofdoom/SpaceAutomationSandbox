@@ -22,7 +22,7 @@ public partial class SettingsPanel : PanelContainer
     private OptionButton _autosave = null!;
     private OptionButton _textSize = null!;
     private CheckBox _colorblind = null!;
-    private CheckBox _menuBar = null!;
+    private CheckBox _menuBar = null!, _nextEnemy = null!;
     private List<Vector2I> _sizes = new();
     private bool _updating;
 
@@ -96,6 +96,10 @@ public partial class SettingsPanel : PanelContainer
         _menuBar = new CheckBox { Text = "Shown", FocusMode = FocusModeEnum.None };
         _menuBar.Toggled += on => Change(() => _settings.MenuBar = on);
         grid.AddChild(_menuBar);
+        grid.AddChild(new Label { Text = "Targets" }); // #110
+        _nextEnemy = new CheckBox { Text = "Next enemy when one is destroyed", FocusMode = FocusModeEnum.None };
+        _nextEnemy.Toggled += on => Change(() => _settings.TargetNextEnemy = on);
+        grid.AddChild(_nextEnemy);
 
         _info = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(420, 0), Modulate = new Color(1, 1, 1, 0.65f) };
         box.AddChild(_info);
@@ -166,6 +170,7 @@ public partial class SettingsPanel : PanelContainer
     {
         _updating = true;
         _menuBar.ButtonPressed = _settings.MenuBar;
+        _nextEnemy.ButtonPressed = _settings.TargetNextEnemy;
         _mode.Select((int)_settings.WindowMode);
 
         var screen = DisplayServer.ScreenGetUsableRect(DisplayServer.WindowGetCurrentScreen()).Size;

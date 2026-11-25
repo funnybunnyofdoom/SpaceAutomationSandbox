@@ -54,7 +54,7 @@ public static class SaveGameSerializer
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 32;
+    public const int SchemaVersion = 33;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -100,6 +100,9 @@ public static class SaveGameSerializer
                 Milestones = sector.MilestonesReached.Count > 0 ? new SortedDictionary<string, long>(sector.MilestonesReached.ToDictionary(m => m.Key, m => m.Value), StringComparer.Ordinal) : null,
                 MilestonesStarted = sector.MilestonesStarted,
                 LargeDesigns = sector.LargeDesigns,
+                Favourites = sector.Favourites.Any(f => f is not null)
+                    ? sector.Favourites.Select((f, i) => (f, i)).Where(x => x.f is not null).Select(x => new FavouriteDto { Slot = x.i + 1, CraftId = x.f!.Target.Craft.Value, BodyId = x.f.Target.Body.Value, Name = x.f.Name }).ToList()
+                    : null,
                 Shots = sector.Shots.Count > 0
                     ? sector.Shots.Select(s => new ShotDto { Position = Vec(s.Position), Velocity = Vec(s.Velocity), ExpireTick = s.ExpireTick, Damage = s.Damage, FactionId = s.FactionId, IsMissile = s.IsMissile, TargetId = s.TargetId.Value, SpeedMps = s.SpeedMps }).ToList()
                     : null,
@@ -126,7 +129,8 @@ public static class SaveGameSerializer
                 Bodies = sector.Bodies.Select(b => new BodyDto
                 {
                     Id = b.Id.Value,
-                    Name = b.Name,
+                    Name = b.OriginalName ?? b.Name,
+                    GivenName = b.OriginalName is null ? null : b.Name,
                     Kind = b.Kind,
                     MassKg = b.MassKg,
                     OriginalMassKg = b.OriginalMassKg != b.MassKg ? b.OriginalMassKg : 0,
@@ -530,6 +534,11 @@ public static class SaveGameSerializer
             }
             sector.MilestonesStarted = dto.MilestonesStarted;
             sector.LargeDesigns = dto.LargeDesigns;
+            foreach (var f in dto.Favourites ?? new List<FavouriteDto>()) // #109; its target may be gone: it says so
+            {
+                if (f.Slot < 1 || f.Slot > SectorState.FavouriteSlots || (f.CraftId == 0) == (f.BodyId == 0)) throw new FormatException($"Favourite {f.Slot} is invalid.");
+                sector.RestoreFavourite(f.Slot - 1, new Favourite(new TargetRef(new CraftId(f.CraftId), new BodyId(f.BodyId)), f.Name ?? ""));
+            }
             foreach (var s in dto.Shots ?? new List<ShotDto>())
             {
                 if (!(s.Damage >= 0)) throw new FormatException("A shot has invalid damage.");
@@ -694,6 +703,7 @@ public static class SaveGameSerializer
                 sector.AddBody(new CelestialBodyState(new BodyId(b.Id), b.Name ?? "", b.Kind, b.MassKg, b.DensityKgPerM3, b.IsMineable, orbit,
                     b.DepositsKg, b.OriginalMassKg > 0 ? b.OriginalMassKg : null));
                 sector.GetBody(new BodyId(b.Id)).StarClass = b.StarClass;
+                if (b.GivenName is { Length: > 0 } given) sector.GetBody(new BodyId(b.Id)).Rename(given);
                 if (b.Craters is { } craters)
                 {
                     if (craters.Any(c => c.MassKg <= 0 || !double.IsFinite(c.BearingRad))) throw new FormatException($"Body {b.Id} has an invalid crater.");
@@ -819,6 +829,10 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool LargeDesigns { get; set; }
 
+        /// <summary>v33: favourite targets (#109), by slot.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<FavouriteDto>? Favourites { get; set; }
+
         /// <summary>v21: shots in flight (#85).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<ShotDto>? Shots { get; set; }
@@ -894,10 +908,26 @@ public static class SaveGameSerializer
         public uint BodyId { get; set; }
     }
 
+    private sealed class FavouriteDto
+    {
+        public int Slot { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint CraftId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public uint BodyId { get; set; }
+        public string? Name { get; set; }
+    }
+
     private sealed class BodyDto
     {
         public uint Id { get; set; }
         public string? Name { get; set; }
+
+        /// <summary>v33: the player's name for it (#109).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? GivenName { get; set; }
         public BodyKind Kind { get; set; }
         public double MassKg { get; set; }
 

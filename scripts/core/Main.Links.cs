@@ -50,9 +50,13 @@ public partial class Main
         {
             if (!you) items.Add(("Fly this craft", true, () => { if (_sector.Exists(target)) Pilot(target.Craft); }));
             if (craft.IsShipyard) items.Add(("Open its shipyard", true, () => _shipyardPanel?.Open(target.Craft)));
-            items.Add(("Rename...", true, () => AskRename(target.Craft)));
             items.Add(("Show in the fleet", true, () => _fleetPanel?.OpenAt(name)));
         }
+        if (craft is null || SectorState.IsPlayers(craft) || craft.IsWreck) items.Add(("Rename...", true, () => AskRename(target))); // #115, #109
+        var kept = _sector.Favourites.ToList().FindIndex(f => f?.Target == target);
+        var slot = kept >= 0 ? kept : _sector.Favourites.ToList().FindIndex(f => f is null);
+        if (slot >= 0 && !you)
+            items.Add((kept >= 0 ? $"No longer favourite {slot + 1}" : $"Keep as favourite {slot + 1}", true, () => { _sector.SetFavourite(slot, kept >= 0 ? TargetRef.None : target); _changedSinceSave = true; }));
         if (_player is { } p && !you && _sector.FlyToBlocker(p, target) is null)
             items.Add(($"Fly to {name}", true, () => { if (_player is { } pilot && _sector.Exists(target)) { ShowStatus(_sector.FlyTo(pilot.Id, target).Message); _changedSinceSave = true; } }));
         // With keys or a controller the menu opens at what has focus.
@@ -60,11 +64,23 @@ public partial class Main
         Callable.From(() => ShowPopup(items)).CallDeferred(); // after the click that asked for it
     }
 
-    /// <summary>Asks for a craft's new name (#115).</summary>
-    private void AskRename(CraftId id)
+    private void AskRename(CraftId id) => AskRename(new TargetRef(id, BodyId.None));
+
+    /// <summary>Asks for a craft's or body's new name (#115, #109).</summary>
+    private void AskRename(TargetRef target)
     {
-        if (_sector.Crafts.FirstOrDefault(c => c.Id == id) is not { IsWreck: false } craft || !SectorState.IsPlayers(craft)) return;
+        if (!_sector.Exists(target)) return;
         var sector = _sector;
+        if (target.Craft.IsNone)
+        {
+            var body = sector.GetBody(target.Body);
+            _confirm.AskText($"Rename {body.Name}" + (body.OriginalName is { } was ? $" (originally {was}; leave it empty to go back to that)" : ""), body.Name, SectorState.MaxCraftName, "Rename",
+                name => ReferenceEquals(sector, _sector) ? sector.RenameBlocker(target.Body, name) : "That game is closed.",
+                name => { ShowStatus(sector.RenameBody(target.Body, name).Message); _changedSinceSave = true; });
+            return;
+        }
+        var id = target.Craft;
+        if (_sector.Crafts.FirstOrDefault(c => c.Id == id) is not { } craft || !SectorState.IsPlayers(craft) && !craft.IsWreck) return;
         _confirm.AskText($"Rename {craft.Name}", craft.Name, SectorState.MaxCraftName, "Rename",
             name => ReferenceEquals(sector, _sector) ? sector.RenameBlocker(id, name) : "That game is closed.",
             name => { ShowStatus(sector.RenameCraft(id, name).Message); _changedSinceSave = true; });

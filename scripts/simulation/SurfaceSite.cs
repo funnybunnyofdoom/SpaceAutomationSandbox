@@ -24,7 +24,9 @@ public sealed class SurfaceSite
     public int Count { get; }
 
     /// <summary>"Rock-1 B".</summary>
-    public string Name { get; }
+    public string Name { get; private set; }
+
+    internal void Rename(string bodyName) => Name = $"{bodyName} {Letter(Index)}"; // #109
 
     public bool Surveyed { get; internal set; }
 
