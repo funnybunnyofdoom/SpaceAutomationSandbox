@@ -99,7 +99,7 @@ public partial class Main
     private void DrawBackdrop()
     {
         DrawStarfield(_backdrop);
-        if (InMenu || (_mapMode && _galaxyView)) return;
+        if (InMenu && !ShowsMenuScene || (_mapMode && _galaxyView)) return;
         var renderTimeS = RenderTimeS;
         foreach (var body in _sector.Bodies)
         {
@@ -193,6 +193,7 @@ public partial class Main
                 DrawCircle(centre, radiusPx, BodyColor(body)); // a dot, or no art
             else ShadeBody(body, centre, radiusPx, screen, renderTimeS);
         }
+        if (InMenu) return; // just the picture (#98)
         // Labels and markers outside the disc can be on screen when the disc isn't.
         if (!view.Grow(radiusPx + 400).HasPoint(centre)) return;
         DrawAnimals(body, centre, radiusPx, renderTimeS);

@@ -10,7 +10,8 @@ public partial class LoadingScreen : Control
 {
     private const double ShowAfterS = 0.15;
 
-    private readonly Label _label;
+    private readonly Label _label, _tip;
+    private readonly TextureRect _portrait;
     private double _elapsed;
     private string _what = "";
 
@@ -26,13 +27,27 @@ public partial class LoadingScreen : Control
         var centre = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
         centre.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(centre);
+        var box = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        box.AddThemeConstantOverride("separation", 16);
+        centre.AddChild(box);
+        _portrait = new TextureRect // #98
+        {
+            CustomMinimumSize = new Vector2(256, 320), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+            TextureFilter = TextureFilterEnum.LinearWithMipmaps, SizeFlagsHorizontal = SizeFlags.ShrinkCenter, MouseFilter = MouseFilterEnum.Ignore,
+        };
+        box.AddChild(_portrait);
         _label = new Label { HorizontalAlignment = HorizontalAlignment.Center };
         _label.AddThemeFontSizeOverride("font_size", 24);
-        centre.AddChild(_label);
+        box.AddChild(_label);
+        _tip = new Label { HorizontalAlignment = HorizontalAlignment.Center, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(520, 0), Modulate = new Color(1, 1, 1, 0.75f) };
+        box.AddChild(_tip);
     }
 
-    public void Begin(string what)
+    public void Begin(string what, Texture2D? portrait = null, string tip = "")
     {
+        _portrait.Texture = portrait;
+        _portrait.Visible = portrait is not null;
+        _tip.Text = tip;
         _what = what;
         _elapsed = 0;
         Modulate = Colors.Transparent;

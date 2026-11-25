@@ -28,6 +28,12 @@ public sealed record SaveSlot(string Path, SaveKind Kind, SaveHeader? Header, in
     public DateTime SavedUtc => Header is { } h && DateTime.TryParse(h.SavedAtUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out var t) ? t : ModifiedUtc;
 
     public bool Broken => Error is not null;
+
+    /// <summary>The race it's played as, by id (#98).</summary>
+    public string Race => Header is { Race.Length: > 0 } h ? h.Race : OldRace;
+
+    /// <summary>For saves from before the header said: found in the sector's first lines, else Human.</summary>
+    internal string OldRace { get; init; } = Construction.RaceCatalog.HumanId;
 }
 
 /// <summary>
@@ -102,12 +108,12 @@ public static class SaveStore
                 if (string.Equals(property, "schemaVersion", StringComparison.OrdinalIgnoreCase)) version = reader.GetInt32();
                 else if (string.Equals(property, "game", StringComparison.OrdinalIgnoreCase)) game = reader.GetString();
                 else if (string.Equals(property, "header", StringComparison.OrdinalIgnoreCase)) header = ReadHeader(ref reader);
-                else reader.Skip();
+                else if (!reader.TrySkip()) break;
             }
             if (game != SaveGameSerializer.GameId) throw new FormatException("not a SpaceAutomationSandbox save");
             if (version is not { } v) throw new FormatException("no save-format version");
             if (v > SaveGameSerializer.SchemaVersion) throw new FormatException($"made by a newer version of the game (save format {v})");
-            return new SaveSlot(path, kind, header, v, null, modified);
+            return new SaveSlot(path, kind, header, v, null, modified) { OldRace = RaceIn(bytes) };
         }
         catch (Exception e) when (e is JsonException or FormatException or IOException or InvalidOperationException or UnauthorizedAccessException)
         {
@@ -115,10 +121,24 @@ public static class SaveStore
         }
     }
 
+    private static string RaceIn(byte[] start)
+    {
+        var text = Encoding.UTF8.GetString(start);
+        var sector = text.IndexOf("\"sector\":", StringComparison.Ordinal);
+        if (sector < 0) return Construction.RaceCatalog.HumanId;
+        string? After(string mark, int from)
+        {
+            var at = from < 0 ? -1 : text.IndexOf(mark, from, StringComparison.Ordinal);
+            var end = at < 0 ? -1 : text.IndexOf('"', at + mark.Length);
+            return end > 0 && end - at - mark.Length is > 0 and < 80 ? text[(at + mark.Length)..end] : null;
+        }
+        return After("\"id\": \"", text.IndexOf("\"customRace\":", sector, StringComparison.Ordinal)) ?? After("\"race\": \"", sector) ?? Construction.RaceCatalog.HumanId;
+    }
+
     private static SaveHeader ReadHeader(ref Utf8JsonReader reader)
     {
         if (reader.TokenType != JsonTokenType.StartObject) throw new FormatException("bad header");
-        string name = "", saved = "", game = "";
+        string name = "", saved = "", game = "", race = "";
         double play = 0;
         long tick = 0;
         ulong seed = 0;
@@ -133,11 +153,14 @@ public static class SaveStore
                 case "playtimes": play = reader.GetDouble(); break;
                 case "tick": tick = reader.GetInt64(); break;
                 case "seed": seed = reader.GetUInt64(); break;
+                case "race": race = reader.GetString() ?? ""; break;
                 case "gamename": game = reader.GetString() ?? ""; break;
-                default: reader.Skip(); break;
+                default: // Skip() refuses to work on part of a file, whatever is in it: saves over 64 KB were listed as broken
+                    if (!reader.TrySkip()) throw new FormatException("the header is too long");
+                    break;
             }
         }
-        return new SaveHeader(name, saved, play, tick, seed, game);
+        return new SaveHeader(name, saved, play, tick, seed, game, Race: race);
     }
 
     /// <summary>Writes a save safely: to a temporary file, then into place.</summary>
@@ -188,7 +211,22 @@ public static class SaveStore
         Write(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    public static void Delete(string path) => File.Delete(path);
+    public static void Delete(string path)
+    {
+        File.Delete(path);
+        File.Delete(PictureOf(path));
+    }
+
+    /// <summary>Where a save's picture is, if it has one (#98).</summary>
+    public static string PictureOf(string path) => System.IO.Path.ChangeExtension(path, ".jpg");
+
+    /// <summary>Puts a picture beside a save; without one, an older picture there goes: it'd be of another game.</summary>
+    public static void WritePicture(string path, byte[]? picture)
+    {
+        if (picture is null || picture.Length == 0) { File.Delete(PictureOf(path)); return; }
+        File.WriteAllBytes(PictureOf(path) + ".tmp", picture);
+        File.Move(PictureOf(path) + ".tmp", PictureOf(path), overwrite: true);
+    }
 
     /// <summary>Moves the single save from before slots into the folder (once). Returns the new path, or null.</summary>
     public static string? MigrateLegacy(string legacyPath, string folder)

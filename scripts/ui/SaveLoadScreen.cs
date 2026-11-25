@@ -25,6 +25,9 @@ public partial class SaveLoadScreen : Control
     private ScreenMode _mode;
     private Button _saveNew = null!;
 
+    /// <summary>A race's portrait, by its id (#98).</summary>
+    public Func<string, Texture2D?> Portrait { get; set; } = _ => null;
+
     /// <summary>The save being renamed (the name box then renames instead of saving), or null.</summary>
     private (string Path, string Name)? _renaming;
 
@@ -58,7 +61,7 @@ public partial class SaveLoadScreen : Control
         var centre = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
         centre.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(centre);
-        var panel = new PanelContainer { CustomMinimumSize = new Vector2(640, 480) };
+        var panel = new PanelContainer { CustomMinimumSize = new Vector2(860, 520) };
         centre.AddChild(panel);
         var box = new VBoxContainer();
         box.AddThemeConstantOverride("separation", 8);
@@ -82,9 +85,9 @@ public partial class SaveLoadScreen : Control
         _saveNew.Pressed += Submit;
         _newRow.AddChild(_saveNew);
 
-        _status = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(600, 0) };
+        _status = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(800, 0) };
         box.AddChild(_status);
-        var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(620, 360), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(840, 400), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         box.AddChild(scroll);
         _rows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _rows.AddThemeConstantOverride("separation", 6);
@@ -150,13 +153,18 @@ public partial class SaveLoadScreen : Control
         if (slots.Count == 0) _rows.AddChild(new Label { Text = "(no saves yet)", Modulate = new Color(1, 1, 1, 0.6f) });
         foreach (var slot in slots)
         {
-            var row = new VBoxContainer();
+            var whole = new HBoxContainer(); // #98
+            whole.AddThemeConstantOverride("separation", 10);
+            whole.AddChild(Picture(Screenshot(slot.Path), 160, 90));
+            whole.AddChild(Picture(slot.Broken ? null : Portrait(slot.Race), 72, 90));
+            var row = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            whole.AddChild(row);
             var kind = slot.Kind switch { SaveKind.Quick => "quicksave", SaveKind.Auto => "autosave", _ => "save" };
             var when = slot.SavedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
             var info = slot.Broken
                 ? $"{slot.Name}  ({kind}, {when})\n  BROKEN: {slot.Error}"
                 : $"{slot.Name}  ({kind}, {when})" + (slot.Header is { } h ? $"\n  played {Played(h.PlayTimeS)}, tick {h.Tick}, seed {h.Seed}, format v{slot.SchemaVersion}" : $"\n  format v{slot.SchemaVersion} (no summary: an older save)");
-            row.AddChild(new Label { Text = info, Modulate = slot.Broken ? Palette.Bad : Colors.White, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(600, 0) });
+            row.AddChild(new Label { Text = info, Modulate = slot.Broken ? Palette.Bad : Colors.White, AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(540, 0) });
             var buttons = new HBoxContainer();
             row.AddChild(buttons);
             var path = slot.Path;
@@ -170,9 +178,31 @@ public partial class SaveLoadScreen : Control
             }
             Add(buttons, "Delete", () => _confirm($"Delete \"{name}\"? This can't be undone.",
                 new (string, Action)[] { ("Delete", () => { SaveStore.Delete(path); _status.Text = $"Deleted \"{name}\"."; Refresh(); }) }));
-            _rows.AddChild(row);
+            _rows.AddChild(whole);
             _rows.AddChild(new HSeparator());
         }
+    }
+
+    /// <summary>A picture in its frame; without one, an empty frame.</summary>
+    private static Control Picture(Texture2D? texture, int width, int height)
+    {
+        var frame = new ColorRect { Color = new Color(0, 0, 0, 0.5f), CustomMinimumSize = new Vector2(width, height), SizeFlagsVertical = SizeFlags.ShrinkBegin, MouseFilter = MouseFilterEnum.Ignore };
+        var picture = new TextureRect { Texture = texture, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered, TextureFilter = TextureFilterEnum.LinearWithMipmaps, MouseFilter = MouseFilterEnum.Ignore };
+        picture.SetAnchorsPreset(LayoutPreset.FullRect);
+        frame.AddChild(picture);
+        return frame;
+    }
+
+    private static Texture2D? Screenshot(string save)
+    {
+        var path = SaveStore.PictureOf(save);
+        try
+        {
+            if (!System.IO.File.Exists(path) || new System.IO.FileInfo(path).Length > 2_000_000) return null;
+            var image = new Image();
+            return image.LoadJpgFromBuffer(System.IO.File.ReadAllBytes(path)) == Error.Ok && !image.IsEmpty() ? ImageTexture.CreateFromImage(image) : null;
+        }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { return null; }
     }
 
     private void Rename(string path, string current)

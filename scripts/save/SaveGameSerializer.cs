@@ -21,7 +21,7 @@ public sealed record LoadedGame(SectorState Sector, CraftId PlayerCraftId, SaveH
 /// list and the ids of goals met (#65). Saves without them load with the goal list off.
 /// </remarks>
 public sealed record SaveHeader(string Name, string SavedAtUtc, double PlayTimeS, long Tick, ulong Seed, string GameName = "",
-    bool GoalsOn = false, string[]? GoalsDone = null);
+    bool GoalsOn = false, string[]? GoalsDone = null, string Race = "");
 
 /// <summary>
 /// Converts a whole <see cref="SectorState"/> to and from versioned JSON (format in docs/08_SAVE_FORMAT.md).

@@ -477,6 +477,7 @@ public partial class Main : Node2D
         _confirm = new ConfirmDialog();
         _saveScreen = new SaveLoadScreen(() => SavesFolder, (question, choices) => _confirm.Ask(question, choices));
         _saveScreen.DefaultName = () => _gameName;
+        _saveScreen.Portrait = PortraitOf; // #98
         _saveScreen.SaveChosen += (path, name) =>
         {
             if (SaveTo(path, name)) _saveScreen.ShowMessage($"Saved \"{name}\".");
@@ -537,14 +538,16 @@ public partial class Main : Node2D
     private static bool IsMenuControl(Node node)
     {
         for (var n = node; n != null; n = n.GetParent())
-            if (n is PauseMenu or SaveLoadScreen or ConfirmDialog or TitleScreen or SettingsPanel or NewGameScreen or ControlsPanel or TopBar) return true;
+            if (n is PauseMenu or SaveLoadScreen or ConfirmDialog or TitleScreen or SettingsPanel or NewGameScreen or RaceCreatorScreen or ControlsPanel or TopBar) return true;
         return false;
     }
 
     private void OpenPause()
     {
+        if (!ModalOpen && !EditorOpen && _settingsPanel is not { Visible: true }) _lastPicture = TakePicture(); // before the menu covers it (#98)
         _pausedBeforeMenu = _warp.Paused;
         _warp.Paused = true;
+        if (_sector is not null) _pause.Portrait = RaceLibrary.Portrait(_sector.Race);
         _pause.Open(_sector is null ? "" : $"{_gameName}   ·   seed {_sector.Seed}   ·   played {(int)(_playTimeS / 3600)} h {(int)(_playTimeS / 60) % 60} min", _goalsOn);
     }
 
@@ -587,7 +590,7 @@ public partial class Main : Node2D
         ResumeFromPause();
         _warp.Paused = false;
         _player = null;
-        _sector = null!; // released: nothing reads it while the title screen shows
+        _sector = null!; // released: the title has its own (#98)
         _mapMode = false;
         _galaxyView = false;
         _hud.CloseHelp();
@@ -600,8 +603,9 @@ public partial class Main : Node2D
         if (_player == null) return false;
         try
         {
-            var header = new SaveHeader(name, System.DateTime.UtcNow.ToString("O"), _playTimeS, _sector.Tick, _sector.Seed, _gameName, _goalsOn, _goalsDone.ToArray());
+            var header = new SaveHeader(name, System.DateTime.UtcNow.ToString("O"), _playTimeS, _sector.Tick, _sector.Seed, _gameName, _goalsOn, _goalsDone.ToArray(), _sector.Race.Id);
             SaveStore.Write(path, SaveGameSerializer.ToJson(_sector, _player.Id, header));
+            SavePicture(path); // #98
             _savedTick = _sector.Tick;
             _changedSinceSave = false;
             ShowStatus($"Saved \"{name}\" at tick {_sector.Tick}.");
@@ -640,7 +644,7 @@ public partial class Main : Node2D
     {
         if (_catalog == null || _loadingScreen.Visible) return;
         var catalog = _catalog;
-        _loadingScreen.Begin(what);
+        _loadingScreen.Begin(what, PortraitOf(SaveStore.Read(path).Race), Tip()); // #98
         try
         {
             var loaded = await System.Threading.Tasks.Task.Run(() => SaveGameSerializer.FromJson(System.IO.File.ReadAllText(path), catalog));
@@ -749,6 +753,7 @@ public partial class Main : Node2D
             _uiRoot.MoveChild(_title, _uiRoot.GetChildCount() - 1);
             if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1); // settings open above the menu
         }
+        OpenMenuScene(); // #98
         _hud.Visible = false;
         foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel, _findPanel })
             if (panel != null) panel.Visible = false;
@@ -763,6 +768,7 @@ public partial class Main : Node2D
     private void LeaveTitle(System.Action start)
     {
         start();
+        CloseMenuScene(); // #98
         if (_title != null) _title.Visible = false;
         if (_settingsPanel != null) _settingsPanel.Visible = false;
         _hud.Visible = true;
@@ -1000,7 +1006,8 @@ public partial class Main : Node2D
         if (InMenu)
         {
             QueueRedraw();
-            _backdrop.QueueRedraw(); // just the starfield
+            _backdrop.QueueRedraw();
+            MenuFrame(delta); // #98
             DevScreenshot();
             return;
         }
@@ -1267,11 +1274,15 @@ public partial class Main : Node2D
 
     private void DrawWorld()
     {
-        if (InMenu || (_mapMode && _galaxyView)) HideBodies();
+        if (InMenu && !ShowsMenuScene || (_mapMode && _galaxyView)) HideBodies();
         _arrowHits.Clear();
         _starHits.Clear();
         _swarmHits.Clear();
-        if (InMenu) return; // the title screen: no game to draw
+        if (InMenu) // the title screen: its own little world (#98)
+        {
+            if (ShowsMenuScene) DrawMenuScene();
+            return;
+        }
         if (_mapMode && _galaxyView) { DrawGalaxy(); return; }
 
         var renderTimeS = RenderTimeS;

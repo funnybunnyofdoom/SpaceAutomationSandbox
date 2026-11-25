@@ -20,6 +20,11 @@ public partial class PauseMenu : Control
     public event Action? QuitToMenuChosen;
     public event Action? QuitToDesktopChosen;
 
+    private TextureRect _portrait = null!;
+
+    /// <summary>The race the game is played as (#98).</summary>
+    public Texture2D? Portrait { set => _portrait.Texture = value; }
+
     private Button _resume = null!;
     private Label _about = null!;
     private Button _goals = null!;
@@ -36,9 +41,18 @@ public partial class PauseMenu : Control
         var centre = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
         centre.SetAnchorsPreset(LayoutPreset.FullRect);
         AddChild(centre);
+        var across = new HBoxContainer();
+        across.AddThemeConstantOverride("separation", 28);
+        centre.AddChild(across);
+        _portrait = new TextureRect // #98
+        {
+            CustomMinimumSize = new Vector2(288, 360), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+            TextureFilter = TextureFilterEnum.LinearWithMipmaps, SizeFlagsVertical = SizeFlags.ShrinkCenter, MouseFilter = MouseFilterEnum.Ignore,
+        };
+        across.AddChild(_portrait);
         var box = new VBoxContainer();
         box.AddThemeConstantOverride("separation", 8);
-        centre.AddChild(box);
+        across.AddChild(box);
         var title = new Label { Text = "PAUSED", HorizontalAlignment = HorizontalAlignment.Center };
         title.AddThemeFontSizeOverride("font_size", 32);
         box.AddChild(title);

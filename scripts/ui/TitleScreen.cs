@@ -5,7 +5,7 @@ using SpaceAutomationSandbox.Core;
 namespace SpaceAutomationSandbox.UI;
 
 /// <summary>
-/// Title screen and main menu (#58): the game's (working) name over the starfield, then Continue
+/// Title screen and main menu (#58): the game's (working) name over a scene of its own (#98), then Continue
 /// (the save, if there is one), New Game, Load, Settings and Quit. Keyboard and controller
 /// drive it with the usual UI keys (arrows/D-pad to move, Enter/A to choose); the first available
 /// button has focus. Load opens the save list (#60). No credits screen for now (#66).
@@ -33,32 +33,45 @@ public partial class TitleScreen : Control
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Stop;
 
-        var shade = new ColorRect { Color = new Color(0, 0, 0, 0.35f), MouseFilter = MouseFilterEnum.Ignore };
-        shade.SetAnchorsPreset(LayoutPreset.FullRect);
+        // Dark behind the menu, clear over the scene (#98).
+        var gradient = new Gradient();
+        gradient.SetColor(0, new Color(0, 0.01f, 0.03f, 0.88f));
+        gradient.SetColor(1, new Color(0, 0.01f, 0.03f, 0));
+        gradient.SetOffset(0, 0.3f);
+        var shade = new TextureRect { Texture = new GradientTexture2D { Gradient = gradient, Width = 256, Height = 4 }, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, MouseFilter = MouseFilterEnum.Ignore };
+        shade.SetAnchorsPreset(LayoutPreset.LeftWide);
+        shade.AnchorRight = 0.72f;
         AddChild(shade);
 
-        var centre = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
-        centre.SetAnchorsPreset(LayoutPreset.FullRect);
-        AddChild(centre);
+        var margin = new MarginContainer { MouseFilter = MouseFilterEnum.Ignore };
+        margin.SetAnchorsPreset(LayoutPreset.FullRect);
+        margin.AddThemeConstantOverride("margin_left", 72);
+        margin.AddThemeConstantOverride("margin_right", 24);
+        AddChild(margin);
 
-        var box = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        var box = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore, SizeFlagsVertical = SizeFlags.ShrinkCenter, SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
         box.AddThemeConstantOverride("separation", 10);
-        centre.AddChild(box);
+        margin.AddChild(box);
 
-        var title = new Label { Text = "SpaceAutomationSandbox", HorizontalAlignment = HorizontalAlignment.Center };
-        title.AddThemeFontSizeOverride("font_size", 48);
-        box.AddChild(title);
-        box.AddChild(new Label
-        {
-            Text = "working title",
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Modulate = new Color(1, 1, 1, 0.6f),
-        });
-        box.AddChild(new Control { CustomMinimumSize = new Vector2(0, 24) });
+        var (name, subtitle) = GameTitle();
+        if (Logo() is { } logo)
+            box.AddChild(new TextureRect { Texture = logo, CustomMinimumSize = new Vector2(440, 150), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspect, MouseFilter = MouseFilterEnum.Ignore, TooltipText = name });
+        else
+            box.AddChild(new Label
+            {
+                Text = name.ToUpperInvariant(), AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(440, 0),
+                LabelSettings = new LabelSettings
+                {
+                    Font = new FontVariation { BaseFont = ThemeDB.FallbackFont, SpacingGlyph = 5, VariationEmbolden = 0.7f }, FontSize = 46, LineSpacing = -6,
+                    OutlineSize = 6, OutlineColor = new Color(0.02f, 0.1f, 0.16f), ShadowSize = 22, ShadowColor = new Color(UiTheme.Cyan, 0.28f), ShadowOffset = Vector2.Zero,
+                },
+            });
+        if (subtitle.Length > 0) box.AddChild(new Label { Text = subtitle, Modulate = new Color(UiTheme.Cyan, 0.85f) });
+        box.AddChild(new Control { CustomMinimumSize = new Vector2(0, 20) });
 
         _continue = MenuButton("Continue", () => ContinueChosen?.Invoke());
         box.AddChild(_continue);
-        _saveInfo = new Label { HorizontalAlignment = HorizontalAlignment.Center, Modulate = new Color(1, 1, 1, 0.55f) };
+        _saveInfo = new Label { Modulate = new Color(1, 1, 1, 0.55f) };
         box.AddChild(_saveInfo);
         _newGame = MenuButton("New Game", () => NewGameChosen?.Invoke());
         box.AddChild(_newGame);
@@ -67,15 +80,35 @@ public partial class TitleScreen : Control
         box.AddChild(MenuButton("Quit", () => QuitChosen?.Invoke()));
         _message = new Label
         {
-            HorizontalAlignment = HorizontalAlignment.Center, Modulate = Palette.Bad,
+            Modulate = Palette.Bad,
             AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(420, 0),
         };
         box.AddChild(_message);
     }
 
+    /// <summary>The game's name isn't final: it's data, and a logo picture (assets/art/ui/logo.png or .webp) takes its place if there is one (#98).</summary>
+    private static (string Name, string Subtitle) GameTitle()
+    {
+        const string path = "res://data/title.json";
+        try
+        {
+            if (FileAccess.FileExists(path) && System.Text.Json.JsonDocument.Parse(FileAccess.GetFileAsString(path)).RootElement is { ValueKind: System.Text.Json.JsonValueKind.Object } root)
+                return (root.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "", root.TryGetProperty("subtitle", out var t) ? t.GetString() ?? "" : "");
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException) { GD.PushWarning($"{path}: {e.Message}"); }
+        return ("Space Automation Sandbox", "");
+    }
+
+    private static Texture2D? Logo()
+    {
+        foreach (var extension in new[] { "webp", "png" })
+            if ($"res://assets/art/ui/logo.{extension}" is var path && ResourceLoader.Exists(path)) return GD.Load<Texture2D>(path);
+        return null;
+    }
+
     private static Button MenuButton(string text, Action pressed)
     {
-        var button = new Button { Text = text, CustomMinimumSize = new Vector2(280, 40), FocusMode = FocusModeEnum.All };
+        var button = new Button { Text = text, CustomMinimumSize = new Vector2(320, 42), FocusMode = FocusModeEnum.All, SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
         button.AddThemeFontSizeOverride("font_size", 20);
         button.Pressed += pressed;
         return button;
