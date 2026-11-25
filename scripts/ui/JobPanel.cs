@@ -232,6 +232,30 @@ public partial class JobPanel : PanelContainer
         return option;
     }
 
+    /// <summary>Opens as a mining job at a body for a material (#121).</summary>
+    public void OpenMining(BodyId source, string material)
+    {
+        Open();
+        _kind.Select(0);
+        ShowKind();
+        Select(_source, _sources.IndexOf(source));
+        RefreshDeposits();
+        Select(_mineMaterial, _deposits.IndexOf(material));
+        Refresh();
+    }
+
+    /// <summary>Opens as a freight job from one of your stations to another (#121).</summary>
+    public void OpenFreight(CraftId from, string material, CraftId to)
+    {
+        Open();
+        _kind.Select(1);
+        ShowKind();
+        Select(_pickup, _stations.IndexOf(from));
+        Select(_haulDestination, _haulTargets.IndexOf(to));
+        Select(_haulMaterial, _materials.Materials.ToList().FindIndex(m => m.Id == material));
+        Refresh();
+    }
+
     /// <summary>Opens as a freight job to a contract's trade station with its material (#124).</summary>
     public void OpenDelivery(CraftId station, string material)
     {

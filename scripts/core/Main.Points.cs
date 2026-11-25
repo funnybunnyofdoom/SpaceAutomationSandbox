@@ -15,6 +15,46 @@ public partial class Main
 
     private DiscoveriesPanel? _discoveriesPanel;
     private ContractsPanel? _contractsPanel;
+    private PlannerPanel? _plannerPanel;
+
+    /// <summary>Where a planner's issue can be dealt with (#121).</summary>
+    private void GoToIssue(PlanIssue issue)
+    {
+        switch (issue.Limit)
+        {
+            case PlanLimit.Miners when !issue.Target.Body.IsNone:
+                SwapPanel(_plannerPanel, _jobPanel, () => _jobPanel!.OpenMining(issue.Target.Body, issue.Material));
+                ShowStatus("A mining job for the ship you fly. To use another ship, fly it (fleet list) and open its job.");
+                break;
+            case PlanLimit.Freight:
+                SwapPanel(_plannerPanel, _jobPanel, () => _jobPanel!.OpenFreight(issue.From, issue.Material, issue.To));
+                break;
+            case PlanLimit.Refineries or PlanLimit.Fabrication:
+                SwapPanel(_plannerPanel, _shipyardPanel, () => _shipyardPanel!.Open());
+                ShowStatus(issue.Limit == PlanLimit.Refineries ? "Refit a station with refineries at a shipyard (Work on craft), or build a refinery station." : "Build a shipyard station to make more.");
+                break;
+            case PlanLimit.Power:
+                SwapPanel(_plannerPanel, _powerPanel, () => _powerPanel!.Open());
+                break;
+            default:
+                if (!issue.Target.IsNone && _sector.Exists(issue.Target)) OpenLink(issue.Target);
+                break;
+        }
+    }
+
+    /// <summary>Dev/test hook <c>--open-planner</c> (or <c>=rate</c>): the planner on a starter ship, or on metal an hour, with a miner at work.</summary>
+    private void DemoPlanner(bool rate)
+    {
+        if (_player is null || _starterDesign is null || _catalog is null) return;
+        _sector.DebugSurveyAll();
+        var yard = _sector.Crafts.First(c => c.IsShipyard);
+        var rock = _sector.Bodies.First(b => b.Name == "Rock-1");
+        var miner = new CraftState(_sector.AllocateCraftId(), "Miner", _starterDesign, _starterDesign.ComputeStats(_catalog), yard.Position + new Vector2D(0, -400), 0) { Velocity = yard.Velocity };
+        _sector.AddCraft(miner);
+        _sector.StartJob(miner.Id, new MiningJob(rock.Id, "iron_ore", yard.Id, 0.8));
+        if (rate) _plannerPanel?.OpenRate("metal", 20);
+        else _plannerPanel?.Open(_starterDesign);
+    }
 
     /// <summary>Dev/test hook <c>--open-contracts</c>: a civilization next door with one offer of each kind, one taken, and the panel open (#124).</summary>
     private void DemoContracts()

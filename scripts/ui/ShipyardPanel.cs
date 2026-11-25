@@ -28,6 +28,19 @@ public partial class ShipyardPanel : PanelContainer
     private readonly PartCatalog _catalog;
     private readonly Func<ShipDesign?> _currentShipDesign;
 
+    /// <summary>Open the production planner on this design (#121).</summary>
+    public event Action<ShipDesign?>? PlanChosen;
+
+    /// <summary>The designs it offers, for the planner.</summary>
+    public IReadOnlyList<(string Label, Func<ShipDesign?> Load)> DesignChoices
+    {
+        get
+        {
+            RefreshDesignList();
+            return _designs.Select(d => (d.Label, (Func<ShipDesign?>)(() => d.Load()))).ToList();
+        }
+    }
+
     private OptionButton _yardPicker = null!;
     private HFlowContainer _stock = null!;
     private Label _note = null!;
@@ -104,7 +117,12 @@ public partial class ShipyardPanel : PanelContainer
 
         var order = new Button { Text = "Order", Icon = UiIcons.Get("shipyard"), FocusMode = FocusModeEnum.None, TooltipText = "Build this design at the yard: ships launch when done, station designs become kits to carry and deploy" };
         order.Pressed += Order;
-        box.AddChild(order);
+        var orderRow = new HBoxContainer();
+        box.AddChild(orderRow);
+        orderRow.AddChild(order);
+        var plan = new Button { Text = "Plan its production...", Flat = true, FocusMode = FocusModeEnum.None, TooltipText = "The production planner: what it takes to make, down to ores, and what holds it back" }; // #121
+        plan.Pressed += () => PlanChosen?.Invoke(SelectedDesign());
+        orderRow.AddChild(plan);
 
         _status = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0) };
         box.AddChild(_status);

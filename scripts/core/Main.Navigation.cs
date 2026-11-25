@@ -25,7 +25,7 @@ public partial class Main
     private readonly List<Control> _navMadeFocusable = new();
 
     private IEnumerable<Control?> SidePanels => new Control?[]
-        { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel, _contractsPanel };
+        { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel, _contractsPanel, _plannerPanel };
 
     private bool PanelNavActive => _navPanel != null;
 
