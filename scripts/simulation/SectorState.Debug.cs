@@ -98,4 +98,9 @@ public sealed partial class SectorState
 
     /// <summary>Benchmarks and tests (#114): a shot in flight from an enemy, harmful to the player's craft.</summary>
     public void DebugShoot(Vector2D position, Vector2D velocity, double lifeS, double damage = 0.01) => _shots.Add(new Shot { Position = position, Velocity = velocity, ExpireTick = Tick + (long)(lifeS * FixedStepClock.TicksPerSecond), Damage = damage, FactionId = -1 });
+    /// <summary>Tests: a craft gone (#124).</summary>
+    internal void RemoveCraftForTest(CraftId id) => RemoveCraft(GetCraft(id));
+
+    /// <summary>Tests: mining counted in a claimed system (#124).</summary>
+    internal void NoteMiningForTest(CelestialBodyState body, long kg) => NoteMining(body, kg);
 }

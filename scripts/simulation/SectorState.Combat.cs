@@ -141,7 +141,7 @@ public sealed partial class SectorState
             if (!RaidOn(faction)) continue;
             var gate = _craftsById.GetValueOrDefault(faction.RaidGateId);
             if (gate is { GateClosed: true } && gate.Stats.GateLockCount == 0) gate.GateClosed = false;
-            var alive = _crafts.Where(c => c.FactionId == faction.Id && !c.IsPatrol && !c.IsTradeStation && !c.IsWreck).ToList();
+            var alive = _crafts.Where(c => c.FactionId == faction.Id && !c.IsPatrol && !c.IsTradeStation && !c.IsStranded && !c.IsWreck).ToList();
             if (alive.Count > 0 && gate is not null && IsGate(gate) && !gate.IsWreck && Tick < faction.RaidEndTick)
             {
                 if (faction.Invading) StepInvasion(faction, gate, alive); // #95
@@ -175,6 +175,7 @@ public sealed partial class SectorState
         {
             if (FactionById(raider.FactionId) is not { } faction) { raider.Controls = ShipControls.Idle; continue; }
             if (raider.IsTradeStation) continue;
+            if (raider.IsStranded) { raider.Controls = ShipControls.Idle; continue; } // #124
             if (raider.IsPatrol) { SteerPatrol(raider, faction); continue; } // #89
             CraftState? target = null;
             var nearest = RaiderEngageM;

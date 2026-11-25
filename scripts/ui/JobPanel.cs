@@ -52,6 +52,7 @@ public partial class JobPanel : PanelContainer
     private OptionButton _salvageDestination = null!;
     private OptionButton _serveMinLoad = null!;
     private OptionButton _source = null!, _mineMaterial = null!, _mineDestination = null!, _returnAt = null!;
+    private List<CraftId> _haulTargets = new(); // your stations, then trade stations awaiting a delivery (#124)
     private OptionButton _pickup = null!, _haulMaterial = null!, _haulDestination = null!, _minPickup = null!, _keepStocked = null!;
     private InfoList _state = null!;
     private RouteView _route = null!;
@@ -231,6 +232,18 @@ public partial class JobPanel : PanelContainer
         return option;
     }
 
+    /// <summary>Opens as a freight job to a contract's trade station with its material (#124).</summary>
+    public void OpenDelivery(CraftId station, string material)
+    {
+        Open();
+        _kind.Select(1);
+        ShowKind();
+        Select(_haulDestination, _haulTargets.IndexOf(station));
+        Select(_haulMaterial, _materials.Materials.ToList().FindIndex(m => m.Id == material));
+        Select(_keepStocked, 0);
+        Refresh();
+    }
+
     public void Open()
     {
         Visible = true;
@@ -281,7 +294,12 @@ public partial class JobPanel : PanelContainer
         }
 
         _stations = sector.Crafts.Where(c => c.Stats.DockingPorts.Count > 0 && !c.IsWreck && SectorState.IsPlayers(c) && c.Id != craft?.Id).Select(c => c.Id).ToList();
-        foreach (var option in new[] { _mineDestination, _pickup, _haulDestination, _salvageDestination, _tradeHome })
+        _haulTargets = _stations.Concat(sector.CivilizationContracts.Where(c => c.State == ContractState.Accepted && c.Kind == ContractKind.Delivery)
+            .Select(c => sector.FactionById(c.FactionId) is { } f ? sector.TradeStationOf(f)?.Id : null).OfType<CraftId>().Distinct()).ToList();
+        _haulDestination.Clear();
+        foreach (var id in _haulTargets) _haulDestination.AddIconItem(UiIcons.Get(sector.GetCraft(id).IsTradeStation ? "contract" : sector.GetCraft(id).IsShipyard ? "shipyard" : "orbit"),
+            sector.GetCraft(id).IsTradeStation ? $"{sector.GetCraft(id).Name} (a contract)" : $"{sector.GetCraft(id).Name} ({id})");
+        foreach (var option in new[] { _mineDestination, _pickup, _salvageDestination, _tradeHome })
         {
             option.Clear();
             foreach (var id in _stations) option.AddIconItem(UiIcons.Get(sector.GetCraft(id).IsShipyard ? "shipyard" : SectorState.IsGate(sector.GetCraft(id)) ? "gate" : "orbit"), $"{sector.GetCraft(id).Name} ({id})");
@@ -294,7 +312,7 @@ public partial class JobPanel : PanelContainer
         Select(_salvageDestination, 0);
         Select(_returnAt, 0);
         Select(_pickup, 0);
-        Select(_haulDestination, Math.Min(1, _stations.Count - 1));
+        Select(_haulDestination, Math.Min(1, _haulTargets.Count - 1));
         Select(_haulMaterial, 0);
         Select(_minPickup, 1);
         Select(_keepStocked, 0);
@@ -314,7 +332,7 @@ public partial class JobPanel : PanelContainer
             case HaulJob haul:
                 _kind.Select(1);
                 Select(_pickup, _stations.IndexOf(haul.PickupId));
-                Select(_haulDestination, _stations.IndexOf(haul.DestinationId));
+                Select(_haulDestination, _haulTargets.IndexOf(haul.DestinationId));
                 Select(_haulMaterial, _materials.Materials.ToList().FindIndex(m => m.Id == haul.MaterialId));
                 Select(_minPickup, Array.IndexOf(MinPickups, haul.MinPickupKg));
                 Select(_keepStocked, Array.IndexOf(KeepStocked, haul.KeepStockedKg));
@@ -500,7 +518,7 @@ public partial class JobPanel : PanelContainer
                     case 1:
                         stops.Add(Station(At(_pickup, _stations)));
                         goods.Add(_haulMaterial.Selected >= 0 && _haulMaterial.Selected < _materials.Materials.Count ? "mat_" + _materials.Materials[_haulMaterial.Selected].Id : "cargo");
-                        stops.Add(Station(At(_haulDestination, _stations)));
+                        stops.Add(Station(At(_haulDestination, _haulTargets)));
                         break;
                     case 2: stops.Add(new("any station", null, "orbit")); goods.Add("cargo"); stops.Add(new("who asks", null, "orbit")); break;
                     case 3: stops.Add(Ship()); goods.Add("survey"); stops.Add(new("next body", null, "planet")); break;
@@ -582,7 +600,7 @@ public partial class JobPanel : PanelContainer
         {
             var material = _materials.Materials[Math.Max(0, _haulMaterial.Selected)].Id;
             Show(_sector().StartJob(craft.Id, new HaulJob(_stations[Math.Max(0, _pickup.Selected)], material,
-                _stations[Math.Max(0, _haulDestination.Selected)], MinPickups[Math.Max(0, _minPickup.Selected)],
+                _haulTargets[Math.Max(0, _haulDestination.Selected)], MinPickups[Math.Max(0, _minPickup.Selected)],
                 KeepStocked[Math.Max(0, _keepStocked.Selected)])));
         }
     }

@@ -54,7 +54,7 @@ public static class SaveGameSerializer
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 39;
+    public const int SchemaVersion = 40;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -92,7 +92,7 @@ public static class SaveGameSerializer
                         Attitude = f.Attitude, Grievance = f.Grievance, NextEventTick = f.NextEventTick, Warned = sector.FactionWarned(f.Id),
                         RaidGateId = f.RaidGateId.Value, RaidEndTick = f.RaidGateId.IsNone ? 0 : f.RaidEndTick,
                         NextPatrolTick = f.NextPatrolTick, PatrolShipsBuilt = f.PatrolShipsBuilt,
-                        Invading = f.Invading, Goodwill = f.Goodwill, TruceUntilTick = f.TruceUntilTick, NextStationTick = f.NextStationTick, Race = f.RaceId, RaceView = f.RaceView,
+                        Invading = f.Invading, Goodwill = f.Goodwill, TruceUntilTick = f.TruceUntilTick, NextStationTick = f.NextStationTick, MiningAccessUntilTick = f.MiningAccessUntilTick, Race = f.RaceId, RaceView = f.RaceView,
                     }).ToList()
                     : null,
                 CivilizationRaces = sector.Factions.Any(f => f.Race is { IsCustom: true })
@@ -116,6 +116,20 @@ public static class SaveGameSerializer
                             Id = h.Id, Kind = h.Kind, StarId = h.Star.Value, BodyId = h.Body.Value, StartTick = h.StartTick, EndTick = h.EndTick, Roll = h.Roll, Begun = h.Begun, Warned = h.Warned, FallenKg = h.FallenKg,
                         }).ToList(),
                         Meteors = sector.Meteors.Select(m => new MeteorDto { X = m.Position.X, Y = m.Position.Y, Vx = m.Velocity.X, Vy = m.Velocity.Y, ExpireTick = m.ExpireTick }).ToList(),
+                    }
+                    : null,
+                Contracts = sector.CivilizationContracts.Count > 0 || sector.NextOffers.Count > 0 || sector.NextContractId > 1
+                    ? new ContractsDto
+                    {
+                        NextId = sector.NextContractId,
+                        NextOffers = new SortedDictionary<int, long>(sector.NextOffers.ToDictionary(n => n.Key, n => n.Value)),
+                        All = sector.CivilizationContracts.Select(c => new ContractDto
+                        {
+                            Id = c.Id, Faction = c.FactionId, Kind = c.Kind, State = c.State, OfferedTick = c.OfferedTick, OfferUntilTick = c.OfferUntilTick, DurationTicks = c.DurationTicks, Roll = c.Roll,
+                            DeadlineTick = c.DeadlineTick, Material = c.Material.Length > 0 ? c.Material : null, Kg = c.Kg, DoneKg = c.DoneKg, Bodies = c.Bodies.Count > 0 ? c.Bodies.Select(b => b.Value).ToList() : null,
+                            PlaceId = c.Place.Value, StrandedId = c.Stranded.Value, RewardMaterial = c.RewardMaterial.Length > 0 ? c.RewardMaterial : null, RewardKg = c.RewardKg, Goodwill = c.Goodwill,
+                            Research = c.Research, AccessHours = c.AccessHours, Result = c.Result.Length > 0 ? c.Result : null,
+                        }).ToList(),
                     }
                     : null,
                 Points = sector.Points.Count > 0
@@ -229,6 +243,7 @@ public static class SaveGameSerializer
                     FactionId = c.FactionId,
                     IsWreck = c.IsWreck,
                     IsPatrol = c.IsPatrol,
+                    IsStranded = c.IsStranded,
                     PatrolStop = c.PatrolStop,
                     IsTradeStation = c.IsTradeStation,
                     PenKg = c.PenKg,
@@ -454,6 +469,7 @@ public static class SaveGameSerializer
                 craft.IsWreck = c.IsWreck;
                 if (c.PatrolStop < 0) throw new FormatException($"Craft {c.Id} has an invalid patrol.");
                 craft.IsPatrol = c.IsPatrol;
+                craft.IsStranded = c.IsStranded;
                 craft.PatrolStop = c.PatrolStop;
                 craft.IsTradeStation = c.IsTradeStation;
                 if (c.PenKg < 0 || !(c.RanchRemainderKg >= 0 && c.RanchRemainderKg < 1) || !(c.CullRemainderKg >= 0 && c.CullRemainderKg < 1))
@@ -540,7 +556,7 @@ public static class SaveGameSerializer
                 if (sector.Bodies.All(b => b.Id.Value != f.HomeStarId)) throw new FormatException($"Civilization {f.Id} claims a missing system.");
                 if (!double.IsFinite(f.Attitude) || !(f.Grievance >= 0) || !(f.Goodwill >= 0)) throw new FormatException($"Civilization {f.Id} has invalid attitude.");
                 sector.RestoreFaction(f.Id, f.Name ?? $"Civilization {f.Id}", f.Culture ?? "", new BodyId(f.HomeStarId), f.Baseline, f.Attitude, f.Grievance, f.NextEventTick, f.Warned, new CraftId(f.RaidGateId), f.RaidEndTick,
-                    f.NextPatrolTick, f.PatrolShipsBuilt, f.Goodwill, f.TruceUntilTick, f.NextStationTick, f.Invading);
+                    f.NextPatrolTick, f.PatrolShipsBuilt, f.Goodwill, f.TruceUntilTick, f.NextStationTick, f.Invading).MiningAccessUntilTick = f.MiningAccessUntilTick;
             }
             var civilizationRaces = (dto.CivilizationRaces ?? new List<JsonNode?>()) // copies of the player's own races (#118)
                 .Select(n => RaceCatalog.Check(n?.Deserialize<RaceDefinition>(RaceFiles.Options) ?? throw new FormatException("A civilization's race is empty."), catalog, Laws.All.Select(l => l.Id).ToList())).ToList();
@@ -590,6 +606,21 @@ public static class SaveGameSerializer
             sector.MilestonesStarted = dto.MilestonesStarted;
             sector.LargeDesigns = dto.LargeDesigns;
             foreach (var (id, amount) in dto.Options ?? new SortedDictionary<string, WorldAmount>()) sector.Options[id] = amount; // #119
+            if (dto.Contracts is { } contracts) // #124; whoever or whatever they're about may be gone: they end by themselves
+            {
+                sector.RestoreContractState(contracts.NextId, contracts.NextOffers ?? new SortedDictionary<int, long>());
+                foreach (var c in contracts.All ?? new List<ContractDto>())
+                {
+                    if (c.Kg < 0 || c.DoneKg < 0 || c.RewardKg < 0 || !(c.Goodwill >= 0) || !(c.Research >= 0) || !(c.AccessHours >= 0) || c.DurationTicks < 0) throw new FormatException($"Contract {c.Id} is invalid.");
+                    foreach (var m in new[] { c.Material, c.RewardMaterial }) if (m is not null && !catalog.Materials.Contains(m)) throw new FormatException($"Contract {c.Id} names unknown material '{m}'.");
+                    sector.RestoreContract(new Contract(c.Id, c.Faction, c.Kind, c.OfferedTick, c.OfferUntilTick, c.DurationTicks, c.Roll)
+                    {
+                        State = c.State, DeadlineTick = c.DeadlineTick, Material = c.Material ?? "", Kg = c.Kg, DoneKg = c.DoneKg, Bodies = (c.Bodies ?? new List<uint>()).Select(b => new BodyId(b)).ToList(),
+                        Place = new BodyId(c.PlaceId), Stranded = new CraftId(c.StrandedId), RewardMaterial = c.RewardMaterial ?? "", RewardKg = c.RewardKg, Goodwill = c.Goodwill, Research = c.Research,
+                        AccessHours = c.AccessHours, Result = c.Result ?? "",
+                    });
+                }
+            }
             if (dto.Hazards is { } hazards) // #123
             {
                 sector.RestoreHazardState(hazards.NextId);
@@ -941,6 +972,10 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Race { get; set; }
 
+        /// <summary>v40: contracts (#124).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ContractsDto? Contracts { get; set; }
+
         /// <summary>v39: hazards (#123).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public HazardsDto? Hazards { get; set; }
@@ -1032,6 +1067,10 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public long NextStationTick { get; set; }
+
+        /// <summary>v40 (#124).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public long MiningAccessUntilTick { get; set; }
     }
 
     private sealed class EventDto
@@ -1227,6 +1266,10 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool IsPatrol { get; set; }
 
+        /// <summary>v40 (#124).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool IsStranded { get; set; }
+
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public int PatrolStop { get; set; }
 
@@ -1414,6 +1457,46 @@ public static class SaveGameSerializer
         public string? RecipeId { get; set; }
         public SortedDictionary<string, long>? InputsKg { get; set; }
         public double ProgressKg { get; set; }
+    }
+
+    private sealed class ContractsDto
+    {
+        public int NextId { get; set; }
+        public SortedDictionary<int, long>? NextOffers { get; set; }
+        public List<ContractDto>? All { get; set; }
+    }
+
+    private sealed class ContractDto
+    {
+        public int Id { get; set; }
+        public int Faction { get; set; }
+        public ContractKind Kind { get; set; }
+        public ContractState State { get; set; }
+        public long OfferedTick { get; set; }
+        public long OfferUntilTick { get; set; }
+        public long DurationTicks { get; set; }
+        public ulong Roll { get; set; }
+        public long DeadlineTick { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Material { get; set; }
+        public long Kg { get; set; }
+        public long DoneKg { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<uint>? Bodies { get; set; }
+        public uint PlaceId { get; set; }
+        public uint StrandedId { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? RewardMaterial { get; set; }
+        public long RewardKg { get; set; }
+        public double Goodwill { get; set; }
+        public double Research { get; set; }
+        public double AccessHours { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Result { get; set; }
     }
 
     private sealed class HazardsDto

@@ -71,6 +71,7 @@ public static class InputActions
     public const string Laws = "open_laws";
     public const string Power = "open_power";
     public const string Discoveries = "open_discoveries"; // #122
+    public const string Contracts = "open_contracts"; // #124
     public const string Life = "open_life";
     public const string Log = "open_log";
     public const string Milestones = "open_milestones";
@@ -118,7 +119,7 @@ public static class InputActions
         (Find, "Find", "Targets and view"), (TargetSmart, "Smart target (what matters now)", "Targets and view"), (TargetEnemy, "Target attacker / enemy", "Targets and view"), (TargetDock, "Target a free docking port", "Targets and view"), (TargetGate, "Target a warp gate", "Targets and view"), (TargetWork, "Target work (wreck or ore)", "Targets and view"), (TargetAlert, "Target what needs you", "Targets and view"), (TargetBack, "Last target", "Targets and view"),
         (ZoomIn, "Zoom in", "Targets and view"), (ZoomOut, "Zoom out", "Targets and view"), (Map, "Map", "Targets and view"),
         (Editor, "Blueprint editor", "Panels"), (Shipyard, "Shipyard", "Panels"), (Fleet, "Fleet", "Panels"), (Cargo, "Cargo", "Panels"),
-        (Job, "Job", "Panels"), (Research, "Research", "Panels"), (Laws, "Laws and civilizations", "Panels"), (Power, "Power", "Panels"), (Life, "Native life", "Panels"), (Discoveries, "Discoveries", "Panels"), (Log, "Message log", "Panels"), (Milestones, "Milestones", "Panels"), (Settings, "Settings", "Panels"), (Debug, "Debug menu", "Panels"),
+        (Job, "Job", "Panels"), (Research, "Research", "Panels"), (Laws, "Laws and civilizations", "Panels"), (Power, "Power", "Panels"), (Life, "Native life", "Panels"), (Discoveries, "Discoveries", "Panels"), (Contracts, "Contracts", "Panels"), (Log, "Message log", "Panels"), (Milestones, "Milestones", "Panels"), (Settings, "Settings", "Panels"), (Debug, "Debug menu", "Panels"),
         (Diagnostics, "Diagnostics", "Panels"), (Help, "Keys and help", "Panels"),
         (MenuBar, "Show / hide the menu bar", "Panels"),
         (PanelFocus, "Use the open panel with keys / controller", "Panels"),
@@ -209,6 +210,7 @@ public static class InputActions
         Add(Laws, 0.5f, Keys(Key.L)); // #36
         Add(Power, 0.5f, Keys(Key.O)); // #75
         Add(Discoveries, 0.5f, Keys(Key.Pageup)); // #122
+        Add(Contracts, 0.5f, Keys(Key.Pagedown)); // #124
         Add(Life, 0.5f, Keys(Key.I)); // #94
         Add(Log, 0.5f, Keys(Key.Backslash)); // #100
         Add(Milestones, 0.5f, Keys(Key.Period)); // #38

@@ -110,6 +110,9 @@ public sealed class Faction
     public long TruceUntilTick { get; internal set; }
     public long NextStationTick { get; internal set; }
 
+    /// <summary>Mining in its system gives no offence until then (a contract's reward, #124). Saved.</summary>
+    public long MiningAccessUntilTick { get; internal set; }
+
     /// <summary>What it thinks of how you treat living worlds (#94), if it cares. Worked out every second; not saved.</summary>
     public double LifeOpinion { get; internal set; }
 

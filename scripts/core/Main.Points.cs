@@ -14,6 +14,21 @@ public partial class Main
     private static readonly Color FieldColor = new(0.45f, 0.75f, 1f);
 
     private DiscoveriesPanel? _discoveriesPanel;
+    private ContractsPanel? _contractsPanel;
+
+    /// <summary>Dev/test hook <c>--open-contracts</c>: a civilization next door with one offer of each kind, one taken, and the panel open (#124).</summary>
+    private void DemoContracts()
+    {
+        if (_player is null) return;
+        DemoWarp();
+        for (var i = 0; i < 60 * FixedStepClock.TicksPerSecond && _sector.Stars.Count < 2; i++) _sector.Step();
+        if (_sector.Stars.Count < 2) return;
+        var faction = _sector.Factions.FirstOrDefault() ?? _sector.MeetCivilization(_sector.Stars[1], cultureId: "pacifist", baseline: 30);
+        for (var i = 0; i < 20 && _sector.TradeStationOf(faction) is null; i++) _sector.Step();
+        foreach (var kind in new[] { ContractKind.Delivery, ContractKind.Survey, ContractKind.Rescue }) _sector.DebugOffer(faction, kind);
+        if (_sector.CivilizationContracts.FirstOrDefault(c => c.Kind == ContractKind.Delivery) is { } first) _sector.AcceptContract(first.Id);
+        _contractsPanel?.Open();
+    }
 
     private void ChoosePoint(int point, string choice)
     {

@@ -29,7 +29,7 @@ public sealed partial class SectorState
 
     /// <summary>Do this craft and the player's side fire on each other? Raiders always; patrols and trade stations only of hostile civilizations.</summary>
     public bool IsEnemy(CraftState craft) =>
-        !IsPlayers(craft) && (!(craft.IsPatrol || craft.IsTradeStation) || FactionById(craft.FactionId) is { Disposition: Disposition.Hostile });
+        !IsPlayers(craft) && (!(craft.IsPatrol || craft.IsTradeStation || craft.IsStranded) || FactionById(craft.FactionId) is { Disposition: Disposition.Hostile });
 
     /// <summary>Two civilizations are enemies when their cultures want opposite laws.</summary>
     public static bool AreEnemies(Faction a, Faction b) =>

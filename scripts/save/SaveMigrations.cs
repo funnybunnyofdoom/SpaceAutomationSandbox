@@ -58,6 +58,7 @@ public static class SaveMigrations
         [36] = ("older games have none", (_, _) => { }),
         [37] = ("v38 added world options and points of interest: older games have them off", (_, _) => { }),
         [38] = ("v39 added hazards: older games have them off", (_, _) => { }),
+        [39] = ("v40 added contracts: older games have them off", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

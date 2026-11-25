@@ -224,6 +224,10 @@ public partial class Main : Node2D
             _programPanel.JobsChosen += () => SwapPanel(_programPanel, _jobPanel, () => _jobPanel!.Open());
             _jobPanel!.ProgramsChosen += id => SwapPanel(_jobPanel, _programPanel, () => _programPanel.Open(id));
             _uiRoot.AddChild(_programPanel);
+            _contractsPanel = new ContractsPanel(() => _sector, () => _player) { Visible = false }; // #124
+            _contractsPanel.Acted += r => { ShowStatus(r.Message); _changedSinceSave = true; };
+            _contractsPanel.HaulChosen += (station, material) => SwapPanel(_contractsPanel, _jobPanel, () => _jobPanel!.OpenDelivery(station, material));
+            _uiRoot.AddChild(_contractsPanel);
             _discoveriesPanel = new DiscoveriesPanel(() => _sector, () => _player, ChoosePoint) { Visible = false }; // #122
             _uiRoot.AddChild(_discoveriesPanel);
             _findPanel = new FindPanel(() => _sector, () => _player, () => Recent, () => CurrentTarget, t => _sector.Exists(t) ? TargetLabel(t) : "", id => _catalog.Materials.Contains(id) ? _catalog.Materials.Get(id).Name : id) { Visible = false }; // #109
@@ -337,6 +341,7 @@ public partial class Main : Node2D
         if (args.FirstOrDefault(x => x.StartsWith("--window=")) is { } size && size["--window=".Length..].Split('x') is [var w, var h]) // dev: test small windows (#96)
             GetWindow().Size = new Vector2I(int.Parse(w), int.Parse(h));
         if (System.Array.IndexOf(args, "--open-programs") >= 0) DemoProgram(); // #120
+        if (System.Array.IndexOf(args, "--open-contracts") >= 0) DemoContracts(); // #124
         if (args.FirstOrDefault(a => a.StartsWith("--hazard=")) is { } happens) DemoHazard(happens.Split('=').Last()); // #123
         if (args.FirstOrDefault(a => a.StartsWith("--open-discoveries")) is { } discover) DemoPoints(discover.Split('=').Last()); // #122
         if (System.Array.IndexOf(args, "--open-find") >= 0) _findPanel?.Open(); // #109
@@ -769,7 +774,7 @@ public partial class Main : Node2D
         }
         OpenMenuScene(); // #98
         _hud.Visible = false;
-        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel })
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel, _contractsPanel })
             if (panel != null) panel.Visible = false;
         _title.Open(SaveSummary());
     }
@@ -952,6 +957,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Laws)) Toggle(_lawsPanel, () => _lawsPanel!.Open());
         else if (Pressed(InputActions.Log)) Toggle(_logPanel, () => _logPanel!.Open());
         else if (Pressed(InputActions.Milestones)) Toggle(_milestonesPanel, () => _milestonesPanel!.Open());
+        else if (Pressed(InputActions.Contracts)) Toggle(_contractsPanel, () => _contractsPanel!.Open());
         else if (Pressed(InputActions.Discoveries)) Toggle(_discoveriesPanel, () => _discoveriesPanel!.Open());
         else if (Pressed(InputActions.Life)) Toggle(_lifePanel, () => _lifePanel!.Open());
         else if (Pressed(InputActions.Power)) Toggle(_powerPanel, () => _powerPanel!.Open());
@@ -966,7 +972,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
-            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel };
+            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel, _contractsPanel };
             var anyOpen = _mapMode || _hud.HelpOpen || panels.Any(p => p is { Visible: true });
             if (!anyOpen) OpenPause();
             if (_mapMode) ToggleMap();

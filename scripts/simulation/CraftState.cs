@@ -248,6 +248,9 @@ public sealed class CraftState
 
     /// <summary>One of a civilization's standing patrol, not a raider (#89), and which planet it heads for. Saved.</summary>
     public bool IsPatrol { get; internal set; }
+
+    /// <summary>A civilization's ship waiting for rescue (#124): not a raider. Saved.</summary>
+    public bool IsStranded { get; internal set; }
     public int PatrolStop { get; internal set; }
 
     /// <summary>A civilization's trade station (#89). Saved.</summary>

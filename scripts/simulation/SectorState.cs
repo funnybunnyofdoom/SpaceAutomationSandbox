@@ -260,6 +260,7 @@ public sealed partial class SectorState
         StepFieldRepairs(); // drones and robots (#86)
         StepSalvage(); // wrecks cut up (#86)
         StepWarpGates(); // gates send queued craft, paid from their power (#22)
+        StepContracts(); // #124
         StepFactions(); // other civilizations' attitude and raids (#36)
         StepEjection();
         EndPowerTick();

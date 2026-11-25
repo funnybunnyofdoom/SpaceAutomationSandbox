@@ -16,7 +16,7 @@ public sealed record WorldOption(string Id, string Name, string Description);
 /// </summary>
 public sealed class WorldOptions
 {
-    public const string PointsOfInterest = "points_of_interest", SolarFlares = "solar_flares", MeteorShowers = "meteor_showers", Comets = "comets";
+    public const string PointsOfInterest = "points_of_interest", SolarFlares = "solar_flares", MeteorShowers = "meteor_showers", Comets = "comets", Contracts = "contracts";
 
     /// <summary>The options there are: one is added here and looked at where it counts; the menus and saves follow.</summary>
     public static readonly IReadOnlyList<WorldOption> All = new[]
@@ -25,6 +25,7 @@ public sealed class WorldOptions
         new WorldOption(SolarFlares, "Solar flares", "A star stops solar panels and wears parts in the open for some minutes. Forecast; never fatal."),
         new WorldOption(MeteorShowers, "Meteor showers", "Rocks fly at craft near a planet, and leave ore on its moons. Forecast; never fatal."),
         new WorldOption(Comets, "Comets", "A comet of rare ices passes for some hours."),
+        new WorldOption(Contracts, "Contracts", "Civilizations you know offer work: deliveries, surveys and rescues, for goods, goodwill, research or mining rights."),
     };
 
     private readonly SortedDictionary<string, WorldAmount> _amounts = new(StringComparer.Ordinal);

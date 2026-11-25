@@ -21,7 +21,7 @@ public sealed partial class SectorState
         if (!_craftsById.TryGetValue(job.DestinationId, out var destination) || destination.Id == craft.Id)
             return new(false, "The destination must be another craft.");
         if (pickup.Id == destination.Id) return new(false, "Pickup and destination must be different.");
-        if (!IsPlayers(pickup) || !IsPlayers(destination)) return new(false, "Freight goes between your own stations: use a trade route to trade.");
+        if (!IsPlayers(pickup) || !IsPlayers(destination) && DeliveryTo(destination, job.MaterialId) is null) return new(false, "Freight goes between your own stations: use a trade route to trade.");
         if (pickup.Stats.DockingPorts.Count == 0) return new(false, $"{pickup.Name} has no docking port.");
         if (destination.Stats.DockingPorts.Count == 0) return new(false, $"{destination.Name} has no docking port.");
 
@@ -88,7 +88,20 @@ public sealed partial class SectorState
                 if (craft.DockedToCraftId != destination.Id) { job.State = HaulJobState.ToDropoff; return; }
                 var room = MaxTransferKg(craft.Id, destination.Id, material);
                 if (job.KeepStockedKg > 0) room = Math.Min(room, Math.Max(0, job.KeepStockedKg - destination.Inventory[material]));
-                if (room > 0 && TryTransfer(craft.Id, destination.Id, material, room).Done) job.DeliveredKg += room;
+                if (destination.IsTradeStation) // a contract's delivery (#124): only what it still wants
+                {
+                    var given = Deliver(craft, destination, material, craft.Inventory[material]); // their station takes what the contract wants, not what fits
+                    job.DeliveredKg += given;
+                    room = given;
+                    if (!job.Active) return; // done
+                    if (given == 0 && craft.Inventory[material] > 0)
+                    {
+                        TryUndock(craft.Id);
+                        WaitHaul(craft, job, HaulJobState.ToDropoff, $"{destination.Name} has no open contract for {material}", JobStationRetryS);
+                        return;
+                    }
+                }
+                else if (room > 0 && TryTransfer(craft.Id, destination.Id, material, room).Done) job.DeliveredKg += room;
                 if (craft.Inventory[material] == 0)
                 {
                     job.CompletedCycles++;

@@ -234,7 +234,7 @@ public sealed partial class SectorState
     /// <summary>Mining in a claimed system is a grievance (called with each kg mined).</summary>
     private void NoteMining(CelestialBodyState body, long kg)
     {
-        if (kg <= 0 || _factions.Count == 0 || ClaimantOf(body.Id) is not { } owner) return;
+        if (kg <= 0 || _factions.Count == 0 || ClaimantOf(body.Id) is not { } owner || Tick < owner.MiningAccessUntilTick) return;
         owner.Grievance = Math.Min(100, owner.Grievance + kg / 1000.0 * GrievancePerTonne);
     }
 
