@@ -127,6 +127,7 @@ public sealed partial class SectorState
             if (baseline is null) faction.RaceView = people.ViewOf(Race); // a baseline given is exactly that
             faction.Attitude += faction.RaceView;
         }
+        faction.PlaysByRace = true; // #125
         _factions.Add(faction);
         _lastDisposition[faction.Id] = faction.Disposition;
         var likes = culture.Stances.Where(s => s.Value > 0).Select(s => Laws.Get(s.Key).Name).ToList();
@@ -217,8 +218,8 @@ public sealed partial class SectorState
         {
             if (RaidOn(faction)) return;
             var gate = _crafts.Where(c => IsGate(c) && !c.IsWreck && StarAt(c.Position)?.Id == faction.HomeStarId).OrderBy(c => c.Id.Value).FirstOrDefault();
-            if (gate is null || rng.NextDouble() >= RaidChance) return;
-            StartRaid(faction, gate, 2 + (int)(rng.NextUInt64() % 3)); // real raiders (#84)
+            if (gate is null || rng.NextDouble() >= Math.Min(1, RaidChance * Civ(faction, Construction.CivilizationTraits.RaidRate))) return;
+            StartRaid(faction, gate, RaidShips(faction, 2 + (int)(rng.NextUInt64() % 3))); // real raiders (#84), more or fewer by race (#125)
         }
         else if (faction.Disposition == Disposition.Wary && faction.Grievance >= 5 && !_warned.GetValueOrDefault(faction.Id))
         {

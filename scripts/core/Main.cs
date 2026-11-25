@@ -722,6 +722,7 @@ public partial class Main : Node2D
             var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath), materials, recipes)
                 .WithResearch(ResearchCatalog.FromJson(Godot.FileAccess.GetFileAsString(ResearchPath)));
             catalog.WithPoints(PointLibrary.Load(catalog)); // #122
+            RaceFiles.Catalog = catalog; // #125
             catalog.WithRaces(RaceLibrary.Load(catalog)); // #97, #116
             var design = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterDesignPath));
             var shipyard = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterShipyardPath));
@@ -742,6 +743,7 @@ public partial class Main : Node2D
             _catalog = catalog;
             _starterDesign = design;
             _starterShipyard = shipyard;
+            RacePoints.SetUsual(design, shipyard, catalog); // #125
         }
         catch (System.Exception e) // bad or missing data file: show it instead of crashing
         {

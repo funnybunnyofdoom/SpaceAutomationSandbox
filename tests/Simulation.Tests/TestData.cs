@@ -24,6 +24,8 @@ internal static class TestData
     public static PartCatalog Catalog()
     {
         var catalog = PartCatalog.FromJson(Read("data/parts/parts.json"), Materials(), Recipes()).WithResearch(Research());
+        RaceFiles.Catalog = catalog;
+        RacePoints.SetUsual(StarterShip(), StarterShipyard(), catalog);
         return catalog.WithRaces(Races(catalog)).WithPoints(Points(catalog));
     }
 
@@ -35,7 +37,8 @@ internal static class TestData
     {
         static string? Text(string path) => File.Exists(path) ? File.ReadAllText(path) : null;
         return RaceCatalog.Load(Directory.GetDirectories(Path.Combine(RepoRoot.Value, "data", "races"))
-            .Select(d => new RaceSource(Path.GetFileName(d), Text(Path.Combine(d, "race.json")), Text(Path.Combine(d, "ship.json")), Text(Path.Combine(d, "shipyard.json")))), catalog, Laws.All.Select(l => l.Id).ToList());
+            .Select(d => new RaceSource(Path.GetFileName(d), Text(Path.Combine(d, "race.json")), Text(Path.Combine(d, "ship.json")), Text(Path.Combine(d, "shipyard.json")), false,
+                Text(Path.Combine(d, "patrol.json")), Text(Path.Combine(d, "raider.json")), Text(Path.Combine(d, "trade_station.json")))), catalog, Laws.All.Select(l => l.Id).ToList());
     }
 
     public static ResearchCatalog Research() => ResearchCatalog.FromJson(Read("data/research/research.json"));

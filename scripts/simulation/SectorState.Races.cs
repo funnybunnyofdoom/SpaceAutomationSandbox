@@ -63,6 +63,10 @@ public sealed partial class SectorState
             else if (view.Opposes != 0) lines.Add($"Civilizations against {name} are {Of(view.Opposes)}");
         }
         foreach (var law in race.BlockedLaws.Keys) lines.Add($"Can't pass the law {Laws.Get(law).Name}");
+        foreach (var trait in CivilizationTraits.All) // #125
+            if (race.CivTraits.GetValueOrDefault(trait.Id) is not 0 and var percent) lines.Add("As a civilization: " + string.Format(percent > 0 ? trait.More : trait.Less, Math.Abs(percent)).ToLowerInvariant());
+        if (race.Favours.Count > 0) lines.Add("As a civilization: pays more for " + string.Join(", ", race.Favours.Select(m => catalog.Materials.Contains(m) ? catalog.Materials.Get(m).Name.ToLowerInvariant() : m)));
+        if (race.Patrol is not null || race.Raider is not null || race.TradeStation is not null) lines.Add("As a civilization: ships and stations of its own design");
         if (race.Ship is not null) lines.Add($"Starts with its own ship, {race.Ship.Name}");
         if (race.Shipyard is not null) lines.Add($"Starts with its own shipyard, {race.Shipyard.Name}");
         lines.AddRange(race.Notes);

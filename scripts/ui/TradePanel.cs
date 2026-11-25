@@ -153,7 +153,7 @@ public partial class TradePanel : PanelContainer
         _gives = Chosen() is { } f && ship is not null
             ? _materials.Materials.Select(m => m.Id).Where(m => ship.Inventory[m] > 0 && sector.ValueTo(f, m) > 0).ToList() : new List<string>();
         _gets = Chosen() is { } seller ? sector.SellsOf(seller).ToList() : new List<string>();
-        foreach (var m in _gives) _give.AddIconItem(UiIcons.Material(m), $"{MaterialName(m)} ({ship!.Inventory[m] / 1000.0:0.0##} t aboard)");
+        foreach (var m in _gives) _give.AddIconItem(UiIcons.Material(m), $"{MaterialName(m)} ({ship!.Inventory[m] / 1000.0:0.0##} t aboard){(SectorState.Favours(Chosen()!, m) ? ", they favour it" : "")}");
         foreach (var m in _gets) _get.AddIconItem(UiIcons.Material(m), MaterialName(m));
         if (keepGive is not null && _gives.IndexOf(keepGive) is var g and >= 0) _give.Select(g);
         if (keepGet is not null && _gets.IndexOf(keepGet) is var t and >= 0) _get.Select(t);
@@ -179,6 +179,8 @@ public partial class TradePanel : PanelContainer
         var system = sector.Bodies.FirstOrDefault(b => b.Id == f.HomeStarId)?.Name ?? "?";
         var rows = new List<HudRow> { new("star", $"{f.Name}, a {f.Culture.Name} civilization in the {system} system", Link: new TargetRef(CraftId.None, f.HomeStarId)) };
         rows.AddRange(CivilizationRows.For(sector, f));
+        if (f.Rules is { Favours.Count: > 0 } race) // #125
+            rows.Add(new HudRow("trade", $"They pay {(CivilizationTraits.FavourFactor - 1) * 100:0}% more for {string.Join(", ", race.Favours.Select(m => MaterialName(m).ToLowerInvariant()))}", Severity.Good));
         rows.Add(hostile ? new("danger", $"They want goods worth {SectorState.PeacePrice(f):N0} for peace, from a ship of yours in their system.", Severity.Warning)
             : station is null ? new("idle", "They have no trade station at the moment.", Severity.Muted)
             : docked ? SectorState.WillTrade(f) ? new HudRow("docked", "Docked at their trade station.", Severity.Good) : new HudRow("warn", "They won't trade while wary, but accept gifts.", Severity.Warning)

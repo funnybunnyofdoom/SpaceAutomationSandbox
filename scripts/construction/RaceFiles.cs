@@ -40,8 +40,28 @@ public static class RacePoints
         foreach (var (material, kg) in race.StockKg) Add($"Stock: {(catalog.Materials.Contains(material) ? catalog.Materials.Get(material).Name.ToLowerInvariant() : material)}", Stock(material, kg));
         Add("Civilizations' views", race.Leanings.Values.Sum(l => l.Wants + l.Opposes) / 10);
         Add("Laws it can't pass", -race.BlockedLaws.Count);
+        if (race.Ship is { } ship) Add($"Starting ship: {ship.Name}", DesignPoints(ship, catalog, "starter_ship")); // #125
+        if (race.Shipyard is { } yard) Add($"Starting shipyard: {yard.Name}", DesignPoints(yard, catalog, "starter_shipyard"));
         return items;
         string Name(string part) => catalog.TryGet(part, out var p) ? p!.Name : part;
+    }
+
+    /// <summary>A starting design costs by what its materials are worth beyond the usual one's, about 4 points per 10 t of metal's worth; a smaller one gives back.</summary>
+    public static double DesignPoints(ShipDesign design, PartCatalog catalog, string usualId)
+    {
+        double Worth(ShipDesign d) => d.ComputeBillOfMaterials(catalog).Kg.Sum(m => m.Value * (catalog.Materials.Contains(m.Key) ? catalog.Materials.Get(m.Key).Value : 1));
+        var usual = usualId == "starter_ship" ? UsualShipWorth : UsualShipyardWorth;
+        return usual <= 0 ? 0 : Math.Round((Worth(design) - usual) / (10_000 * (catalog.Materials.Contains("metal") ? catalog.Materials.Get("metal").Value : 1)) * 4 * 4) / 4;
+    }
+
+    /// <summary>What the usual starting designs are worth, set when the game's data loads.</summary>
+    public static double UsualShipWorth { get; set; }
+    public static double UsualShipyardWorth { get; set; }
+
+    public static void SetUsual(ShipDesign ship, ShipDesign shipyard, PartCatalog catalog)
+    {
+        double Worth(ShipDesign d) => d.ComputeBillOfMaterials(catalog).Kg.Sum(m => m.Value * (catalog.Materials.Contains(m.Key) ? catalog.Materials.Get(m.Key).Value : 1));
+        (UsualShipWorth, UsualShipyardWorth) = (Worth(ship), Worth(shipyard));
     }
 
     public static double Total(RaceDefinition race, PartCatalog catalog) => Math.Round(Items(race, catalog).Sum(i => i.Points), 2);
@@ -79,10 +99,23 @@ public static class RaceFiles
     }
 
     /// <summary>Why a race of the player's can't be played, or null. (Over the points budget is only unbalanced.)</summary>
+    /// <summary>The game's parts, for checking a shipyard of the player's own (set when the data loads).</summary>
+    public static PartCatalog? Catalog { get; set; }
+
     public static string? Problem(RaceDefinition race)
     {
         var robots = race.ShipyardParts.GetValueOrDefault("habitat") == "robot_bay";
         if (string.IsNullOrWhiteSpace(race.Name)) return "Give it a name.";
+        if (race.Shipyard is { } yard && race.ShipyardParts.Count > 0) return "With a shipyard of its own, choose its parts there, not by swapping the habitat.";
+        if (race.Shipyard is { } own && Catalog is not null) // #125: it must work with the crew it has
+        {
+            var stats = own.ComputeStats(Catalog!);
+            if (stats.FabricationRateKgPerS <= 0 || stats.DockingPorts.Count == 0) return "Its shipyard needs a fabricator and a docking port.";
+            if (race.Crew > stats.CrewCapacity) return $"Its shipyard's habitats hold {stats.CrewCapacity} crew.";
+            if (stats.CrewRequired > race.Crew + stats.RobotCount) return $"Its shipyard needs {stats.CrewRequired} crew or robots to work.";
+            if (race.Crew > 0 && !race.Supplies) return "Crew need food and water at the start.";
+            return race.StockKg.Values.Any(kg => Math.Abs(kg) > MaxStockKg) ? $"At most {MaxStockKg / 1000} t more or less of a material." : null;
+        }
         if (race.ShipyardParts.Any(p => (p.Key, p.Value) != ("habitat", "robot_bay"))) return "Only the shipyard's habitat can be swapped, for a robot bay.";
         if (robots && race.Crew > 0) return "With a robot bay instead of the habitat, the shipyard has nowhere for crew.";
         if (!robots && race.Crew < 2) return "Its shipyard needs 2 crew, or robots, to work.";

@@ -47,7 +47,7 @@ public sealed class TradeTests
         Assert.Empty(SectorState.TradeStationDesign.Validate(Catalog, DesignRole.Station));
         Assert.Equal(faction.HomeStarId, sector.StarAt(station.Position)!.Id);
         Assert.Equal(SectorState.TradeGoods, sector.SellsOf(faction).Count);
-        Assert.All(sector.SellsOf(faction), m => Assert.Equal(SectorState.TradeStockKg, station.Inventory[m]));
+        Assert.All(sector.SellsOf(faction), m => Assert.Equal(SectorState.StockOf(faction), station.Inventory[m]));
         Run(sector, 20 * Minute);
         Assert.Empty(station.PartHealth);
         Assert.Single(sector.Crafts, c => c.IsTradeStation);

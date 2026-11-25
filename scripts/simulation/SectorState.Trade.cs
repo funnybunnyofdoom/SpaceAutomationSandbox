@@ -58,23 +58,29 @@ public sealed partial class SectorState
     {
         if (Parts is null || !Parts.Materials.Contains(material)) return 0;
         var taste = new DeterministicRandom(((ulong)faction.Id * 0x9E3779B97F4A7C15UL) ^ NewGame.SeedFromText(material) ^ Seed).NextDouble();
-        return Parts.Materials.Get(material).Value * (0.6 + 0.9 * taste);
+        return Parts.Materials.Get(material).Value * (0.6 + 0.9 * taste) * (Favours(faction, material) ? CivilizationTraits.FavourFactor : 1);
     }
+
+    /// <summary>A good its race favours: it pays more for it, and doesn't sell it (#125).</summary>
+    public static bool Favours(Faction faction, string material) => faction.Rules?.Favours.Contains(material) == true;
+
+    /// <summary>What it keeps of each thing it sells, by its race.</summary>
+    public static long StockOf(Faction faction) => (long)(TradeStockKg * Civ(faction, CivilizationTraits.TradeStock));
 
     /// <summary>The materials a civilization sells (fixed by its id): not worthless things, never what only weapons use.</summary>
     public IReadOnlyList<string> SellsOf(Faction faction)
     {
         if (Parts is null) return Array.Empty<string>();
         var rng = new DeterministicRandom(Seed ^ ((ulong)faction.Id * 0xA24BAED4963EE407UL));
-        return Parts.Materials.Materials.Where(m => m.Value >= 1 && m.Id is not (ShellMaterial or MissileMaterial))
+        return Parts.Materials.Materials.Where(m => m.Value >= 1 && m.Id is not (ShellMaterial or MissileMaterial) && !Favours(faction, m.Id))
             .Select(m => (m.Id, Roll: rng.NextUInt64())).OrderBy(x => x.Roll).Take(TradeGoods).Select(x => x.Id).OrderBy(x => x, StringComparer.Ordinal).ToList();
     }
 
-    private static double Margin(Faction faction) => faction.Disposition == Disposition.Friendly ? FriendlyMargin : NeutralMargin;
+    private static double Margin(Faction faction) => (faction.Disposition == Disposition.Friendly ? FriendlyMargin : NeutralMargin) * Civ(faction, CivilizationTraits.TradeMargin);
 
     /// <summary>Value per kg they give for a material: less the more of it they already hold.</summary>
     public double BuyPrice(Faction faction, CraftState station, string material) =>
-        ValueTo(faction, material) * (1 - Margin(faction)) * Math.Max(0.3, 1 - station.Inventory[material] / (2.0 * TradeStockKg));
+        ValueTo(faction, material) * (1 - Margin(faction)) * Math.Max(0.3, 1 - station.Inventory[material] / (2.0 * StockOf(faction)));
 
     /// <summary>Value per kg they ask for a material.</summary>
     public double SellPrice(Faction faction, string material) => ValueTo(faction, material) * (1 + Margin(faction));
@@ -192,10 +198,10 @@ public sealed partial class SectorState
                 foreach (var ship in _crafts) if (ship.DockedToCraftId == station.Id) TryUndock(ship.Id);
             if (Tick % (60 * FixedStepClock.TicksPerSecond) != 0) continue;
             var sells = SellsOf(faction);
-            foreach (var material in sells) Stock(station, material, Math.Min((long)(TradeStockKg * TradeRestockPerMinute), TradeStockKg - station.Inventory[material]));
+            foreach (var material in sells) Stock(station, material, Math.Min((long)(StockOf(faction) * TradeRestockPerMinute), StockOf(faction) - station.Inventory[material]));
             foreach (var (material, kg) in station.Inventory.Kg.ToList())
             {
-                var spare = sells.Contains(material) ? Math.Max(0, kg - TradeStockKg) : kg;
+                var spare = sells.Contains(material) ? Math.Max(0, kg - StockOf(faction)) : kg;
                 var used = Math.Min(spare, (long)Math.Ceiling(spare * TradeUsePerMinute));
                 if (used <= 0) continue;
                 station.Inventory.TryRemove(new Dictionary<string, long> { [material] = used });
@@ -218,8 +224,9 @@ public sealed partial class SectorState
         var stops = PatrolStops(faction.HomeStarId);
         if (stops.Count == 0) return null;
         var planet = stops[^1]; // the outermost: away from your gate
-        var stats = TradeStationDesign.ComputeStats(Parts!);
-        var station = new CraftState(AllocateCraftId(), $"{faction.Name} trade station", TradeStationDesign, stats, GetPosition(planet.Id), 0)
+        var design = faction.Rules?.TradeStation ?? TradeStationDesign; // its race's own (#125)
+        var stats = design.ComputeStats(Parts!);
+        var station = new CraftState(AllocateCraftId(), $"{faction.Name} trade station", design, stats, GetPosition(planet.Id), 0)
         {
             FactionId = faction.Id, IsTradeStation = true,
         };
@@ -227,7 +234,7 @@ public sealed partial class SectorState
         var radius = planet.RadiusM + stats.BoundingRadiusM + 2_000;
         PutOnRails(station.Id, new CircularOrbit(planet.Id, radius, CircularOrbitPeriodS(planet, radius, DeployOrbitPeriodS), faction.Id));
         DiscoveredKg += (long)Math.Round(stats.TotalMassKg);
-        foreach (var material in SellsOf(faction)) Stock(station, material, TradeStockKg);
+        foreach (var material in SellsOf(faction)) Stock(station, material, StockOf(faction));
         return station;
     }
 

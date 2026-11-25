@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SpaceAutomationSandbox.Construction;
 
 namespace SpaceAutomationSandbox.Simulation;
 
@@ -79,10 +80,11 @@ public sealed partial class SectorState
             if (stops.Count == 0) continue;
             var ships = 0;
             foreach (var craft in _crafts) if (craft.IsPatrol && craft.FactionId == faction.Id && !craft.IsWreck) ships++;
-            if (ships >= FleetPatrolShips) continue;
-            faction.NextPatrolTick = Tick + (long)((ships + 1 < FleetPatrolShips && faction.PatrolShipsBuilt < FleetPatrolShips ? 1 : FleetReplaceS) * FixedStepClock.TicksPerSecond);
+            var size = PatrolSize(faction);
+            if (ships >= size) continue;
+            faction.NextPatrolTick = Tick + (long)((ships + 1 < size && faction.PatrolShipsBuilt < size ? 1 : FleetReplaceS / Civ(faction, CivilizationTraits.PatrolRebuild)) * FixedStepClock.TicksPerSecond);
             var stop = stops[^1]; // they come from the outermost planet
-            var design = faction.PatrolShipsBuilt % FleetPatrolShips == FleetPatrolShips - 1 ? MissileRaiderDesign : RaiderDesign;
+            var design = faction.PatrolShipsBuilt % FleetPatrolShips == FleetPatrolShips - 1 ? MissileDesignOf(faction, patrol: true) : GunDesignOf(faction, patrol: true);
             var stats = design.ComputeStats(Parts);
             var angle = faction.PatrolShipsBuilt * 0.05 + faction.Id;
             var position = GetPosition(stop.Id) + new Vector2D(Math.Cos(angle), Math.Sin(angle)) * (stop.RadiusM + PatrolAltitudeM + 500);
@@ -90,11 +92,41 @@ public sealed partial class SectorState
             {
                 FactionId = faction.Id, IsPatrol = true, PatrolStop = stops.Count - 1, Velocity = GetVelocityAt(stop.Id, TimeS),
             };
-            ship.Inventory.Add(design == RaiderDesign ? ShellMaterial : MissileMaterial, RaiderShellsKg);
+            Arm(ship);
             AddCraft(ship);
-            DiscoveredKg += (long)Math.Round(stats.TotalMassKg) + RaiderShellsKg;
+            DiscoveredKg += (long)Math.Round(stats.TotalMassKg);
             faction.PatrolShipsBuilt++;
         }
+    }
+
+    // --- A civilization's race (#125) ---
+
+    /// <summary>What a civilization trait of its race multiplies by: 1 for none.</summary>
+    private static double Civ(Faction faction, string trait) => faction.Rules?.CivFactor(trait) ?? 1;
+
+    /// <summary>Patrol ships a civilization keeps: 3, more or fewer by its race, 1 to 5.</summary>
+    public static int PatrolSize(Faction faction) => Math.Clamp((int)Math.Round(FleetPatrolShips * Civ(faction, CivilizationTraits.PatrolShips), MidpointRounding.AwayFromZero), 1, 5);
+
+    /// <summary>A raid's ships, by its race.</summary>
+    public static int RaidShips(Faction faction, int usual) => Math.Max(1, (int)Math.Round(usual * Civ(faction, CivilizationTraits.RaidSize), MidpointRounding.AwayFromZero));
+
+    private static ShipDesign GunDesignOf(Faction faction, bool patrol) => (patrol ? faction.Rules?.Patrol ?? faction.Rules?.Raider : faction.Rules?.Raider ?? faction.Rules?.Patrol) ?? RaiderDesign;
+
+    /// <summary>Its own design with its guns swapped for missile launchers, or the usual missile raider.</summary>
+    private static ShipDesign MissileDesignOf(Faction faction, bool patrol)
+    {
+        var own = GunDesignOf(faction, patrol);
+        return own == RaiderDesign ? MissileRaiderDesign : new ShipDesign($"{own.Id}_missiles", $"{own.Name} (missiles)", own.Cells.Select(c => c.PartId == "autocannon" ? c with { PartId = "missile_launcher" } : c));
+    }
+
+    /// <summary>Shells or missiles for what it carries.</summary>
+    private void Arm(CraftState ship)
+    {
+        var missiles = ship.Design.Cells.Any(c => c.PartId == "missile_launcher");
+        var guns = ship.Design.Cells.Any(c => c.PartId == "autocannon");
+        if (guns || !missiles) ship.Inventory.Add(ShellMaterial, RaiderShellsKg);
+        if (missiles) ship.Inventory.Add(MissileMaterial, RaiderShellsKg);
+        DiscoveredKg += ship.Inventory.TotalKg; // from outside, as the ship (added by the caller)
     }
 
     /// <summary>A patrol ship's tick: fight what it's hostile to nearby, else go round the planets.</summary>

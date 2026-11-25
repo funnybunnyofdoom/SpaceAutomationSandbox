@@ -36,6 +36,27 @@ public static class RaceTraits
     };
 }
 
+/// <summary>How a civilization of a race behaves (#125): each a percentage from −<see cref="RaceTraits.Limit"/> to +<see cref="RaceTraits.Limit"/>.</summary>
+public static class CivilizationTraits
+{
+    public const string PatrolShips = "patrolShips", PatrolRebuild = "patrolRebuild", RaidSize = "raidSize", RaidRate = "raidRate", TradeMargin = "tradeMargin", TradeStock = "tradeStock";
+
+    public const int MaxFavours = 4;
+
+    /// <summary>How much more a civilization pays for a good it favours.</summary>
+    public const double FavourFactor = 1.5;
+
+    public static readonly IReadOnlyList<RaceTrait> All = new[]
+    {
+        new RaceTrait(PatrolShips, "Patrol size", "Keeps {0}% more patrol ships", "Keeps {0}% fewer patrol ships"),
+        new RaceTrait(PatrolRebuild, "Patrol rebuilding", "Replaces lost patrol ships {0}% faster", "Replaces lost patrol ships {0}% slower"),
+        new RaceTrait(RaidSize, "Raid size", "Raids with {0}% more ships", "Raids with {0}% fewer ships"),
+        new RaceTrait(RaidRate, "Raids", "Raids {0}% more often when hostile", "Raids {0}% less often when hostile"),
+        new RaceTrait(TradeMargin, "Trade margin", "Takes a {0}% bigger margin in trade", "Takes a {0}% smaller margin in trade"),
+        new RaceTrait(TradeStock, "Trade stock", "Stocks {0}% more of what it sells", "Stocks {0}% less of what it sells"),
+    };
+}
+
 /// <summary>Who the player is (#97, #116), from data/races/&lt;id&gt;/race.json: how the game starts, its traits, and how civilizations see it.</summary>
 public sealed record RaceDefinition
 {
@@ -107,6 +128,29 @@ public sealed record RaceDefinition
     /// <summary>Goal hints that differ, by goal id.</summary>
     public Dictionary<string, string> GoalHints { get; init; } = new();
 
+    /// <summary>As a civilization (#125): by <see cref="CivilizationTraits"/> id, percent.</summary>
+    public Dictionary<string, int> CivTraits { get; init; } = new();
+
+    /// <summary>Goods its civilizations pay more for (#125).</summary>
+    public List<string> Favours { get; init; } = new();
+
+    /// <summary>A race of the player's own: its starting ship and shipyard as design files (#125); empty for the usual.</summary>
+    public string? ShipDesign { get; init; }
+    public string? ShipyardDesign { get; init; }
+
+    /// <summary>What a civilization trait multiplies by: 1 without it.</summary>
+    public double CivFactor(string trait) => CivTraits.TryGetValue(trait, out var percent) ? (100 + percent) / 100.0 : 1;
+
+    /// <summary>Its civilizations' own designs (#125): patrol.json, raider.json and trade_station.json in its folder.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ShipDesign? Patrol { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ShipDesign? Raider { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ShipDesign? TradeStation { get; init; }
+
     /// <summary>Its own starting designs (ship.json, shipyard.json), if it has any.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ShipDesign? Ship { get; init; }
@@ -123,7 +167,7 @@ public sealed record RaceDefinition
 }
 
 /// <summary>A race's files: its folder's name and what's in it.</summary>
-public sealed record RaceSource(string Folder, string? Race, string? Ship = null, string? Shipyard = null, bool Custom = false);
+public sealed record RaceSource(string Folder, string? Race, string? Ship = null, string? Shipyard = null, bool Custom = false, string? Patrol = null, string? Raider = null, string? TradeStation = null);
 
 /// <summary>The races, Human first; the default, and what older saves play. A race that can't be used is left out, with the reason.</summary>
 public sealed class RaceCatalog
@@ -174,6 +218,7 @@ public sealed class RaceCatalog
             Name = given.Name ?? "", Description = given.Description ?? "", Accent = given.Accent ?? "", Picture = given.Picture ?? "", Notes = given.Notes ?? new(), Traits = given.Traits ?? new(), StockKg = given.StockKg ?? new(),
             ShipyardParts = given.ShipyardParts ?? new(), Tech = given.Tech ?? new(), BlockedLaws = given.BlockedLaws ?? new(), Leanings = given.Leanings ?? new(), GoalHints = given.GoalHints ?? new(),
             Cultures = given.Cultures ?? new(), Views = given.Views ?? new(), CivilizationNames = given.CivilizationNames ?? new(), ShipName = given.ShipName ?? "", ShipyardName = given.ShipyardName ?? "",
+            CivTraits = given.CivTraits ?? new(), Favours = given.Favours ?? new(), ShipDesign = given.ShipDesign is { Length: > 0 } ship ? ship : null, ShipyardDesign = given.ShipyardDesign is { Length: > 0 } yard ? yard : null,
         };
         if (race.Leanings.Values.Any(l => l is null) || race.Tech.Any(t => t is null) || race.ShipyardParts.Values.Any(p => p is null) || race.Cultures.Any(c => c is null) || race.CivilizationNames.Any(string.IsNullOrWhiteSpace)) throw new FormatException("something in it is empty.");
         if (race.SchemaVersion != SchemaVersion) throw new FormatException($"race.json is schemaVersion {race.SchemaVersion}; this build reads {SchemaVersion}.");
@@ -187,6 +232,16 @@ public sealed class RaceCatalog
             if (RaceTraits.All.All(t => t.Id != trait)) throw new FormatException($"unknown trait '{trait}'. There are: {string.Join(", ", RaceTraits.All.Select(t => t.Id))}.");
             if (Math.Abs(percent) > RaceTraits.Limit) throw new FormatException($"trait '{trait}' is {percent}%; it must be from -{RaceTraits.Limit} to {RaceTraits.Limit}.");
         }
+        foreach (var (trait, percent) in race.CivTraits) // #125
+        {
+            if (CivilizationTraits.All.All(t => t.Id != trait)) throw new FormatException($"unknown civilization trait '{trait}'. There are: {string.Join(", ", CivilizationTraits.All.Select(t => t.Id))}.");
+            if (Math.Abs(percent) > RaceTraits.Limit) throw new FormatException($"civilization trait '{trait}' is {percent}%; it must be from -{RaceTraits.Limit} to {RaceTraits.Limit}.");
+        }
+        if (race.Favours.Count > CivilizationTraits.MaxFavours || race.Favours.Distinct().Count() != race.Favours.Count) throw new FormatException($"it may favour up to {CivilizationTraits.MaxFavours} different goods.");
+        foreach (var good in race.Favours)
+            if (!catalog.Materials.Contains(good ?? "")) throw new FormatException($"it favours unknown material '{good}'.");
+        if (race.ShipDesign is { } shipJson) race = race with { Ship = CheckDesign(shipJson, "its starting ship", catalog, DesignRole.Ship) };
+        if (race.ShipyardDesign is { } yardJson) race = race with { Shipyard = CheckDesign(yardJson, "its starting shipyard", catalog, DesignRole.Station) };
         foreach (var part in race.ShipyardParts.SelectMany(p => new[] { p.Key, p.Value }))
             if (!catalog.TryGet(part, out _)) throw new FormatException($"unknown part '{part}'.");
         foreach (var tech in race.Tech)
@@ -212,16 +267,34 @@ public sealed class RaceCatalog
         if (source.Custom && RaceFiles.Problem(race) is { } problem) throw new FormatException(problem);
         return race with
         {
-            Ship = Design(source.Ship, "ship.json", DesignRole.Ship),
-            Shipyard = Design(source.Shipyard, "shipyard.json", DesignRole.Station),
+            Ship = source.Ship is { } ship ? CheckDesign(ship, "ship.json", catalog, DesignRole.Ship) : race.Ship,
+            Shipyard = source.Shipyard is { } yard ? CheckDesign(yard, "shipyard.json", catalog, DesignRole.Station) : race.Shipyard,
+            Patrol = source.Patrol is { } patrol ? CheckFleet(patrol, "patrol.json", catalog, armed: true) : null,
+            Raider = source.Raider is { } raider ? CheckFleet(raider, "raider.json", catalog, armed: true) : null,
+            TradeStation = source.TradeStation is { } station ? CheckFleet(station, "trade_station.json", catalog, armed: false) : null,
         };
+    }
 
-        ShipDesign? Design(string? json, string file, DesignRole role)
-        {
-            if (json is null) return null;
-            var design = ShipDesign.FromJson(json);
-            var errors = design.Validate(catalog, role);
-            return errors.Count == 0 ? design : throw new FormatException($"{file}: {errors[0]}");
-        }
+    /// <summary>The most parts a civilization's own design may have (#125): no neighbour is hopeless.</summary>
+    public const int MaxFleetParts = 30, MaxFleetWeapons = 4;
+
+    private static ShipDesign CheckDesign(string json, string what, PartCatalog catalog, DesignRole role)
+    {
+        ShipDesign design;
+        try { design = ShipDesign.FromJson(json); }
+        catch (Exception e) when (e is JsonException or FormatException or ArgumentException) { throw new FormatException($"{what} can't be read: {e.Message}"); }
+        var errors = design.Validate(catalog, role);
+        return errors.Count == 0 ? design : throw new FormatException($"{what}: {errors[0]}");
+    }
+
+    /// <summary>A civilization's ship or trade station: it works, isn't too big, and is armed (ships) or has a port (stations).</summary>
+    private static ShipDesign CheckFleet(string json, string file, PartCatalog catalog, bool armed)
+    {
+        var design = CheckDesign(json, file, catalog, armed ? DesignRole.Ship : DesignRole.Station);
+        var stats = design.ComputeStats(catalog);
+        if (design.Cells.Count > MaxFleetParts) throw new FormatException($"{file}: at most {MaxFleetParts} parts.");
+        if (armed && stats.WeaponList.Count is 0 or > MaxFleetWeapons) throw new FormatException($"{file}: it needs 1 to {MaxFleetWeapons} weapons.");
+        if (!armed && stats.DockingPorts.Count == 0) throw new FormatException($"{file}: it needs a docking port.");
+        return design;
     }
 }

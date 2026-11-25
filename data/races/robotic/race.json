@@ -25,6 +25,16 @@
   "notes": [
     "Robots need power, never food or water; you can still house and recruit people"
   ],
+  "civTraits": {
+    "patrolShips": 30,
+    "patrolRebuild": 20,
+    "raidSize": 20,
+    "tradeMargin": -20
+  },
+  "favours": [
+    "electronics",
+    "superconductors"
+  ],
   "civilization": true,
   "cultures": [
     "territorial",

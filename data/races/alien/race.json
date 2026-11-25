@@ -25,6 +25,17 @@
     }
   },
   "shipyardName": "Hive yard",
+  "civTraits": {
+    "patrolShips": -20,
+    "raidRate": 30,
+    "raidSize": -20,
+    "tradeStock": 40
+  },
+  "favours": [
+    "food",
+    "water",
+    "biomass"
+  ],
   "civilization": true,
   "cultures": [
     "territorial",

@@ -78,6 +78,12 @@ public sealed class Faction
     /// <summary>What it makes of the player's race, for good: fixed when they met. Saved.</summary>
     public double RaceView { get; internal set; }
 
+    /// <summary>Its race changes how it behaves (#125): met since then. Civilizations in older games play as before. Saved.</summary>
+    public bool PlaysByRace { get; internal set; }
+
+    /// <summary>The race whose civilization traits and designs it has, or null.</summary>
+    public Construction.RaceDefinition? Rules => PlaysByRace ? Race : null;
+
     /// <summary>The star of the system it claims.</summary>
     public BodyId HomeStarId { get; }
 

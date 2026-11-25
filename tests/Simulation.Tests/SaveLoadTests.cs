@@ -136,7 +136,7 @@ public class SaveLoadTests
     [InlineData("{}")]
     [InlineData("""{ "schemaVersion": 1, "game": "SomethingElse", "sector": {} }""")]
     [InlineData("""{ "schemaVersion": 0, "game": "SpaceAutomationSandbox", "sector": {} }""")]
-    [InlineData("""{ "schemaVersion": 41, "game": "SpaceAutomationSandbox", "sector": {} }""")]
+    [InlineData("""{ "schemaVersion": 42, "game": "SpaceAutomationSandbox", "sector": {} }""")]
     public void Load_RejectsWrongOrForeignFiles(string json)
     {
         Assert.Throws<FormatException>(() => SaveGameSerializer.FromJson(json, TestData.Catalog()));

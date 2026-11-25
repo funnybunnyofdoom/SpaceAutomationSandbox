@@ -103,4 +103,14 @@ public sealed partial class SectorState
 
     /// <summary>Tests: mining counted in a claimed system (#124).</summary>
     internal void NoteMiningForTest(CelestialBodyState body, long kg) => NoteMining(body, kg);
+    /// <summary>Tests: a civilization of this race (#125), or none.</summary>
+    internal void SetFactionRaceForTest(Faction faction, Construction.RaceDefinition? race)
+    {
+        faction.Race = race;
+        faction.RaceId = race?.Id ?? "";
+        foreach (var craft in _crafts.Where(c => c.FactionId == faction.Id).ToList()) { DiscoveredKg -= (long)Math.Round(craft.Stats.TotalMassKg) + craft.Inventory.TotalKg; RemoveCraft(craft); }
+        faction.PatrolShipsBuilt = 0;
+        faction.NextPatrolTick = 0;
+        faction.NextStationTick = 0;
+    }
 }

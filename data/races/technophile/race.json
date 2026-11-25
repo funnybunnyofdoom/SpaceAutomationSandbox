@@ -32,6 +32,15 @@
       "opposes": 0
     }
   },
+  "civTraits": {
+    "tradeMargin": 20,
+    "patrolRebuild": 30,
+    "raidRate": -30
+  },
+  "favours": [
+    "electronics",
+    "exotic_ore"
+  ],
   "civilization": true,
   "cultures": [
     "territorial",

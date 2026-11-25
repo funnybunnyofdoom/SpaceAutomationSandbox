@@ -27,7 +27,10 @@ public partial class RaceCreatorScreen : Control
     private CheckBox _robots = null!, _supplies = null!, _civilization = null!;
     private readonly Dictionary<string, CheckBox> _cultures = new();
     private readonly Dictionary<string, (HSlider Slider, Label Value)> _traits = new(), _stock = new(), _wants = new(), _opposes = new();
-    private readonly Dictionary<string, CheckBox> _tech = new(), _blocked = new();
+    private readonly Dictionary<string, CheckBox> _tech = new(), _blocked = new(), _favours = new();
+    private readonly Dictionary<string, (HSlider Slider, Label Value)> _civTraits = new();
+    private OptionButton _startShip = null!, _startYard = null!;
+    private List<ShipDesign?> _ships = new(), _yards = new();
     private VBoxContainer _fields = null!;
     private TextureRect _card = null!;
     private Label _cardName = null!, _points = null!, _effects = null!, _status = null!;
@@ -118,6 +121,14 @@ public partial class RaceCreatorScreen : Control
         start.AddChild(_crew);
         _supplies = Check(start, "Food and water", on => _race with { Supplies = on });
         _robots = Check(start, "Robot bay instead of the habitat", on => _race with { ShipyardParts = on ? new() { ["habitat"] = "robot_bay" } : new(), Crew = on ? 0 : Math.Max(2, _race.Crew), Supplies = !on || _race.Supplies });
+        start.AddChild(new Label { Text = "Starting ship" }); // #125
+        _startShip = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill, TooltipText = "One of your ship designs, or the usual" };
+        _startShip.ItemSelected += i => Set(Starting(ship: true, (int)i));
+        start.AddChild(_startShip);
+        start.AddChild(new Label { Text = "Starting shipyard" });
+        _startYard = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill, TooltipText = "One of your station designs with a fabricator and a docking port, or the usual" };
+        _startYard.ItemSelected += i => { Set(Starting(ship: false, (int)i)); Fill(); };
+        start.AddChild(_startYard);
         var stock = Grid(3);
         foreach (var material in NewGame.StartingStockKg.Keys)
             _stock[material] = Slide(stock, $"More or less {catalog.Materials.Get(material).Name.ToLowerInvariant()}, t", RaceFiles.MaxStockKg / 1000, 1, v => _race with { StockKg = With(_race.StockKg, material, (long)v * 1000, 0) });
@@ -156,6 +167,24 @@ public partial class RaceCreatorScreen : Control
             check.Toggled += on => Set(_race with { Cultures = Culture.All.Select(c => c.Id).Where(id => id == culture.Id ? on : _race.Cultures.Contains(id)).ToList() });
             cultures.AddChild(check);
             _cultures[culture.Id] = check;
+        }
+
+        _fields.AddChild(new Label { Text = "How its civilizations behave (costs no points: it's about others)", ThemeTypeVariation = "HudText", Modulate = new Color(1, 1, 1, 0.7f) });
+        var civ = Grid(3);
+        foreach (var trait in CivilizationTraits.All)
+            _civTraits[trait.Id] = Slide(civ, trait.Name, RaceTraits.Limit, 5, v => _race with { CivTraits = With(_race.CivTraits, trait.Id, (int)v, 0) });
+        _fields.AddChild(new Label { Text = $"Goods they pay {(CivilizationTraits.FavourFactor - 1) * 100:0}% more for (up to {CivilizationTraits.MaxFavours})" });
+        var favours = Grid(4);
+        foreach (var material in catalog.Materials.Materials.Where(m => m.Value >= 1))
+        {
+            var check = new CheckBox { Text = material.Name, Icon = UiIcons.Material(material.Id) };
+            check.Toggled += on =>
+            {
+                if (on && _race.Favours.Count >= CivilizationTraits.MaxFavours) { check.SetPressedNoSignal(false); Say($"Up to {CivilizationTraits.MaxFavours} goods.", Severity.Warning); return; }
+                Set(_race with { Favours = catalog.Materials.Materials.Select(m => m.Id).Where(id => id == material.Id ? on : _race.Favours.Contains(id)).ToList() });
+            };
+            favours.AddChild(check);
+            _favours[material.Id] = check;
         }
 
         // --- What it comes to ---
@@ -300,7 +329,7 @@ public partial class RaceCreatorScreen : Control
         // A new race: notes and designs are the old one's own.
         _race = race with
         {
-            Id = RaceFiles.CustomPrefix + "new", Name = $"{race.Name} copy", Notes = new(), GoalHints = new(), Order = 100, Civilization = false, CivilizationNames = new(), Ship = null, Shipyard = null, SchemaVersion = RaceCatalog.SchemaVersion,
+            Id = RaceFiles.CustomPrefix + "new", Name = $"{race.Name} copy", Notes = new(), GoalHints = new(), Order = 100, Civilization = false, CivilizationNames = new(), Ship = null, Shipyard = null, ShipDesign = null, ShipyardDesign = null, Patrol = null, Raider = null, TradeStation = null, SchemaVersion = RaceCatalog.SchemaVersion,
             Picture = race.IsCustom ? race.Picture : race.Id,
         };
         (_saved, _picture) = (null, null);
@@ -325,6 +354,10 @@ public partial class RaceCreatorScreen : Control
         _supplies.ButtonPressed = _race.Supplies;
         _civilization.ButtonPressed = _race.Civilization;
         foreach (var (id, check) in _cultures) { check.ButtonPressed = _race.Cultures.Contains(id); check.Disabled = !_race.Civilization; }
+        foreach (var (id, row) in _civTraits) Put(row, _race.CivTraits.GetValueOrDefault(id));
+        foreach (var (id, check) in _favours) check.ButtonPressed = _race.Favours.Contains(id);
+        ListDesigns();
+        _robots.Disabled = _race.Shipyard is not null;
         foreach (var (id, row) in _traits) Put(row, _race.Traits.GetValueOrDefault(id));
         foreach (var (id, row) in _stock) Put(row, _race.StockKg.GetValueOrDefault(id) / 1000.0);
         foreach (var (id, row) in _wants) Put(row, _race.Leanings.GetValueOrDefault(id)?.Wants ?? 0);
@@ -341,6 +374,37 @@ public partial class RaceCreatorScreen : Control
             row.Slider.SetValueNoSignal(value);
             row.Value.Text = $"{value:+0;-0;0}";
         }
+    }
+
+    /// <summary>Your designs that could start a game (#125): ships that fly, stations with a fabricator and a docking port.</summary>
+    private void ListDesigns()
+    {
+        if (_catalog() is not { } catalog) return;
+        var all = new List<ShipDesign>();
+        foreach (var entry in BlueprintLibrary.List())
+            try { all.Add(BlueprintLibrary.Load(entry)); } catch (Exception) { /* unreadable: the editor says so */ }
+        _ships = all.Where(d => d.Validate(catalog, DesignRole.Ship).Count == 0).Prepend(null).ToList();
+        _yards = all.Where(d => d.Validate(catalog, DesignRole.Station).Count == 0 && d.ComputeStats(catalog) is { FabricationRateKgPerS: > 0, DockingPorts.Count: > 0 }).Prepend(null).ToList();
+        Put(_startShip, _ships, _race.Ship, "The usual starter ship");
+        Put(_startYard, _yards, _race.Shipyard, "The usual starter shipyard");
+
+        static void Put(OptionButton options, List<ShipDesign?> designs, ShipDesign? chosen, string usual)
+        {
+            options.Clear();
+            foreach (var design in designs) options.AddItem(design?.Name ?? usual);
+            var at = chosen is null ? 0 : designs.FindIndex(d => d?.Id == chosen.Id);
+            if (at < 0) { designs.Add(chosen); options.AddItem(chosen!.Name); at = designs.Count - 1; } // one no longer in the library
+            options.Select(at);
+        }
+    }
+
+    private RaceDefinition Starting(bool ship, int index)
+    {
+        var list = ship ? _ships : _yards;
+        var design = index >= 0 && index < list.Count ? list[index] : null;
+        var json = design?.ToJson();
+        return ship ? _race with { Ship = design, ShipDesign = json }
+            : _race with { Shipyard = design, ShipyardDesign = json, ShipyardParts = design is null ? _race.ShipyardParts : new() };
     }
 
     private void Set(RaceDefinition race)

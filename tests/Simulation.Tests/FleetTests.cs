@@ -49,11 +49,11 @@ public sealed class FleetTests
         var mass = sector.ComputeMassLedger().TotalKg;
         Run(sector, Minute);
         var patrol = Patrol(sector, faction);
-        Assert.Equal(SectorState.FleetPatrolShips, patrol.Count);
+        Assert.Equal(SectorState.PatrolSize(faction), patrol.Count);
         Assert.All(patrol, c => Assert.Equal(star.Id, sector.StarAt(c.Position)!.Id));
-        Assert.Single(patrol, c => c.Stats.WeaponList.Any(w => w.Weapon.Kind == WeaponKind.Missile));
+        Assert.Equal(patrol.Count >= 3 ? 1 : 0, patrol.Count(c => c.Stats.WeaponList.Any(w => w.Weapon.Kind == WeaponKind.Missile))); // every third ship built
         Run(sector, 30 * Minute);
-        Assert.Equal(SectorState.FleetPatrolShips, Patrol(sector, faction).Count);
+        Assert.Equal(SectorState.PatrolSize(faction), Patrol(sector, faction).Count);
         Assert.All(Patrol(sector, faction), c => Assert.Equal(0, Hurt(c))); // they fly without crashing
         Assert.All(Patrol(sector, faction), c => Assert.Equal(star.Id, sector.StarAt(c.Position)!.Id));
         Assert.Equal(mass, sector.ComputeMassLedger().TotalKg);
@@ -128,8 +128,8 @@ public sealed class FleetTests
         Run(sector, 40);
         var after = Patrol(sector, faction).Count;
         Run(sector, (int)(SectorState.FleetReplaceS * FixedStepClock.TicksPerSecond) + 40);
-        Assert.Equal(SectorState.FleetPatrolShips, Patrol(sector, faction).Count);
-        Assert.InRange(after, SectorState.FleetPatrolShips - 1, SectorState.FleetPatrolShips);
+        Assert.Equal(SectorState.PatrolSize(faction), Patrol(sector, faction).Count);
+        Assert.InRange(after, SectorState.PatrolSize(faction) - 1, SectorState.PatrolSize(faction));
         Assert.Contains(lost, sector.Crafts); // the wreck stays, to salvage
     }
 

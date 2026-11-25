@@ -54,7 +54,7 @@ public static class SaveGameSerializer
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 40;
+    public const int SchemaVersion = 41;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -92,7 +92,7 @@ public static class SaveGameSerializer
                         Attitude = f.Attitude, Grievance = f.Grievance, NextEventTick = f.NextEventTick, Warned = sector.FactionWarned(f.Id),
                         RaidGateId = f.RaidGateId.Value, RaidEndTick = f.RaidGateId.IsNone ? 0 : f.RaidEndTick,
                         NextPatrolTick = f.NextPatrolTick, PatrolShipsBuilt = f.PatrolShipsBuilt,
-                        Invading = f.Invading, Goodwill = f.Goodwill, TruceUntilTick = f.TruceUntilTick, NextStationTick = f.NextStationTick, MiningAccessUntilTick = f.MiningAccessUntilTick, Race = f.RaceId, RaceView = f.RaceView,
+                        Invading = f.Invading, Goodwill = f.Goodwill, TruceUntilTick = f.TruceUntilTick, NextStationTick = f.NextStationTick, MiningAccessUntilTick = f.MiningAccessUntilTick, PlaysByRace = f.PlaysByRace, Race = f.RaceId, RaceView = f.RaceView,
                     }).ToList()
                     : null,
                 CivilizationRaces = sector.Factions.Any(f => f.Race is { IsCustom: true })
@@ -557,6 +557,7 @@ public static class SaveGameSerializer
                 if (!double.IsFinite(f.Attitude) || !(f.Grievance >= 0) || !(f.Goodwill >= 0)) throw new FormatException($"Civilization {f.Id} has invalid attitude.");
                 sector.RestoreFaction(f.Id, f.Name ?? $"Civilization {f.Id}", f.Culture ?? "", new BodyId(f.HomeStarId), f.Baseline, f.Attitude, f.Grievance, f.NextEventTick, f.Warned, new CraftId(f.RaidGateId), f.RaidEndTick,
                     f.NextPatrolTick, f.PatrolShipsBuilt, f.Goodwill, f.TruceUntilTick, f.NextStationTick, f.Invading).MiningAccessUntilTick = f.MiningAccessUntilTick;
+                sector.FactionById(f.Id)!.PlaysByRace = f.PlaysByRace;
             }
             var civilizationRaces = (dto.CivilizationRaces ?? new List<JsonNode?>()) // copies of the player's own races (#118)
                 .Select(n => RaceCatalog.Check(n?.Deserialize<RaceDefinition>(RaceFiles.Options) ?? throw new FormatException("A civilization's race is empty."), catalog, Laws.All.Select(l => l.Id).ToList())).ToList();
@@ -1071,6 +1072,10 @@ public static class SaveGameSerializer
         /// <summary>v40 (#124).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public long MiningAccessUntilTick { get; set; }
+
+        /// <summary>v41 (#125): older civilizations play as before.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool PlaysByRace { get; set; }
     }
 
     private sealed class EventDto

@@ -115,7 +115,7 @@ public sealed partial class SectorState
         var bearing = Math.Atan2(outward.Y, outward.X) + rng.Range(-0.6, 0.6);
         for (var i = 0; i < ships; i++)
         {
-            var design = ships >= MissileRaidShips && i == ships - 1 ? MissileRaiderDesign : RaiderDesign;
+            var design = ships >= MissileRaidShips && i == ships - 1 ? MissileDesignOf(faction, patrol: false) : GunDesignOf(faction, patrol: false);
             var stats = design.ComputeStats(Parts);
             var angle = bearing + (i - (ships - 1) / 2.0) * 0.02;
             var position = gate.Position + new Vector2D(Math.Cos(angle), Math.Sin(angle)) * RaidArriveM;
@@ -123,9 +123,9 @@ public sealed partial class SectorState
             {
                 FactionId = faction.Id, Velocity = gate.Velocity,
             };
-            raider.Inventory.Add(design == RaiderDesign ? ShellMaterial : MissileMaterial, RaiderShellsKg);
+            Arm(raider);
             AddCraft(raider);
-            DiscoveredKg += (long)Math.Round(stats.TotalMassKg) + RaiderShellsKg; // from outside: the mass ledger stays balanced
+            DiscoveredKg += (long)Math.Round(stats.TotalMassKg); // from outside: the mass ledger stays balanced
         }
         faction.RaidGateId = gate.Id;
         faction.RaidEndTick = Tick + (long)(RaidDurationS * FixedStepClock.TicksPerSecond);

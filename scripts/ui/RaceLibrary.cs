@@ -27,7 +27,8 @@ public static class RaceLibrary
         foreach (var (dir, custom) in new[] { (Dir, false), (UserDir, true) })
             if (DirAccess.DirExistsAbsolute(dir))
                 foreach (var folder in DirAccess.GetDirectoriesAt(dir).OrderBy(f => f, StringComparer.Ordinal))
-                    sources.Add(new RaceSource(folder, Read($"{dir}/{folder}/race.json"), custom ? null : Read($"{dir}/{folder}/ship.json"), custom ? null : Read($"{dir}/{folder}/shipyard.json"), custom));
+                    sources.Add(new RaceSource(folder, Read($"{dir}/{folder}/race.json"), custom ? null : Read($"{dir}/{folder}/ship.json"), custom ? null : Read($"{dir}/{folder}/shipyard.json"), custom,
+                        custom ? null : Read($"{dir}/{folder}/patrol.json"), custom ? null : Read($"{dir}/{folder}/raider.json"), custom ? null : Read($"{dir}/{folder}/trade_station.json")));
         var races = RaceCatalog.Load(sources, catalog, LawIds);
         foreach (var problem in races.Problems) GD.PushWarning($"Race not usable: {problem}");
         return races;

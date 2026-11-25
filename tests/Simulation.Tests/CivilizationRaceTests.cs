@@ -69,9 +69,9 @@ public sealed class CivilizationRaceTests
     }
 
     [Fact]
-    public void Race_changes_only_looks_and_attitude()
+    public void Race_keeps_the_culture_and_changes_goods_only_by_what_it_favours()
     {
-        // With and without races the same culture, goods and prices come of the same seed.
+        // With and without races the same culture comes of the same seed; goods and prices differ only by what the race favours (#125).
         var plain = PartCatalog.FromJson(TestData.Read("data/parts/parts.json"), TestData.Materials(), TestData.Recipes()).WithResearch(TestData.Research());
         for (ulong seed = 1; seed < 10; seed++)
         {
@@ -80,8 +80,9 @@ public sealed class CivilizationRaceTests
             var (f, g) = (a.MeetCivilization(a.Stars[0]), b.MeetCivilization(b.Stars[0]));
             Assert.Equal(("", (RaceDefinition?)null), (g.RaceId, g.Race));
             Assert.Equal((f.Culture.Id, f.Baseline), (g.Culture.Id, g.Baseline));
-            Assert.Equal(a.SellsOf(f), b.SellsOf(g));
-            Assert.Equal(a.ValueTo(f, "metal"), b.ValueTo(g, "metal"));
+            Assert.Empty(a.SellsOf(f).Where(m => SectorState.Favours(f, m)));
+            foreach (var material in new[] { "metal", "electronics", "food" })
+                Assert.Equal(a.ValueTo(f, material), b.ValueTo(g, material) * (SectorState.Favours(f, material) ? CivilizationTraits.FavourFactor : 1), 6);
         }
     }
 
