@@ -49,7 +49,7 @@ public partial class PartCard : PanelContainer
                 StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, TextureFilter = TextureFilterEnum.Nearest, MouseFilter = MouseFilterEnum.Ignore,
             });
             var title = Text($"{part.Name}\n{part.MassKg / 1000:0.##} t", CardWidth * scale - 56);
-            title.AddThemeColorOverride("font_color", UiTheme.Accent);
+            title.ThemeTypeVariation = "SectionHeader";
             top.AddChild(title);
             if (problem is not null) Line("danger", problem, Severity.Bad, scale);
             if (lockedBy is not null) Line("research", $"Needs {lockedBy} researched before it can be built.", Severity.Warning, scale);

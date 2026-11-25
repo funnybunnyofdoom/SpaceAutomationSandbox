@@ -119,6 +119,15 @@ public partial class Main
         return @event is InputEventKey or InputEventJoypadButton or InputEventMouseButton { ButtonIndex: MouseButton.WheelUp or MouseButton.WheelDown };
     }
 
+    /// <summary>The interface takes the race's colour (#97).</summary>
+    private void ShowRace(Construction.RaceDefinition race)
+    {
+        var accent = race.Accent.Length > 0 && race.Id != Construction.RaceCatalog.HumanId && Color.HtmlIsValid(race.Accent) ? new Color(race.Accent) : UiTheme.Cyan;
+        if (accent.IsEqualApprox(UiTheme.Accent)) return;
+        UiTheme.Accent = accent;
+        ApplyTheme();
+    }
+
     /// <summary>The interface theme (#68): text size and a clear focus highlight. Panels set their own titles' sizes.</summary>
     private void ApplyTheme()
     {

@@ -54,7 +54,7 @@ public static class SaveGameSerializer
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 33;
+    public const int SchemaVersion = 34;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -100,6 +100,7 @@ public static class SaveGameSerializer
                 Milestones = sector.MilestonesReached.Count > 0 ? new SortedDictionary<string, long>(sector.MilestonesReached.ToDictionary(m => m.Key, m => m.Value), StringComparer.Ordinal) : null,
                 MilestonesStarted = sector.MilestonesStarted,
                 LargeDesigns = sector.LargeDesigns,
+                Race = sector.Race.Id == RaceCatalog.HumanId ? null : sector.Race.Id,
                 Favourites = sector.Favourites.Any(f => f is not null)
                     ? sector.Favourites.Select((f, i) => (f, i)).Where(x => x.f is not null).Select(x => new FavouriteDto { Slot = x.i + 1, CraftId = x.f!.Target.Craft.Value, BodyId = x.f.Target.Body.Value, Name = x.f.Name }).ToList()
                     : null,
@@ -353,6 +354,8 @@ public static class SaveGameSerializer
         try
         {
             var sector = new SectorState(dto.Seed, dto.Tick) { Recipes = catalog.Recipes, Parts = catalog };
+            if (!catalog.Races.TryGet(dto.Race ?? RaceCatalog.HumanId, out var race)) throw new FormatException($"Unknown race '{dto.Race}'.");
+            sector.Race = race;
             if (dto.Tuning is { } t)
             {
                 sector.Tuning.DrillRateMultiplier = t.DrillRateMultiplier;
@@ -828,6 +831,10 @@ public static class SaveGameSerializer
         /// <summary>v32: large-ship building is open (#111).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool LargeDesigns { get; set; }
+
+        /// <summary>v34: who the player is (#97); omitted for Human.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Race { get; set; }
 
         /// <summary>v33: favourite targets (#109), by slot.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

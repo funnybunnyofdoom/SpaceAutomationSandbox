@@ -48,7 +48,6 @@ public partial class HudCard : PanelContainer
             Flat = true, FocusMode = FocusModeEnum.None, Alignment = HorizontalAlignment.Left, ThemeTypeVariation = "HudHeader", TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, ClipText = true,
             SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter, TooltipText = "Click to fold or unfold",
         };
-        _header.AddThemeColorOverride("font_color", UiTheme.Accent);
         _header.Pressed += () => { toggled(); Set(_data); };
         top.AddChild(_header);
         _rows = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };

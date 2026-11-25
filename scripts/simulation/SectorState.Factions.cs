@@ -54,10 +54,17 @@ public sealed partial class SectorState
         if (_events.Count > MaxEvents) _events.RemoveAt(0);
     }
 
+    /// <summary>Who the player is (#97): Human, as before there were races, unless the game was started as another.</summary>
+    public Construction.RaceDefinition Race { get; internal set; } = Construction.RaceCatalog.HumanOnly.Default;
+
+    /// <summary>Why the player can't pass a law, or null.</summary>
+    public string? LawBlocker(string lawId) => Race.BlockedLaws.GetValueOrDefault(lawId);
+
     public ActionResult SetLaw(string lawId, bool on)
     {
         if (Laws.All.All(l => l.Id != lawId)) return new(false, $"No law '{lawId}'.");
         if (on == _laws.Contains(lawId)) return new(false, $"{Laws.Get(lawId).Name} is already {(on ? "in force" : "off")}.");
+        if (on && LawBlocker(lawId) is { } why) return new(false, why);
         if (on) _laws.Add(lawId); else _laws.Remove(lawId);
         var text = $"{Laws.Get(lawId).Name} {(on ? "enacted" : "repealed")}.";
         AddEvent(text, EventKind.Civilization);
@@ -115,7 +122,7 @@ public sealed partial class SectorState
     {
         rng ??= new DeterministicRandom(Seed ^ (0xFAC7104EUL * (ulong)(_factions.Count + 1)) ^ star.Id.Value);
         var culture = cultureId is null ? Culture.All[(int)(rng.NextUInt64() % (ulong)Culture.All.Count)] : Culture.Get(cultureId);
-        var faction = new Faction(_factions.Count + 1, FactionName(rng), culture.Id, star.Id, baseline ?? Math.Round(rng.Range(-20, 20)))
+        var faction = new Faction(_factions.Count + 1, FactionName(rng), culture.Id, star.Id, (baseline ?? Math.Round(rng.Range(-20, 20))) + Race.Leaning(culture.StanceOn))
         {
             NextEventTick = Tick + (long)(FactionDecisionIntervalS * FixedStepClock.TicksPerSecond),
         };

@@ -126,6 +126,10 @@ public partial class LawsPanel : PanelContainer
         foreach (var (lawId, box, views) in _lawRows)
         {
             box.ButtonPressed = sector.LawActive(lawId);
+            var blocked = sector.LawBlocker(lawId);
+            box.Disabled = blocked is not null && !sector.LawActive(lawId);
+            box.TooltipText = Laws.Get(lawId).Effect + (blocked is null ? "" : $"\n{blocked}");
+            box.Text = Laws.Get(lawId).Name + (blocked is null ? "" : $"  (not for you: {sector.Race.Name})");
             var opinions = sector.Factions
                 .Select(f => (f.Name, Stance: f.Culture.StanceOn(lawId)))
                 .Where(o => o.Stance != 0)

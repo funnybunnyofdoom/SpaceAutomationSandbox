@@ -84,7 +84,7 @@ public partial class JobPanel : PanelContainer
         _title.AddThemeFontSizeOverride("font_size", 18);
         box.AddChild(_title);
 
-        _title.AddThemeColorOverride("font_color", UiTheme.Accent);
+        _title.ThemeTypeVariation = "SectionHeader";
         // The kinds as icons; the list behind them keeps the choice (#103).
         var kindRow = new HFlowContainer();
         _kind = new OptionButton { FocusMode = FocusModeEnum.None, Visible = false };

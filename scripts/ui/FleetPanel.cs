@@ -69,7 +69,7 @@ public partial class FleetPanel : PanelContainer
         AddChild(box);
         _title = new Label { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _title.AddThemeFontSizeOverride("font_size", 18);
-        _title.AddThemeColorOverride("font_color", UiTheme.Accent);
+        _title.ThemeTypeVariation = "SectionHeader";
         var head = new HBoxContainer();
         head.AddChild(_title);
         box.AddChild(head);

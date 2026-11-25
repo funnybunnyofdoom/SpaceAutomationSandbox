@@ -400,7 +400,7 @@ public static class InputActions
     /// <summary>A panel title such as "CARGO  (C to close)" that names the current key, refreshed whenever the panel shows.</summary>
     public static void TitleWithKey(Label label, string title, string action)
     {
-        label.AddThemeColorOverride("font_color", UI.UiTheme.Accent);
+        label.ThemeTypeVariation = "SectionHeader";
         void Set() => label.Text = $"{title}  ({Key1(action)} to close)";
         Set();
         label.VisibilityChanged += Set;

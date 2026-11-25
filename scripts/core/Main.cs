@@ -25,6 +25,7 @@ public partial class Main : Node2D
     private const string PartsPath = "res://data/parts/parts.json";
     private const string RecipesPath = "res://data/recipes/recipes.json";
     private const string ResearchPath = "res://data/research/research.json";
+    private const string RacesPath = "res://data/races/races.json";
     private const string StarterDesignPath = "res://data/blueprints/starter_ship.json";
     private const string StarterShipyardPath = "res://data/blueprints/starter_shipyard.json";
 
@@ -241,6 +242,7 @@ public partial class Main : Node2D
             ShowTitle();
             // Dev/test: choose from the menu without clicking.
             if (System.Array.IndexOf(startArgs, "--title-pick=new") >= 0) LeaveTitle(StartNewGame);
+            if (startArgs.FirstOrDefault(q => q.StartsWith("--window=")) is { } asked && asked["--window=".Length..].Split('x') is [var across, var down]) GetWindow().Size = new Vector2I(int.Parse(across), int.Parse(down)); // dev
             if (System.Array.IndexOf(startArgs, "--title-pick=setup") >= 0) { _uiRoot.MoveChild(_newGame, _uiRoot.GetChildCount() - 1); _newGame.Open(); } // #62 check
             if (System.Array.IndexOf(startArgs, "--title-pick=continue") >= 0) ContinueFromTitle();
             return;
@@ -256,7 +258,7 @@ public partial class Main : Node2D
 
         // Dev/test hooks, e.g. `godot --path . -- --open-editor`: start with a panel open.
         var args = OS.GetCmdlineUserArgs();
-        if (System.Array.IndexOf(args, "--new-game") >= 0) StartNewGame(); // ignores the save; nothing is written
+        if (System.Array.IndexOf(args, "--new-game") >= 0) StartNewGame(NewGame.DefaultSeed, "New game", race: _catalog?.Races.Races.FirstOrDefault(r => System.Array.IndexOf(args, "--race=" + r.Id) >= 0)); // ignores the save; nothing is written
         if (System.Array.IndexOf(args, "--demo-build") >= 0) DemoBuild();
         if (System.Array.IndexOf(args, "--demo-anchor") >= 0 && _player != null)
         {
@@ -490,8 +492,8 @@ public partial class Main : Node2D
             });
         });
         _saveScreen.Closed += () => { if (InMenu) ShowTitle(); else OpenPauseAgain(); };
-        _newGame = new NewGameScreen();
-        _newGame.StartChosen += (name, seed, goals, supplies) => LeaveTitle(() => { StartNewGame(seed, name, supplies); _goalsOn = goals; });
+        _newGame = new NewGameScreen(() => _catalog?.Races ?? RaceCatalog.HumanOnly);
+        _newGame.StartChosen += (name, seed, goals, supplies, race) => LeaveTitle(() => { StartNewGame(seed, name, supplies, race); _goalsOn = goals; });
         _newGame.BackChosen += ShowTitle;
         _pause = new PauseMenu();
         _pause.ResumeChosen += ResumeFromPause;
@@ -574,6 +576,7 @@ public partial class Main : Node2D
     /// <summary>Back to the title screen: the game is let go (no sector, no craft, no panels).</summary>
     private void ReturnToTitle()
     {
+        ShowRace(RaceCatalog.HumanOnly.Default);
         ResumeFromPause();
         _warp.Paused = false;
         _player = null;
@@ -650,6 +653,7 @@ public partial class Main : Node2D
     {
         {
             _sector = loaded.Sector;
+            ShowRace(_sector.Race);
             _lastEventShown = null; // events from before don't show as new (#36)
             _player = loaded.PlayerCraftId.IsNone ? null : _sector.GetCraft(loaded.PlayerCraftId);
             _playTimeS = loaded.Header?.PlayTimeS ?? 0;
@@ -683,6 +687,7 @@ public partial class Main : Node2D
             var recipes = RecipeCatalog.FromJson(Godot.FileAccess.GetFileAsString(RecipesPath), materials);
             var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath), materials, recipes)
                 .WithResearch(ResearchCatalog.FromJson(Godot.FileAccess.GetFileAsString(ResearchPath)));
+            catalog.WithRaces(RaceCatalog.FromJson(Godot.FileAccess.GetFileAsString(RacesPath), catalog)); // #97
             var design = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterDesignPath));
             var shipyard = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterShipyardPath));
             var errors = design.Validate(catalog, DesignRole.Ship)
@@ -761,7 +766,7 @@ public partial class Main : Node2D
     /// <summary>A new game from a seed (#62); the default seed for command-line starts.</summary>
     private void StartNewGame() => StartNewGame(NewGame.DefaultSeed, "New game");
 
-    private void StartNewGame(ulong seed, string name, StartingSupplies supplies = StartingSupplies.Standard)
+    private void StartNewGame(ulong seed, string name, StartingSupplies supplies = StartingSupplies.Standard, RaceDefinition? race = null)
     {
         _gameName = name;
         _goalsOn = false;
@@ -776,8 +781,9 @@ public partial class Main : Node2D
             return;
         }
 
-        var game = NewGame.Create(seed, _catalog, _starterDesign, _starterShipyard, supplies);
+        var game = NewGame.Create(seed, _catalog, _starterDesign, _starterShipyard, supplies, race);
         _sector = game.Sector;
+        ShowRace(_sector.Race);
         _lastEventShown = null; // events from before don't show as new (#36)
         _player = _sector.GetCraft(game.PlayerCraftId);
         _savedTick = -1; // a new game is unsaved until it's saved

@@ -1,5 +1,7 @@
 using System;
 using Godot;
+using System.Collections.Generic;
+using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Simulation;
 
 namespace SpaceAutomationSandbox.UI;
@@ -13,7 +15,7 @@ public partial class NewGameScreen : Control
 {
     /// <summary>Start a game with this name and seed.</summary>
     /// <summary>Start a game with this name and seed; the bool is the goal list for new players (#65); then the starting supplies.</summary>
-    public event Action<string, ulong, bool, StartingSupplies>? StartChosen;
+    public event Action<string, ulong, bool, StartingSupplies, RaceDefinition>? StartChosen;
     public event Action? BackChosen;
 
     private LineEdit _name = null!, _seed = null!;
@@ -21,9 +23,17 @@ public partial class NewGameScreen : Control
     private CheckBox _goals = null!;
     private OptionButton _supplies = null!;
     private readonly Random _random = new();
+    private readonly Func<RaceCatalog> _races;
+    private HBoxContainer _raceRow = null!;
+    private Label _raceInfo = null!, _suppliesTitle = null!;
+    private readonly Dictionary<RaceDefinition, Button> _raceButtons = new();
+    private RaceDefinition _race = RaceCatalog.HumanOnly.Default;
 
-    public NewGameScreen()
+    public NewGameScreen() : this(() => RaceCatalog.HumanOnly) { }
+
+    public NewGameScreen(Func<RaceCatalog> races)
     {
+        _races = races;
         Name = "NewGameScreen";
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Stop;
@@ -64,7 +74,17 @@ public partial class NewGameScreen : Control
         _seedInfo = new Label { Modulate = new Color(1, 1, 1, 0.6f), AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(340, 0) };
         grid.AddChild(_seedInfo);
 
-        grid.AddChild(new Label { Text = "Food and water" });
+        grid.AddChild(new Label { Text = "Race", SizeFlagsVertical = SizeFlags.ShrinkBegin }); // #97
+        _raceRow = new HBoxContainer();
+        _raceRow.AddThemeConstantOverride("separation", 8);
+        var raceBox = new HBoxContainer();
+        raceBox.AddThemeConstantOverride("separation", 14);
+        raceBox.AddChild(_raceRow);
+        _raceInfo = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(320, 0), SizeFlagsVertical = SizeFlags.ShrinkBegin };
+        raceBox.AddChild(_raceInfo); // beside the portraits, so that it fits a small window
+        grid.AddChild(raceBox);
+
+        grid.AddChild(_suppliesTitle = new Label { Text = "Food and water" });
         _supplies = new OptionButton { TooltipText = "What the starting shipyard has for its 4 crew" };
         _supplies.AddItem("Lean: about 3 days");
         _supplies.AddItem("Standard: about 17 days");
@@ -94,9 +114,39 @@ public partial class NewGameScreen : Control
         _supplies.Select((int)StartingSupplies.Standard);
         _seed.Text = RandomSeed().ToString();
         ShowSeed();
+        ListRaces();
         Visible = true;
         _name.GrabFocus();
         _name.SelectAll();
+    }
+
+    private void ListRaces()
+    {
+        foreach (var child in _raceRow.GetChildren()) { _raceRow.RemoveChild(child); child.QueueFree(); }
+        _raceButtons.Clear();
+        var group = new ButtonGroup();
+        foreach (var race in _races().Races)
+        {
+            var path = $"res://assets/art/races/{race.Id}.webp";
+            var button = new Button
+            {
+                Text = race.Name, ToggleMode = true, ButtonGroup = group, SizeFlagsVertical = SizeFlags.ShrinkBegin, Icon = ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null, ExpandIcon = true,
+                IconAlignment = HorizontalAlignment.Center, VerticalIconAlignment = VerticalAlignment.Top, CustomMinimumSize = new Vector2(212, 290), TextureFilter = TextureFilterEnum.LinearWithMipmaps, // painted, not pixel art
+            };
+            button.AddThemeConstantOverride("icon_max_width", 200);
+            button.Pressed += () => ChooseRace(race);
+            _raceRow.AddChild(button);
+            _raceButtons[race] = button;
+        }
+        ChooseRace(_races().Default);
+    }
+
+    private void ChooseRace(RaceDefinition race)
+    {
+        _race = race;
+        _raceButtons[race].SetPressedNoSignal(true);
+        _raceInfo.Text = race.Description + string.Concat(race.Effects.ConvertAll(e => $"\n•  {e}"));
+        _supplies.Visible = _suppliesTitle.Visible = race.Supplies;
     }
 
     private void ShowSeed()
@@ -113,7 +163,7 @@ public partial class NewGameScreen : Control
         var seedText = _seed.Text.Trim();
         var seed = seedText.Length == 0 ? RandomSeed() : NewGame.SeedFromText(seedText);
         Visible = false;
-        StartChosen?.Invoke(name.Length > 0 ? name : "New game", seed, _goals.ButtonPressed, (StartingSupplies)_supplies.Selected);
+        StartChosen?.Invoke(name.Length > 0 ? name : "New game", seed, _goals.ButtonPressed, (StartingSupplies)_supplies.Selected, _race);
     }
 
     private void Back()

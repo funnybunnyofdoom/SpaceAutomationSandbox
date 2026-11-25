@@ -39,7 +39,7 @@ public static class NewGame
     public const long PlayerStartingFuelKg = 150;
 
     /// <summary>People at the home shipyard at the start (#11). Its habitat holds a few more, so they can grow.</summary>
-    public const int StartingCrew = 4;
+    public const int StartingCrew = 4; // Human
 
     /// <summary>Shipyard orbit height above the home planet's surface. Its period is a real circular orbit there (#32).</summary>
     public const double ShipyardAltitudeM = 600; // 300 m above the player's spawn, so it's in view at the start
@@ -85,14 +85,20 @@ public static class NewGame
     }
 
     public static NewGameResult Create(ulong seed, PartCatalog catalog, ShipDesign starterShip, ShipDesign starterShipyard,
-        StartingSupplies supplies = StartingSupplies.Standard)
+        StartingSupplies supplies = StartingSupplies.Standard, RaceDefinition? race = null)
     {
+        race ??= catalog.Races.Default;
+        if (race.ShipyardParts.Count > 0) // #97
+            starterShipyard = new ShipDesign($"{starterShipyard.Id}_{race.Id}", $"{starterShipyard.Name} ({race.Name})",
+                starterShipyard.Cells.Select(c => race.ShipyardParts.TryGetValue(c.PartId, out var instead) ? c with { PartId = instead } : c));
         Require(starterShip.Validate(catalog, DesignRole.Ship), starterShip);
         Require(starterShipyard.Validate(catalog, DesignRole.Station), starterShipyard);
 
         var sector = SectorGenerator.Generate(seed);
         sector.Recipes = catalog.Recipes;
         sector.Parts = catalog;
+        sector.Race = race;
+        if (race.Tech.Count > 0) sector.RestoreResearch(0, race.Tech, allUnlocked: false);
         var primary = SectorGenerator.HomePlanet(sector);
 
         var player = new CraftState(sector.AllocateCraftId(), "Player", starterShip, starterShip.ComputeStats(catalog),
@@ -119,11 +125,14 @@ public static class NewGame
             if (!catalog.Materials.Contains(material)) throw new InvalidOperationException($"Starting stock uses unknown material '{material}'.");
             yard.Inventory.Add(material, kg);
         }
-        var (food, water) = SuppliesKg(supplies);
-        yard.Inventory.Add(SectorState.FoodMaterial, food);
-        yard.Inventory.Add(SectorState.WaterMaterial, water);
+        if (race.Supplies)
+        {
+            var (food, water) = SuppliesKg(supplies);
+            yard.Inventory.Add(SectorState.FoodMaterial, food);
+            yard.Inventory.Add(SectorState.WaterMaterial, water);
+        }
 
-        sector.RestoreCrew(yard.Id, StartingCrew, 0, 0, 0, 0, legacyNoCrew: false);
+        sector.RestoreCrew(yard.Id, race.Crew, 0, 0, 0, 0, legacyNoCrew: false);
         return new NewGameResult(sector, player.Id, yard.Id);
     }
 

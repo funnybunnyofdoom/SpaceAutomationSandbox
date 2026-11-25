@@ -63,7 +63,7 @@ public partial class TradePanel : PanelContainer
         var head = new HBoxContainer();
         var title = new Label { Text = "TRADE AND DIPLOMACY", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         title.AddThemeFontSizeOverride("font_size", 18);
-        title.AddThemeColorOverride("font_color", UiTheme.Accent);
+        title.ThemeTypeVariation = "SectionHeader";
         head.AddChild(title);
         box.AddChild(head);
         box.AddChild(UiTabs.Row(("laws", "Laws", () => LawsChosen?.Invoke()), ("trade", "Trade", null)));

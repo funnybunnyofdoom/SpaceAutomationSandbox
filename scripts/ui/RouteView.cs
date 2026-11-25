@@ -35,7 +35,7 @@ public partial class RouteView : HBoxContainer
                 good.SizeFlagsHorizontal = SizeFlags.ShrinkCenter;
                 arrow.AddChild(good);
                 var line = new Label { Text = "→", HorizontalAlignment = HorizontalAlignment.Center, CustomMinimumSize = new Vector2(46, 0) };
-                line.AddThemeColorOverride("font_color", UiTheme.Accent);
+                line.ThemeTypeVariation = "SectionHeader";
                 arrow.AddChild(line);
                 AddChild(arrow);
             }

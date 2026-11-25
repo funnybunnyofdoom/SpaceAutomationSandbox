@@ -203,6 +203,15 @@ public sealed class PartCatalog
     public RecipeCatalog Recipes { get; }
 
     /// <summary>The tech tree (#37), carried with the parts. Empty: nothing is locked.</summary>
+    /// <summary>Who the player can be (#97).</summary>
+    public RaceCatalog Races { get; private set; } = RaceCatalog.HumanOnly;
+
+    public PartCatalog WithRaces(RaceCatalog races)
+    {
+        Races = races;
+        return this;
+    }
+
     public ResearchCatalog Research { get; private set; } = ResearchCatalog.Empty;
 
     /// <summary>Attaches the tech tree (checked against these parts). Returns this catalog.</summary>

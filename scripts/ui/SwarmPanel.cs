@@ -50,7 +50,7 @@ public partial class SwarmPanel : PanelContainer
         var head = new HBoxContainer();
         var title = new Label { Text = "SWARMS", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         title.AddThemeFontSizeOverride("font_size", 18);
-        title.AddThemeColorOverride("font_color", UiTheme.Accent);
+        title.ThemeTypeVariation = "SectionHeader";
         head.AddChild(title);
         box.AddChild(head);
         box.AddChild(UiTabs.Row(("fleet", "Fleet", () => FleetChosen?.Invoke()), ("swarm", "Swarms", null)));

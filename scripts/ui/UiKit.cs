@@ -34,9 +34,19 @@ public enum Severity { Normal, Muted, Good, Warning, Bad }
 public static class UiTheme
 {
     public const float PanelAlpha = 0.7f;
-    public static readonly Color Accent = new(0.36f, 0.84f, 1f);
+    public static readonly Color Cyan = new(0.36f, 0.84f, 1f);
     public static readonly Color Glass = new(0.02f, 0.04f, 0.08f, PanelAlpha);
-    public static readonly Color Edge = new(0.36f, 0.75f, 1f, 0.35f);
+
+    /// <summary>The interface's colour; a race can have its own (#97). Set before <see cref="Build"/>.</summary>
+    public static Color Accent { get; set; } = Cyan;
+
+    public static Color Edge => Tint(new Color(0.36f, 0.75f, 1f, 0.35f));
+
+    /// <summary>A bar with nothing wrong: duller when the accent is near the warning colour, so the two can't be mistaken.</summary>
+    public static Color Bar => Accent.IsEqualApprox(Cyan) ? Accent : new Color(0.66f, 0.6f, 0.52f);
+
+    /// <summary>One of the theme's blues in the accent's hue.</summary>
+    private static Color Tint(Color blue) => Accent.IsEqualApprox(Cyan) ? blue : Color.FromHsv(Accent.H, blue.S * 0.9f, blue.V, blue.A);
 
     public static Color Of(Severity severity) => severity switch
     {
@@ -68,15 +78,15 @@ public static class UiTheme
         theme.SetStylebox("panel", "PanelContainer", Box(Glass, Edge, 10, 8));
         theme.SetStylebox("panel", "TooltipPanel", Box(new Color(0.03f, 0.05f, 0.09f, 1f), Edge, 8, 5));
         theme.SetStylebox("panel", "PopupMenu", Box(new Color(0.03f, 0.06f, 0.11f, 0.97f), Edge, 6, 6));
-        theme.SetStylebox("hover", "PopupMenu", Box(new Color(0.12f, 0.32f, 0.45f), Colors.Transparent, 4, 2, 0));
+        theme.SetStylebox("hover", "PopupMenu", Box(Tint(new Color(0.12f, 0.32f, 0.45f)), Colors.Transparent, 4, 2, 0));
         theme.SetStylebox("panel", "ItemList", Box(new Color(0, 0, 0, 0.3f), new Color(Edge, 0.2f), 6, 4));
 
         foreach (var type in new[] { "Button", "OptionButton", "MenuButton" })
         {
-            theme.SetStylebox("normal", type, Box(new Color(0.09f, 0.17f, 0.25f, 0.75f), new Color(Edge, 0.3f), 5, 3));
-            theme.SetStylebox("hover", type, Box(new Color(0.12f, 0.27f, 0.38f, 0.9f), new Color(Accent, 0.8f), 5, 3));
-            theme.SetStylebox("pressed", type, Box(new Color(0.1f, 0.4f, 0.55f, 0.95f), Accent, 5, 3));
-            theme.SetStylebox("hover_pressed", type, Box(new Color(0.13f, 0.46f, 0.62f, 0.95f), Accent, 5, 3));
+            theme.SetStylebox("normal", type, Box(Tint(new Color(0.09f, 0.17f, 0.25f, 0.75f)), new Color(Edge, 0.3f), 5, 3));
+            theme.SetStylebox("hover", type, Box(Tint(new Color(0.12f, 0.27f, 0.38f, 0.9f)), new Color(Accent, 0.8f), 5, 3));
+            theme.SetStylebox("pressed", type, Box(Tint(new Color(0.1f, 0.4f, 0.55f, 0.95f)), Accent, 5, 3));
+            theme.SetStylebox("hover_pressed", type, Box(Tint(new Color(0.13f, 0.46f, 0.62f, 0.95f)), Accent, 5, 3));
             theme.SetStylebox("disabled", type, Box(new Color(0.06f, 0.08f, 0.11f, 0.55f), new Color(1, 1, 1, 0.08f), 5, 3));
         }
         foreach (var type in new[] { "CheckBox", "CheckButton" }) // no box of their own
@@ -87,7 +97,7 @@ public static class UiTheme
 
         foreach (var (name, alpha) in new[] { ("tab_selected", 0.9f), ("tab_hovered", 0.6f), ("tab_unselected", 0.3f), ("tab_disabled", 0.15f) })
             foreach (var type in new[] { "TabBar", "TabContainer" })
-                theme.SetStylebox(name, type, Box(new Color(0.1f, 0.28f, 0.4f, alpha), name == "tab_selected" ? Accent : new Color(Edge, 0.2f), 10, 4));
+                theme.SetStylebox(name, type, Box(Tint(new Color(0.1f, 0.28f, 0.4f, alpha)), name == "tab_selected" ? Accent : new Color(Edge, 0.2f), 10, 4));
         theme.SetStylebox("panel", "TabContainer", Box(new Color(0, 0, 0, 0.2f), new Color(Edge, 0.2f), 8, 8));
         theme.SetStylebox("background", "ProgressBar", Box(new Color(0, 0, 0, 0.5f), new Color(Edge, 0.3f), 2, 1, 1, 3));
         theme.SetStylebox("fill", "ProgressBar", Box(new Color(Accent, 0.65f), Colors.Transparent, 0, 0, 0, 3));
@@ -105,6 +115,7 @@ public static class UiTheme
         theme.SetFontSize("font_size", "HudHeader", Mathf.RoundToInt(15 * textScale));
         theme.SetTypeVariation("SectionHeader", "Label");
         theme.SetColor("font_color", "SectionHeader", Accent);
+        theme.SetColor("font_color", "HudHeader", Accent);
         return theme;
     }
 
@@ -148,7 +159,7 @@ public partial class StatBar : Control
 
     public override void _Draw()
     {
-        var fill = _severity == Severity.Normal ? UiTheme.Accent : UiTheme.Of(_severity);
+        var fill = _severity == Severity.Normal ? UiTheme.Bar : UiTheme.Of(_severity);
         DrawRect(new Rect2(Vector2.Zero, Size), new Color(0, 0, 0, 0.5f));
         DrawRect(new Rect2(0, 0, Size.X * (float)_fraction, Size.Y), new Color(fill, 0.42f));
         DrawRect(new Rect2(0, Size.Y - 2, Size.X * (float)_fraction, 2), fill);

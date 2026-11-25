@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "races": [
+    {
+      "id": "human",
+      "name": "Human",
+      "description": "People, with everything people need.",
+      "effects": [
+        "4 crew at the shipyard, with food and water",
+        "Crew grow slowly in habitats, or are recruited for food and water",
+        "Robot bays after researching Automation"
+      ],
+      "crew": 4,
+      "supplies": true,
+      "accent": "#5cd6ff"
+    },
+    {
+      "id": "robotic",
+      "name": "Robotic",
+      "description": "Machines that run on power alone.",
+      "effects": [
+        "4 robots at the shipyard; robots need power, never food or water",
+        "Automation (robot bays, repair drones) is already researched",
+        "No food or water at the start; you can still build habitats and recruit people",
+        "Civilizations that want organic crews are 20 colder, those against it 10 warmer",
+        "Can't pass the Organic crews only law"
+      ],
+      "crew": 0,
+      "supplies": false,
+      "shipyardParts": { "habitat": "robot_bay" },
+      "tech": ["automation"],
+      "blockedLaws": { "organic_crews": "You are robots: it would stop your own craft." },
+      "leanings": { "organic_crews": { "wants": -20, "opposes": 10 } },
+      "accent": "#e8a33d"
+    }
+  ]
+}
