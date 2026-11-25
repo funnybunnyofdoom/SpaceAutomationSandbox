@@ -44,6 +44,13 @@ public sealed record RaceDefinition
     public string Name { get; init; } = "";
     public string Description { get; init; } = "";
 
+    /// <summary>A race of the player's own (#117): the built-in race whose portrait it has, "plain", or empty for its own picture.</summary>
+    public string Picture { get; init; } = "";
+
+    /// <summary>One the player made (#117): its id says so.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsCustom => Id.StartsWith(RaceFiles.CustomPrefix, StringComparison.Ordinal);
+
     /// <summary>Place in the list; the same: by id. Human is always first.</summary>
     public int Order { get; init; } = 100;
 
@@ -100,13 +107,14 @@ public sealed record RaceDefinition
 }
 
 /// <summary>A race's files: its folder's name and what's in it.</summary>
-public sealed record RaceSource(string Folder, string? Race, string? Ship = null, string? Shipyard = null);
+public sealed record RaceSource(string Folder, string? Race, string? Ship = null, string? Shipyard = null, bool Custom = false);
 
 /// <summary>The races, Human first; the default, and what older saves play. A race that can't be used is left out, with the reason.</summary>
 public sealed class RaceCatalog
 {
     public const int SchemaVersion = 2;
     public const string HumanId = "human";
+    public const int MaxName = 40, MaxDescription = 200;
 
     /// <summary>Human alone, as the game played before races (bare tests, tools, and if its own file can't be used).</summary>
     public static readonly RaceCatalog HumanOnly = new(new[] { new RaceDefinition { SchemaVersion = SchemaVersion, Id = HumanId, Name = "Human", Crew = 4, Supplies = true } }, Array.Empty<string>());
@@ -115,7 +123,7 @@ public sealed class RaceCatalog
 
     private RaceCatalog(IEnumerable<RaceDefinition> races, IReadOnlyList<string> problems)
     {
-        _races = races.OrderBy(r => r.Id != HumanId).ThenBy(r => r.Order).ThenBy(r => r.Id, StringComparer.Ordinal).ToList();
+        _races = races.OrderBy(r => r.Id != HumanId).ThenBy(r => r.IsCustom).ThenBy(r => r.Order).ThenBy(r => r.Id, StringComparer.Ordinal).ToList();
         Problems = problems;
     }
 
@@ -141,14 +149,20 @@ public sealed class RaceCatalog
         return new RaceCatalog(races, problems);
     }
 
+    /// <summary>Checks a race wherever it came from; what's left out of it is empty, not missing.</summary>
     /// <exception cref="FormatException">It can't be used; the message says why.</exception>
-    public static RaceDefinition Read(RaceSource source, PartCatalog catalog, IReadOnlyCollection<string> laws)
+    public static RaceDefinition Check(RaceDefinition given, PartCatalog catalog, IReadOnlyCollection<string> laws)
     {
-        if (source.Race is null) throw new FormatException("it has no race.json.");
-        var race = JsonSerializer.Deserialize<RaceDefinition>(source.Race, PartCatalog.JsonOptions) ?? throw new FormatException("race.json is empty.");
+        var race = given with
+        {
+            Name = given.Name ?? "", Description = given.Description ?? "", Accent = given.Accent ?? "", Picture = given.Picture ?? "", Notes = given.Notes ?? new(), Traits = given.Traits ?? new(), StockKg = given.StockKg ?? new(),
+            ShipyardParts = given.ShipyardParts ?? new(), Tech = given.Tech ?? new(), BlockedLaws = given.BlockedLaws ?? new(), Leanings = given.Leanings ?? new(), GoalHints = given.GoalHints ?? new(),
+            ShipName = given.ShipName ?? "", ShipyardName = given.ShipyardName ?? "",
+        };
+        if (race.Leanings.Values.Any(l => l is null) || race.Tech.Any(t => t is null) || race.ShipyardParts.Values.Any(p => p is null)) throw new FormatException("something in it is empty.");
         if (race.SchemaVersion != SchemaVersion) throw new FormatException($"race.json is schemaVersion {race.SchemaVersion}; this build reads {SchemaVersion}.");
-        if (race.Id != source.Folder) throw new FormatException($"its id is '{race.Id}'; it must be the folder's name.");
         if (string.IsNullOrWhiteSpace(race.Name)) throw new FormatException("it has no name.");
+        if (race.Name.Length > MaxName || race.ShipName.Length > MaxName || race.ShipyardName.Length > MaxName || race.Description.Length > MaxDescription) throw new FormatException($"names have at most {MaxName} characters, descriptions {MaxDescription}.");
         if (race.Crew < 0) throw new FormatException("crew can't be below 0.");
         if (race.Accent.Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(race.Accent, "^#[0-9a-fA-F]{6}$")) throw new FormatException($"accent '{race.Accent}' isn't #rrggbb.");
         if (string.IsNullOrWhiteSpace(race.ShipName) || string.IsNullOrWhiteSpace(race.ShipyardName)) throw new FormatException("the ship and the shipyard need names.");
@@ -165,6 +179,19 @@ public sealed class RaceCatalog
             if (!catalog.Materials.Contains(material)) throw new FormatException($"unknown material '{material}'.");
         foreach (var law in race.BlockedLaws.Keys.Concat(race.Leanings.Keys))
             if (!laws.Contains(law)) throw new FormatException($"unknown law '{law}'.");
+        return race;
+    }
+
+    /// <summary>Reads a race's folder.</summary>
+    /// <exception cref="FormatException">It can't be used; the message says why.</exception>
+    public static RaceDefinition Read(RaceSource source, PartCatalog catalog, IReadOnlyCollection<string> laws)
+    {
+        if (source.Race is null) throw new FormatException("it has no race.json.");
+        var race = JsonSerializer.Deserialize<RaceDefinition>(source.Race, PartCatalog.JsonOptions) ?? throw new FormatException("race.json is empty.");
+        if (race.Id != source.Folder) throw new FormatException($"its id is '{race.Id}'; it must be the folder's name.");
+        if (race.IsCustom != source.Custom) throw new FormatException(source.Custom ? $"the id of a race of yours starts with '{RaceFiles.CustomPrefix}'." : $"only the player's own races' ids start with '{RaceFiles.CustomPrefix}'.");
+        race = Check(race, catalog, laws);
+        if (source.Custom && RaceFiles.Problem(race) is { } problem) throw new FormatException(problem);
         return race with
         {
             Ship = Design(source.Ship, "ship.json", DesignRole.Ship),

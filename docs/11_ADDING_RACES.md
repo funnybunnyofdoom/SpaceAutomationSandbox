@@ -38,3 +38,9 @@ A race is a folder in `data/races/`. Add one and it's in the New Game screen; no
 | `recruitCost` | recruiting costs more |
 
 Traits apply to the player's own craft only. They're read from these files each time, so changing a race changes games already played with it.
+
+## The player's own races (#117)
+
+The race creator, on the New Game screen, makes these without files. They're kept in `user://races/<id>/` in the same format, with ids that start with `custom_`, and `picture` (a built-in race's id, `plain`, or empty for `portrait.webp` beside it). Beyond the rules above, the shipyard must work from the start: 2 to 6 crew with food and water, or a robot bay and no crew. A race can be exported to one file with its picture (`kind: race`, version 1) and imported again. A game keeps its own copy of such a race, so changing or deleting it changes no game.
+
+Points: a race has 8. 5% of mining, building, refining, research or machines' power costs 1 for the better; crew supplies and growth 0.5; recruiting 0.25. Also: a crew member over 4, 1; robots instead of the habitat, 6; tech, its cost / 40; 10 points of civilizations' views, 1; stock by the tonne (electronics 0.75, composites 0.6, fuel 0.3, metal 0.2, slag 0.05). For the worse gives them back; no food and water gives 2, a law it can't pass 1. Over 8 it's only marked unbalanced.

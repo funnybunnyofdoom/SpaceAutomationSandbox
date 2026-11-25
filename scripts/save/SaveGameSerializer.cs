@@ -54,7 +54,7 @@ public static class SaveGameSerializer
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 34;
+    public const int SchemaVersion = 35;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -100,7 +100,8 @@ public static class SaveGameSerializer
                 Milestones = sector.MilestonesReached.Count > 0 ? new SortedDictionary<string, long>(sector.MilestonesReached.ToDictionary(m => m.Key, m => m.Value), StringComparer.Ordinal) : null,
                 MilestonesStarted = sector.MilestonesStarted,
                 LargeDesigns = sector.LargeDesigns,
-                Race = sector.Race.Id == RaceCatalog.HumanId ? null : sector.Race.Id,
+                Race = sector.Race.Id == RaceCatalog.HumanId || sector.Race.IsCustom ? null : sector.Race.Id,
+                CustomRace = sector.Race.IsCustom ? JsonSerializer.SerializeToNode(sector.Race, RaceFiles.Options) : null,
                 Favourites = sector.Favourites.Any(f => f is not null)
                     ? sector.Favourites.Select((f, i) => (f, i)).Where(x => x.f is not null).Select(x => new FavouriteDto { Slot = x.i + 1, CraftId = x.f!.Target.Craft.Value, BodyId = x.f.Target.Body.Value, Name = x.f.Name }).ToList()
                     : null,
@@ -354,8 +355,14 @@ public static class SaveGameSerializer
         try
         {
             var sector = new SectorState(dto.Seed, dto.Tick) { Recipes = catalog.Recipes, Parts = catalog };
-            if (!catalog.Races.TryGet(dto.Race ?? RaceCatalog.HumanId, out var race)) throw new FormatException($"This game is played as the race '{dto.Race}', which isn't installed or can't be used (data/races/{dto.Race}).");
-            sector.Race = race;
+            if (dto.CustomRace is { } own) // the game keeps its own copy (#117)
+            {
+                var custom = RaceCatalog.Check(own.Deserialize<RaceDefinition>(RaceFiles.Options) ?? throw new FormatException("The save's race is empty."), catalog, Laws.All.Select(l => l.Id).ToList());
+                if (!custom.IsCustom) throw new FormatException($"The save's own race has the id of another: '{custom.Id}'.");
+                sector.Race = custom;
+            }
+            else if (!catalog.Races.TryGet(dto.Race ?? RaceCatalog.HumanId, out var race)) throw new FormatException($"This game is played as the race '{dto.Race}', which isn't installed or can't be used (data/races/{dto.Race}).");
+            else sector.Race = race;
             if (dto.Tuning is { } t)
             {
                 sector.Tuning.DrillRateMultiplier = t.DrillRateMultiplier;
@@ -835,6 +842,10 @@ public static class SaveGameSerializer
         /// <summary>v34: who the player is (#97); omitted for Human.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Race { get; set; }
+
+        /// <summary>v35: a race the player made (#117), as it was when the game started.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public JsonNode? CustomRace { get; set; }
 
         /// <summary>v33: favourite targets (#109), by slot.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

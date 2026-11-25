@@ -53,6 +53,7 @@ public static class SaveMigrations
         [31] = ("v32 added large-ship building: opens in an older game once a Fabricator Mk3 works", (_, _) => { }),
         [32] = ("v33 added favourite targets and names given to bodies: none in older games", (_, _) => { }),
         [33] = ("v34 added races: older games are Human", (_, _) => { }),
+        [34] = ("v35 added races of the player's own: older games have none", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

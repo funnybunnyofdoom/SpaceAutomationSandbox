@@ -242,6 +242,7 @@ public partial class Main : Node2D
             // Dev/test: choose from the menu without clicking.
             if (System.Array.IndexOf(startArgs, "--title-pick=new") >= 0) LeaveTitle(StartNewGame);
             if (startArgs.FirstOrDefault(q => q.StartsWith("--window=")) is { } asked && asked["--window=".Length..].Split('x') is [var across, var down]) GetWindow().Size = new Vector2I(int.Parse(across), int.Parse(down)); // dev
+            if (System.Array.IndexOf(startArgs, "--title-pick=races") >= 0 && _catalog.Races.Races.FirstOrDefault(r => System.Array.IndexOf(startArgs, "--race=" + r.Id) >= 0) is { } raceArg) { _uiRoot.MoveChild(_raceCreator, _uiRoot.GetChildCount() - 1); _raceCreator.Open(raceArg); } // dev (#117)
             if (System.Array.IndexOf(startArgs, "--title-pick=setup") >= 0) { _uiRoot.MoveChild(_newGame, _uiRoot.GetChildCount() - 1); _newGame.Open(); } // #62 check
             if (System.Array.IndexOf(startArgs, "--title-pick=continue") >= 0) ContinueFromTitle();
             return;
@@ -466,6 +467,7 @@ public partial class Main : Node2D
     private string _gameName = "New game";
 
     private NewGameScreen _newGame = null!;
+    private RaceCreatorScreen _raceCreator = null!;
 
     /// <summary>Shown while a save loads (#67).</summary>
     private LoadingScreen _loadingScreen = null!;
@@ -491,7 +493,12 @@ public partial class Main : Node2D
             });
         });
         _saveScreen.Closed += () => { if (InMenu) ShowTitle(); else OpenPauseAgain(); };
-        _newGame = new NewGameScreen(() => _catalog?.Races ?? RaceCatalog.HumanOnly, race => _catalog is { } c ? SectorState.Describe(race, c) : System.Array.Empty<string>());
+        _newGame = new NewGameScreen(() => _catalog?.Races ?? RaceCatalog.HumanOnly, race => _catalog is { } c ? SectorState.Describe(race, c) : System.Array.Empty<string>(),
+            race => _catalog is { } c && race.IsCustom && RacePoints.Unbalanced(race, c));
+        _raceCreator = new RaceCreatorScreen(() => _catalog, (question, choices) => { _uiRoot.MoveChild(_confirm, _uiRoot.GetChildCount() - 1); _confirm.Ask(question, choices); }); // #117
+        _raceCreator.Changed += () => { if (_catalog is { } c) c.WithRaces(RaceLibrary.Load(c)); };
+        _raceCreator.Closed += id => _newGame.Return(id);
+        _newGame.CreatorChosen += race => { _uiRoot.MoveChild(_raceCreator, _uiRoot.GetChildCount() - 1); _raceCreator.Open(race); };
         _newGame.StartChosen += (name, seed, goals, supplies, race) => LeaveTitle(() => { StartNewGame(seed, name, supplies, race); _goalsOn = goals; });
         _newGame.BackChosen += ShowTitle;
         _pause = new PauseMenu();
@@ -514,6 +521,7 @@ public partial class Main : Node2D
         _uiRoot.AddChild(_pause);
         _uiRoot.AddChild(_saveScreen);
         _uiRoot.AddChild(_newGame);
+        _uiRoot.AddChild(_raceCreator);
         if (_settingsPanel != null) _uiRoot.MoveChild(_settingsPanel, _uiRoot.GetChildCount() - 1);
         _uiRoot.AddChild(_confirm);
         _loadingScreen = new LoadingScreen(); // over everything (#67)

@@ -80,7 +80,7 @@ public partial class Main
         _panelsWidth = -right; // what the edge arrows keep clear of (#101)
 
         // Only the topmost menu shows. Those under it keep their state and focus, and come back when it closes.
-        var screens = new Control?[] { _title, _pause, _newGame, _saveScreen, _settingsPanel, _controls, _confirm, _loadingScreen };
+        var screens = new Control?[] { _title, _pause, _newGame, _raceCreator, _saveScreen, _settingsPanel, _controls, _confirm, _loadingScreen };
         var top = System.Array.FindLastIndex(screens, s => s is { Visible: true });
         for (var i = 0; i < screens.Length; i++)
             if (screens[i] is { } screen && screen != _loadingScreen) SetBeneath(screen == _settingsPanel ? screen : Content(screen), i < top);

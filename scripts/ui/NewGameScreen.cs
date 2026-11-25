@@ -19,6 +19,9 @@ public partial class NewGameScreen : Control
     public event Action<string, ulong, bool, StartingSupplies, RaceDefinition>? StartChosen;
     public event Action? BackChosen;
 
+    /// <summary>Make a race from this one, or change it if it's the player's (#117).</summary>
+    public event Action<RaceDefinition>? CreatorChosen;
+
     private LineEdit _name = null!, _seed = null!;
     private Label _seedInfo = null!;
     private CheckBox _goals = null!;
@@ -26,19 +29,22 @@ public partial class NewGameScreen : Control
     private readonly Random _random = new();
     private readonly Func<RaceCatalog> _races;
     private readonly Func<RaceDefinition, IReadOnlyList<string>> _describe;
+    private readonly Func<RaceDefinition, bool> _unbalanced;
     private HBoxContainer _raceRow = null!;
     private ScrollContainer _raceScroll = null!, _infoScroll = null!;
     private Label _raceInfo = null!, _suppliesTitle = null!;
     private readonly Dictionary<RaceDefinition, Button> _raceButtons = new();
     private Label _raceProblems = null!;
+    private Button _creator = null!;
     private RaceDefinition _race = RaceCatalog.HumanOnly.Default;
 
-    public NewGameScreen() : this(() => RaceCatalog.HumanOnly, _ => Array.Empty<string>()) { }
+    public NewGameScreen() : this(() => RaceCatalog.HumanOnly, _ => Array.Empty<string>(), _ => false) { }
 
-    public NewGameScreen(Func<RaceCatalog> races, Func<RaceDefinition, IReadOnlyList<string>> describe)
+    public NewGameScreen(Func<RaceCatalog> races, Func<RaceDefinition, IReadOnlyList<string>> describe, Func<RaceDefinition, bool> unbalanced)
     {
         _races = races;
         _describe = describe;
+        _unbalanced = unbalanced;
         Name = "NewGameScreen";
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Stop;
@@ -88,9 +94,14 @@ public partial class NewGameScreen : Control
         _raceScroll.AddChild(_raceRow); // more races than fit (#116)
         raceBox.AddChild(_raceScroll);
         _raceInfo = new Label { ThemeTypeVariation = "HudText", AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(320, 0), SizeFlagsVertical = SizeFlags.ShrinkBegin };
-        _infoScroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, CustomMinimumSize = new Vector2(336, 0) };
+        var besideRaces = new VBoxContainer();
+        _infoScroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, CustomMinimumSize = new Vector2(336, 0) };
         _infoScroll.AddChild(_raceInfo);
-        raceBox.AddChild(_infoScroll); // beside the portraits, so that it fits a small window
+        besideRaces.AddChild(_infoScroll);
+        _creator = new Button { TooltipText = "Opens the race creator" };
+        _creator.Pressed += () => { Visible = false; CreatorChosen?.Invoke(_race); };
+        besideRaces.AddChild(_creator);
+        raceBox.AddChild(besideRaces); // beside the portraits, so that it fits a small window
         grid.AddChild(raceBox);
         _raceProblems = new Label { ThemeTypeVariation = "HudText", AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(460, 0) };
 
@@ -131,6 +142,16 @@ public partial class NewGameScreen : Control
         _name.SelectAll();
     }
 
+    /// <summary>Back from the race creator: what was typed stays, and the race made there is chosen.</summary>
+    public void Return(string? raceId)
+    {
+        ListRaces();
+        if (_raceButtons.Keys.FirstOrDefault(r => r.Id == raceId) is { } race) ChooseRace(race);
+        Visible = true;
+        _raceButtons[_race].GrabFocus();
+        _raceScroll.EnsureControlVisible(_raceButtons[_race]);
+    }
+
     private void ListRaces()
     {
         foreach (var child in _raceRow.GetChildren()) { _raceRow.RemoveChild(child); child.QueueFree(); }
@@ -140,7 +161,7 @@ public partial class NewGameScreen : Control
         {
             var button = new Button
             {
-                Text = race.Name, ToggleMode = true, ButtonGroup = group, SizeFlagsVertical = SizeFlags.ShrinkBegin, Icon = RaceLibrary.Portrait(race), ExpandIcon = true,
+                Text = race.Name + (_unbalanced(race) ? " (unbalanced)" : ""), ClipText = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, TooltipText = race.Name, ToggleMode = true, ButtonGroup = group, SizeFlagsVertical = SizeFlags.ShrinkBegin, Icon = RaceLibrary.Portrait(race), ExpandIcon = true,
                 IconAlignment = HorizontalAlignment.Center, VerticalIconAlignment = VerticalAlignment.Top, CustomMinimumSize = new Vector2(172, 240), TextureFilter = TextureFilterEnum.LinearWithMipmaps, // painted, not pixel art
             };
             button.AddThemeConstantOverride("icon_max_width", 160);
@@ -160,6 +181,7 @@ public partial class NewGameScreen : Control
     {
         _race = race;
         _raceButtons[race].SetPressedNoSignal(true);
+        _creator.Text = race.IsCustom ? $"Change {race.Name}..." : $"Make a race from {race.Name}...";
         _raceInfo.Text = race.Description + string.Concat(_describe(race).Select(e => $"\n•  {e}"));
         _supplies.Visible = _suppliesTitle.Visible = race.Supplies;
     }
