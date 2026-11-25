@@ -269,12 +269,8 @@ public partial class BlueprintGridCanvas : Control
         if (Stamp is not null)
         {
             if (button == MouseButton.Right) { SetStamp(null); return; }
-            var placed = StampAt(cell);
-            if (!_model.PlaceAll(placed)) { Refused?.Invoke("It doesn't fit the grid there, or nothing would change."); return; }
-            _model.Selection.Clear();
-            _model.Selection.UnionWith(placed.Select(c => c.Pos));
-            SelectionChanged?.Invoke();
-            Edited?.Invoke();
+            (_dragButton, _from) = (button, cell); // a drag repeats it (#113)
+            QueueRedraw();
             return;
         }
         if (Tool == GridTool.Select)
@@ -304,6 +300,17 @@ public partial class BlueprintGridCanvas : Control
     {
         var button = _dragButton;
         _dragButton = MouseButton.None;
+        if (Stamp is not null)
+        {
+            var placed = StampAt(_from, cell);
+            QueueRedraw();
+            if (!_model.PlaceAll(placed)) { Refused?.Invoke("It doesn't fit the grid there, or nothing would change."); return; }
+            _model.Selection.Clear();
+            _model.Selection.UnionWith(placed.Select(c => c.Pos));
+            SelectionChanged?.Invoke();
+            Edited?.Invoke();
+            return;
+        }
         if (Tool == GridTool.Draw)
         {
             _model.EndStroke();
@@ -346,15 +353,17 @@ public partial class BlueprintGridCanvas : Control
         _layer.QueueRedraw();
     }
 
-    private IReadOnlyList<DesignCell> StampAt(GridPos cell) =>
-        Stamp is { } stamp ? stamp.Select(c => c with { Pos = new GridPos(cell.X + c.Pos.X, cell.Y + c.Pos.Y) }).ToList() : Array.Empty<DesignCell>();
+    private IReadOnlyList<DesignCell> StampAt(GridPos from, GridPos to) =>
+        Stamp is { } stamp
+            ? BlueprintTools.Repeated(stamp, from, to).SelectMany(c => BlueprintTools.Mirrored(c, _model.MirrorLeftRight, _model.MirrorFrontBack)).DistinctBy(c => c.Pos).ToList()
+            : Array.Empty<DesignCell>();
 
     /// <summary>What letting go (or clicking) here would do: parts placed and cells emptied.</summary>
     private (IReadOnlyList<DesignCell> Placed, IReadOnlyList<GridPos> Removed) Pending()
     {
         var nothing = (Array.Empty<DesignCell>(), Array.Empty<GridPos>());
         if (_hover is not { } hover || _model.IsLocked) return nothing;
-        if (Stamp is not null) return (StampAt(hover), Array.Empty<GridPos>());
+        if (Stamp is not null) return (StampAt(_dragButton == MouseButton.Left ? _from : hover, hover), Array.Empty<GridPos>());
         if (Tool == GridTool.Select)
         {
             if (!_movingSelection || _dragButton == MouseButton.None) return nothing;
@@ -394,7 +403,7 @@ public partial class BlueprintGridCanvas : Control
         {
             var fits = _model.InBounds(cell.Pos);
             off |= !fits;
-            if (fits && !(_dragButton == MouseButton.Left && Tool == GridTool.Draw)) DrawPartSprite(this, cell.PartId, cell.Rotation, CellOrigin(cell.Pos), new Color(1, 1, 1, 0.45f));
+            if (fits && (Stamp is not null || !(_dragButton == MouseButton.Left && Tool == GridTool.Draw))) DrawPartSprite(this, cell.PartId, cell.Rotation, CellOrigin(cell.Pos), new Color(1, 1, 1, 0.45f));
             if (CellPx >= 8 || !fits) DrawRect(new Rect2(CellOrigin(cell.Pos), new Vector2(CellPx, CellPx)), fits ? (_model.Cells.ContainsKey(cell.Pos) && Stamp is not null ? Palette.Warning with { A = 0.9f } : HoverPlace) : HoverErase, false, 2);
             if (!fits) Cross(cell.Pos);
         }

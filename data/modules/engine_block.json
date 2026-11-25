@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "kind": "module",
+  "name": "Engine block",
+  "cells": [
+    {"x": 0, "y": 0, "part": "hull"},
+    {"x": 1, "y": 0, "part": "hull"},
+    {"x": 2, "y": 0, "part": "hull"},
+    {"x": 3, "y": 0, "part": "hull"},
+    {"x": 4, "y": 0, "part": "hull"},
+    {"x": 0, "y": 1, "part": "battery"},
+    {"x": 1, "y": 1, "part": "thruster"},
+    {"x": 2, "y": 1, "part": "hull"},
+    {"x": 3, "y": 1, "part": "thruster"},
+    {"x": 4, "y": 1, "part": "battery"},
+    {"x": 0, "y": 2, "part": "thruster"},
+    {"x": 1, "y": 2, "part": "thruster"},
+    {"x": 2, "y": 2, "part": "thruster"},
+    {"x": 3, "y": 2, "part": "thruster"},
+    {"x": 4, "y": 2, "part": "thruster"}
+  ]
+}

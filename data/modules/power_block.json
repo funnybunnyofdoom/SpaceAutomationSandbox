@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "kind": "module",
+  "name": "Power block",
+  "cells": [
+    {"x": 0, "y": 0, "part": "solar_panel"},
+    {"x": 1, "y": 0, "part": "solar_panel"},
+    {"x": 2, "y": 0, "part": "solar_panel"},
+    {"x": 0, "y": 1, "part": "solar_panel"},
+    {"x": 1, "y": 1, "part": "battery"},
+    {"x": 2, "y": 1, "part": "solar_panel"},
+    {"x": 0, "y": 2, "part": "solar_panel"},
+    {"x": 1, "y": 2, "part": "hull"},
+    {"x": 2, "y": 2, "part": "solar_panel"},
+    {"x": 0, "y": 3, "part": "solar_panel"},
+    {"x": 1, "y": 3, "part": "battery"},
+    {"x": 2, "y": 3, "part": "solar_panel"},
+    {"x": 0, "y": 4, "part": "solar_panel"},
+    {"x": 1, "y": 4, "part": "solar_panel"},
+    {"x": 2, "y": 4, "part": "solar_panel"}
+  ]
+}

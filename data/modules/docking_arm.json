@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "kind": "module",
+  "name": "Docking arm",
+  "cells": [
+    {"x": 0, "y": 0, "part": "docking_port"},
+    {"x": 0, "y": 1, "part": "hull"},
+    {"x": 0, "y": 2, "part": "hull"},
+    {"x": 0, "y": 3, "part": "hull"},
+    {"x": 0, "y": 4, "part": "hull"}
+  ]
+}

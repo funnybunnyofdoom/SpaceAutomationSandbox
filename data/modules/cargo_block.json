@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "kind": "module",
+  "name": "Cargo block",
+  "cells": [
+    {"x": 0, "y": 0, "part": "cargo"},
+    {"x": 1, "y": 0, "part": "cargo"},
+    {"x": 2, "y": 0, "part": "cargo"},
+    {"x": 0, "y": 1, "part": "cargo"},
+    {"x": 1, "y": 1, "part": "hull"},
+    {"x": 2, "y": 1, "part": "cargo"},
+    {"x": 0, "y": 2, "part": "cargo"},
+    {"x": 1, "y": 2, "part": "cargo"},
+    {"x": 2, "y": 2, "part": "cargo"}
+  ]
+}

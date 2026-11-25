@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "kind": "module",
+  "name": "Mining head",
+  "cells": [
+    {"x": 0, "y": 0, "part": "drill"},
+    {"x": 2, "y": 0, "part": "drill"},
+    {"x": 4, "y": 0, "part": "drill"},
+    {"x": 0, "y": 1, "part": "hull"},
+    {"x": 1, "y": 1, "part": "hull"},
+    {"x": 2, "y": 1, "part": "hull"},
+    {"x": 3, "y": 1, "part": "hull"},
+    {"x": 4, "y": 1, "part": "hull"},
+    {"x": 1, "y": 2, "part": "battery"},
+    {"x": 2, "y": 2, "part": "hull"},
+    {"x": 3, "y": 2, "part": "battery"}
+  ]
+}

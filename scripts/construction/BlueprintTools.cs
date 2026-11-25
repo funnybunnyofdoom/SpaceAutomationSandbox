@@ -80,6 +80,25 @@ public static class BlueprintTools
         return list.Select(c => c with { Pos = new GridPos(c.Pos.X - x, c.Pos.Y - y) }).OrderBy(c => c.Pos.Y).ThenBy(c => c.Pos.X).ToList();
     }
 
+    /// <summary>
+    /// A stamp (its corner at (0, 0)) put down at a cell and side by side towards another, along whichever way it's further (#113).
+    /// </summary>
+    public static IReadOnlyList<DesignCell> Repeated(IReadOnlyList<DesignCell> stamp, GridPos from, GridPos to)
+    {
+        if (stamp.Count == 0) return stamp;
+        var (width, height) = (stamp.Max(c => c.Pos.X) + 1, stamp.Max(c => c.Pos.Y) + 1);
+        var (dx, dy) = (to.X - from.X, to.Y - from.Y);
+        var across = Math.Abs(dx) >= Math.Abs(dy);
+        var (size, along) = across ? (width, dx) : (height, dy);
+        var cells = new List<DesignCell>();
+        for (var i = 0; i <= Math.Abs(along) / size; i++)
+        {
+            var step = i * size * Math.Sign(along);
+            foreach (var c in stamp) cells.Add(c with { Pos = new GridPos(from.X + c.Pos.X + (across ? step : 0), from.Y + c.Pos.Y + (across ? 0 : step)) });
+        }
+        return cells;
+    }
+
     /// <summary>A quarter turn clockwise, parts and all, with the corner at (0, 0).</summary>
     public static IReadOnlyList<DesignCell> Turned(IEnumerable<DesignCell> cells) =>
         ToCorner(cells.Select(c => new DesignCell(new GridPos(-c.Pos.Y, c.Pos.X), c.PartId, (c.Rotation + 1) & 3)));

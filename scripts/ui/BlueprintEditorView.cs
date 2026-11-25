@@ -72,6 +72,7 @@ public partial class BlueprintEditorView : Control
         RefreshLoadList();
         // Research changes over time: mark the parts that can't be built yet (they can still be planned with).
         FilterPalette();
+        if (_modulesBox.Visible) ListModules();
         Visible = true;
         if (_usingButtons) UseButtons(false);
         RefreshLarge();
@@ -101,10 +102,11 @@ public partial class BlueprintEditorView : Control
         columns.AddChild(left);
         _left = left;
         left.AddChild(Heading("BLUEPRINT EDITOR"));
+        BuildModules(left);
         // Categories (#102): all, then one icon each.
         var categories = new HFlowContainer();
         categories.AddThemeConstantOverride("h_separation", 3);
-        left.AddChild(categories);
+        _partsBox.AddChild(categories);
         var categoryGroup = new ButtonGroup();
         foreach (var (name, icon) in PartFacts.Categories.Prepend(("", "map")))
         {
@@ -120,12 +122,12 @@ public partial class BlueprintEditorView : Control
         _search = new LineEdit { PlaceholderText = "Search parts", ClearButtonEnabled = true };
         _search.TextChanged += _ => FilterPalette();
         _search.TextSubmitted += _ => _search.ReleaseFocus();
-        left.AddChild(_search);
+        _partsBox.AddChild(_search);
         var paletteScroll = new ScrollContainer
         {
             SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
         };
-        left.AddChild(paletteScroll);
+        _partsBox.AddChild(paletteScroll);
         var paletteList = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         paletteList.AddThemeConstantOverride("separation", 2);
         paletteScroll.AddChild(paletteList);

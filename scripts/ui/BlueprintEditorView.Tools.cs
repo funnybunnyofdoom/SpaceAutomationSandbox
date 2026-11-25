@@ -56,7 +56,7 @@ public partial class BlueprintEditorView
         _toolbar.AddChild(new VSeparator());
         Selected("copy", "Copy the selection", InputActions.EditCopy, Copy);
         Selected("cut", "Cut the selection", InputActions.EditCut, Cut);
-        Tool(_toolbar, "paste", "Paste at the pointer: click to place, right click to stop", InputActions.EditPaste, () => _grid.SetStamp(_clipboard));
+        Tool(_toolbar, "paste", "Paste at the pointer: click to place, drag to repeat, right click to stop", InputActions.EditPaste, Paste);
         Selected("turn", "Turn the selection a quarter", InputActions.EditTurn, () => Reshape(BlueprintTools.Turned));
         Selected("mirror_h", "Mirror the selection left to right", InputActions.EditFlip, () => Reshape(c => BlueprintTools.Flipped(c, true)));
         Selected("mirror_v", "Mirror the selection front to back", InputActions.EditFlipFront, () => Reshape(c => BlueprintTools.Flipped(c, false)));
@@ -91,7 +91,8 @@ public partial class BlueprintEditorView
     {
         var open = LargeOpen();
         var extent = open ? BlueprintEditor.LargeHalfExtent : BlueprintEditor.HalfExtent;
-        _large = open;
+        _large = _paletteTabs.Visible = open;
+        if (!open) ShowModules(false);
         for (var i = _everyones; i < _toolbar.GetChildCount(); i++) _toolbar.GetChild<Control>(i).Visible = open;
         if (!open && _grid.Tool != GridTool.Draw) SetTool(GridTool.Draw);
         if (!open) { _grid.BrushSize = 1; _brush.Select(0); _grid.SetStamp(null); _model.Selection.Clear(); }
@@ -105,6 +106,11 @@ public partial class BlueprintEditorView
             _introduced = true;
             SetStatus($"Large-ship building is open: a {2 * extent + 1} x {2 * extent + 1} grid. Wheel zooms, middle drag moves, and the tools above the grid draw shapes and move whole groups of parts.", OkColor);
         }
+        if (open && OS.GetCmdlineUserArgs().FirstOrDefault(x => x.StartsWith("--stamp=")) is { } stamp) // dev hook: start stamping a module (#113)
+        {
+            ShowModules(true);
+            ChooseModule(_moduleButtons.Values.FirstOrDefault(e => e.Id == stamp["--stamp=".Length..]));
+        }
         foreach (var (button, text, action) in _tips) button.TooltipText = action is null ? text : $"{text}  ({InputActions.Key1(action)})";
         RefreshTools();
     }
@@ -116,7 +122,8 @@ public partial class BlueprintEditorView
         _mirrorH.SetPressedNoSignal(_model.MirrorLeftRight);
         _mirrorV.SetPressedNoSignal(_model.MirrorFrontBack);
         for (var i = 0; i < _toolButtons.Count; i++) _toolButtons[i].SetPressedNoSignal(Tools[i].Tool == _grid.Tool && _grid.Stamp is null);
-        foreach (var button in _selectionButtons) button.Disabled = _model.Selection.Count == 0;
+        foreach (var button in _selectionButtons) button.Disabled = _model.Selection.Count == 0 && _grid.Stamp is null;
+        RefreshModuleButtons();
         _grid.Redraw();
     }
 
@@ -143,6 +150,13 @@ public partial class BlueprintEditorView
         if (_model.Selection.Count == 0) return;
         _clipboard = BlueprintTools.ToCorner(_model.Selected);
         SetStatus($"{_clipboard.Count} parts copied.");
+    }
+
+    private void Paste()
+    {
+        if (_clipboard.Count == 0) { SetStatus("Nothing copied yet.", WarningColor); return; }
+        _module = null;
+        _grid.SetStamp(_clipboard);
     }
 
     private void Cut()
@@ -259,7 +273,7 @@ public partial class BlueprintEditorView
         else if (!_large) return false;
         else if (Is(InputActions.EditCopy)) Copy();
         else if (Is(InputActions.EditCut)) Cut();
-        else if (Is(InputActions.EditPaste)) _grid.SetStamp(_clipboard);
+        else if (Is(InputActions.EditPaste)) Paste();
         else if (Is(InputActions.EditSelectAll))
         {
             _model.Selection.UnionWith(_model.Cells.Keys);
