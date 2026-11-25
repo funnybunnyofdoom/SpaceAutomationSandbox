@@ -31,5 +31,17 @@
       "wants": -5,
       "opposes": 0
     }
-  }
+  },
+  "civilization": true,
+  "cultures": [
+    "territorial",
+    "pacifist",
+    "militarist"
+  ],
+  "civilizationNames": [
+    "Cobalt Institute",
+    "Meridian Works",
+    "Halden Foundry",
+    "Auric League"
+  ]
 }

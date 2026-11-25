@@ -185,7 +185,7 @@ public partial class Main
             TargetKind.Ships => craft.Job is { Active: true } job ? $"{job.Kind}: {job.Status}" : "your ship",
             TargetKind.Enemies => "ENEMY",
             TargetKind.Wrecks => "wreck",
-            _ => craft.IsTradeStation ? "trade station" : "other ship",
+            _ => (craft.IsTradeStation ? "trade station" : "other ship") + (_sector.FactionById(craft.FactionId)?.Race is { } race ? $", {race.Name}" : ""),
         };
         return $"{craft.Name} ({kind})";
     }

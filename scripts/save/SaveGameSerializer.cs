@@ -54,7 +54,7 @@ public static class SaveGameSerializer
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 35;
+    public const int SchemaVersion = 36;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -92,8 +92,11 @@ public static class SaveGameSerializer
                         Attitude = f.Attitude, Grievance = f.Grievance, NextEventTick = f.NextEventTick, Warned = sector.FactionWarned(f.Id),
                         RaidGateId = f.RaidGateId.Value, RaidEndTick = f.RaidGateId.IsNone ? 0 : f.RaidEndTick,
                         NextPatrolTick = f.NextPatrolTick, PatrolShipsBuilt = f.PatrolShipsBuilt,
-                        Invading = f.Invading, Goodwill = f.Goodwill, TruceUntilTick = f.TruceUntilTick, NextStationTick = f.NextStationTick,
+                        Invading = f.Invading, Goodwill = f.Goodwill, TruceUntilTick = f.TruceUntilTick, NextStationTick = f.NextStationTick, Race = f.RaceId, RaceView = f.RaceView,
                     }).ToList()
+                    : null,
+                CivilizationRaces = sector.Factions.Any(f => f.Race is { IsCustom: true })
+                    ? sector.Factions.Where(f => f.Race is { IsCustom: true }).Select(f => f.Race!).DistinctBy(r => r.Id).OrderBy(r => r.Id, StringComparer.Ordinal).Select(r => JsonSerializer.SerializeToNode(r, RaceFiles.Options)).ToList()
                     : null,
                 Laws = sector.ActiveLaws.Count > 0 ? sector.ActiveLaws.ToList() : null,
                 Events = sector.Events.Count > 0 ? sector.Events.Select(e => new EventDto { Tick = e.Tick, Text = e.Text, Kind = (int)e.Kind, CraftId = e.Target.Craft.Value, BodyId = e.Target.Body.Value }).ToList() : null,
@@ -504,6 +507,13 @@ public static class SaveGameSerializer
                 sector.RestoreFaction(f.Id, f.Name ?? $"Civilization {f.Id}", f.Culture ?? "", new BodyId(f.HomeStarId), f.Baseline, f.Attitude, f.Grievance, f.NextEventTick, f.Warned, new CraftId(f.RaidGateId), f.RaidEndTick,
                     f.NextPatrolTick, f.PatrolShipsBuilt, f.Goodwill, f.TruceUntilTick, f.NextStationTick, f.Invading);
             }
+            var civilizationRaces = (dto.CivilizationRaces ?? new List<JsonNode?>()) // copies of the player's own races (#118)
+                .Select(n => RaceCatalog.Check(n?.Deserialize<RaceDefinition>(RaceFiles.Options) ?? throw new FormatException("A civilization's race is empty."), catalog, Laws.All.Select(l => l.Id).ToList())).ToList();
+            foreach (var f in dto.Factions ?? new List<FactionDto>())
+            {
+                if (!(Math.Abs(f.RaceView) <= RaceDefinition.MaxView)) throw new FormatException($"Civilization {f.Id} has an invalid view of your race.");
+                sector.RestoreFactionRace(f.Id, f.Race, f.RaceView, civilizationRaces.FirstOrDefault(r => r.Id == f.Race));
+            }
             sector.RestoreLaws(dto.Laws ?? new List<string>());
             sector.RestoreEvents((dto.Events ?? new List<EventDto>()).Select(e => new SectorEvent(e.Tick, e.Text ?? "",
                 e.Kind >= 0 && e.Kind <= (int)EventKind.Message ? (EventKind)e.Kind : EventKind.Other, new TargetRef(new CraftId(e.CraftId), new BodyId(e.BodyId)))));
@@ -843,6 +853,10 @@ public static class SaveGameSerializer
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Race { get; set; }
 
+        /// <summary>v36: copies of the player's own races that civilizations are (#118).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<JsonNode?>? CivilizationRaces { get; set; }
+
         /// <summary>v35: a race the player made (#117), as it was when the game started.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public JsonNode? CustomRace { get; set; }
@@ -880,6 +894,13 @@ public static class SaveGameSerializer
         public double Grievance { get; set; }
         public long NextEventTick { get; set; }
         public bool Warned { get; set; }
+
+        /// <summary>v36: its race and how it sees the player's (#118). Null: from before.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? Race { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public double RaceView { get; set; }
 
         /// <summary>v21: the gate it's raiding.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

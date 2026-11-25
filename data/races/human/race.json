@@ -9,5 +9,6 @@
   "supplies": true,
   "notes": [
     "Crew grow slowly in habitats, or are recruited for food and water"
-  ]
+  ],
+  "civilization": true
 }

@@ -84,6 +84,22 @@ public sealed record RaceDefinition
     /// <summary>By law: what civilizations with a view on it think of this race.</summary>
     public Dictionary<string, RaceLeaning> Leanings { get; init; } = new();
 
+    /// <summary>The civilizations you meet can be of this race (#118); for the player's own, only if they say so.</summary>
+    public bool Civilization { get; init; }
+
+    /// <summary>The cultures such a civilization may have; none listed: any.</summary>
+    public List<string> Cultures { get; init; } = new();
+
+    /// <summary>How such a civilization sees a player of another race, by race id. Its own it sees <see cref="SharedView"/> warmer.</summary>
+    public Dictionary<string, double> Views { get; init; } = new();
+
+    /// <summary>What its civilizations may be called; none: the usual names.</summary>
+    public List<string> CivilizationNames { get; init; } = new();
+
+    public const double SharedView = 10, MaxView = 50;
+
+    public double ViewOf(RaceDefinition player) => Views.TryGetValue(player.Id, out var view) ? view : player.Id == Id ? SharedView : 0;
+
     /// <summary>What the first ship and the shipyard are called.</summary>
     public string ShipName { get; init; } = "Player";
     public string ShipyardName { get; init; } = "Shipyard";
@@ -157,9 +173,9 @@ public sealed class RaceCatalog
         {
             Name = given.Name ?? "", Description = given.Description ?? "", Accent = given.Accent ?? "", Picture = given.Picture ?? "", Notes = given.Notes ?? new(), Traits = given.Traits ?? new(), StockKg = given.StockKg ?? new(),
             ShipyardParts = given.ShipyardParts ?? new(), Tech = given.Tech ?? new(), BlockedLaws = given.BlockedLaws ?? new(), Leanings = given.Leanings ?? new(), GoalHints = given.GoalHints ?? new(),
-            ShipName = given.ShipName ?? "", ShipyardName = given.ShipyardName ?? "",
+            Cultures = given.Cultures ?? new(), Views = given.Views ?? new(), CivilizationNames = given.CivilizationNames ?? new(), ShipName = given.ShipName ?? "", ShipyardName = given.ShipyardName ?? "",
         };
-        if (race.Leanings.Values.Any(l => l is null) || race.Tech.Any(t => t is null) || race.ShipyardParts.Values.Any(p => p is null)) throw new FormatException("something in it is empty.");
+        if (race.Leanings.Values.Any(l => l is null) || race.Tech.Any(t => t is null) || race.ShipyardParts.Values.Any(p => p is null) || race.Cultures.Any(c => c is null) || race.CivilizationNames.Any(string.IsNullOrWhiteSpace)) throw new FormatException("something in it is empty.");
         if (race.SchemaVersion != SchemaVersion) throw new FormatException($"race.json is schemaVersion {race.SchemaVersion}; this build reads {SchemaVersion}.");
         if (string.IsNullOrWhiteSpace(race.Name)) throw new FormatException("it has no name.");
         if (race.Name.Length > MaxName || race.ShipName.Length > MaxName || race.ShipyardName.Length > MaxName || race.Description.Length > MaxDescription) throw new FormatException($"names have at most {MaxName} characters, descriptions {MaxDescription}.");
@@ -177,6 +193,8 @@ public sealed class RaceCatalog
             if (!catalog.Research.TryGet(tech, out _)) throw new FormatException($"unknown tech '{tech}'.");
         foreach (var material in race.StockKg.Keys)
             if (!catalog.Materials.Contains(material)) throw new FormatException($"unknown material '{material}'.");
+        if (race.Views.Values.Any(v => !(Math.Abs(v) <= RaceDefinition.MaxView))) throw new FormatException($"views of other races are from -{RaceDefinition.MaxView} to {RaceDefinition.MaxView}.");
+        if (race.CivilizationNames.Any(n => n.Length > MaxName)) throw new FormatException($"civilizations' names have at most {MaxName} characters.");
         foreach (var law in race.BlockedLaws.Keys.Concat(race.Leanings.Keys))
             if (!laws.Contains(law)) throw new FormatException($"unknown law '{law}'.");
         return race;

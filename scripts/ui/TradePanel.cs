@@ -22,6 +22,8 @@ public partial class TradePanel : PanelContainer
     private readonly Func<CraftState?> _ship;
     private readonly MaterialCatalog _materials;
     private readonly Action _changed;
+    private HBoxContainer _portrait = null!;
+    private string _portraitOf = "";
     private OptionButton _faction = null!, _give = null!, _get = null!;
     private SpinBox _tonnes = null!;
     private Label _message = null!;
@@ -70,8 +72,13 @@ public partial class TradePanel : PanelContainer
         _faction = new OptionButton { FocusMode = FocusModeEnum.None };
         _faction.ItemSelected += _ => { RefreshGoods(); Refresh(); };
         box.AddChild(_faction);
+        var across = new HBoxContainer(); // #118
+        across.AddThemeConstantOverride("separation", 8);
+        box.AddChild(across);
+        _portrait = new HBoxContainer();
+        across.AddChild(_portrait);
         _state = new InfoList();
-        box.AddChild(_state);
+        across.AddChild(_state);
 
         _deal = new VBoxContainer();
         box.AddChild(_deal);
@@ -157,6 +164,13 @@ public partial class TradePanel : PanelContainer
         _sinceRefresh = 0;
         var sector = _sector();
         _deal.Visible = Chosen() is not null;
+        var shown = Chosen() is { } who ? $"{who.Id} {who.Name} {who.RaceId}" : "";
+        if (shown != _portraitOf)
+        {
+            _portraitOf = shown;
+            foreach (var child in _portrait.GetChildren()) { _portrait.RemoveChild(child); child.QueueFree(); }
+            if (Chosen() is { } now) _portrait.AddChild(CivilizationRows.Portrait(now, 96));
+        }
         if (Chosen() is not { } f) { _state.Set(new[] { new HudRow("idle", "You haven't met a civilization yet. A warp gate's first jump into a new system may find one.", Severity.Muted) }); return; }
         var ship = _ship();
         var docked = ship is not null && sector.DockedTrader(ship) == f;

@@ -24,5 +24,20 @@
   },
   "notes": [
     "Robots need power, never food or water; you can still house and recruit people"
+  ],
+  "civilization": true,
+  "cultures": [
+    "territorial",
+    "pacifist",
+    "militarist"
+  ],
+  "views": {
+    "alien": -10
+  },
+  "civilizationNames": [
+    "Concord",
+    "Axiom",
+    "Continuum",
+    "Lattice"
   ]
 }

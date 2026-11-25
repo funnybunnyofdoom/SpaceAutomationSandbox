@@ -68,8 +68,15 @@ public sealed class Faction
     }
 
     public int Id { get; }
-    public string Name { get; }
+    public string Name { get; internal set; }
     public Culture Culture { get; }
+
+    /// <summary>The race it is (#118), by id; empty for none. Its data, or null if that race isn't there: only looks and words depend on it.</summary>
+    public string RaceId { get; internal set; } = "";
+    public Construction.RaceDefinition? Race { get; internal set; }
+
+    /// <summary>What it makes of the player's race, for good: fixed when they met. Saved.</summary>
+    public double RaceView { get; internal set; }
 
     /// <summary>The star of the system it claims.</summary>
     public BodyId HomeStarId { get; }
@@ -118,7 +125,7 @@ public sealed class Faction
 
     /// <summary>Where its attitude is heading with these laws in force.</summary>
     public double TargetAttitude(IReadOnlyCollection<string> laws) =>
-        Math.Clamp(Baseline + laws.Sum(l => Culture.StanceOn(l)) * PointsPerStance - Grievance + Goodwill + LifeOpinion, -100, 100);
+        Math.Clamp(Baseline + RaceView + laws.Sum(l => Culture.StanceOn(l)) * PointsPerStance - Grievance + Goodwill + LifeOpinion, -100, 100);
 }
 
 /// <summary>Something that happened, for the player's log and status line (#36).</summary>

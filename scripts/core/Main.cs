@@ -1318,7 +1318,7 @@ public partial class Main : Node2D
             if (craft == _player || _pixelsPerMetre <= 0.02f) continue;
             if (crowd && craft.Stats.TotalThrustN > 0 && _player?.TargetCraftId != craft.Id) continue;
             DrawString(ThemeDB.FallbackFont, at + new Vector2(Mathf.Max(8f, radius) + 4, 4), CraftTag(craft),
-                HorizontalAlignment.Left, -1, 11, CraftLabelColor);
+                HorizontalAlignment.Left, -1, 11, _sector.FactionById(craft.FactionId) is { } owner && !craft.IsWreck ? CivilizationRows.Accent(owner) : CraftLabelColor); // #118
         }
     }
 

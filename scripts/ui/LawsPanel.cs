@@ -141,7 +141,7 @@ public partial class LawsPanel : PanelContainer
         _updating = false;
 
         // Built only when a civilization is met, so its button can be pressed; the rows update in place.
-        var key = string.Join(",", sector.Factions.Select(f => f.Id));
+        var key = string.Join(",", sector.Factions.Select(f => $"{f.Id} {f.Name} {f.RaceId}"));
         if (key != _factionKey)
         {
             _factionKey = key;
@@ -151,7 +151,11 @@ public partial class LawsPanel : PanelContainer
             foreach (var f in sector.Factions)
             {
                 var rows = new InfoList();
-                _factions.AddChild(rows);
+                var across = new HBoxContainer();
+                across.AddThemeConstantOverride("separation", 8);
+                across.AddChild(CivilizationRows.Portrait(f)); // #118
+                across.AddChild(rows);
+                _factions.AddChild(across);
                 _factionRows[f.Id] = rows;
                 var id = f.Id;
                 var deal = new Button { Text = "Trade and diplomacy", Icon = UiIcons.Get("trade"), FocusMode = FocusModeEnum.None, SizeFlagsHorizontal = SizeFlags.ShrinkBegin };

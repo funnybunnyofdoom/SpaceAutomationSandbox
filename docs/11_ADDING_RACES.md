@@ -25,6 +25,10 @@ A race is a folder in `data/races/`. Add one and it's in the New Game screen; no
 | `shipyardParts` | no | Parts of the starting shipyard to swap, old id to new |
 | `blockedLaws` | no | Laws it can't pass, with the reason |
 | `leanings` | no | By law: points on the attitude of civilizations that want it (`wants`) or are against it (`opposes`) |
+| `civilization` | no | `true`: civilizations you meet can be of this race (looks, words and attitude only) |
+| `cultures` | no | The cultures such a civilization may have (`territorial`, `conservationist`, `purist`, `pacifist`, `militarist`); left out: any |
+| `views` | no | By race id: points (-50 to 50) on how such a civilization sees a player of that race. Its own race it sees 10 warmer unless this says otherwise |
+| `civilizationNames` | no | What such civilizations may be called |
 | `shipName`, `shipyardName` | no | What the first ship and the shipyard are called |
 | `goalHints` | no | Goal list hints that differ, by goal id |
 | `notes` | no | Extra lines for the New Game screen. What the data means is listed by itself |

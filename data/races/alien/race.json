@@ -24,5 +24,21 @@
       "opposes": -5
     }
   },
-  "shipyardName": "Hive yard"
+  "shipyardName": "Hive yard",
+  "civilization": true,
+  "cultures": [
+    "territorial",
+    "conservationist",
+    "purist",
+    "pacifist"
+  ],
+  "views": {
+    "robotic": -10
+  },
+  "civilizationNames": [
+    "Vesh brood",
+    "Okhari brood",
+    "Tzin brood",
+    "Ulmari brood"
+  ]
 }

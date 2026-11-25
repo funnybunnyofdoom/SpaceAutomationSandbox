@@ -120,13 +120,54 @@ public sealed partial class SectorState
         {
             NextEventTick = Tick + (long)(FactionDecisionIntervalS * FixedStepClock.TicksPerSecond),
         };
+        SetRace(faction, RaceFor(faction, own: true));
+        if (faction.Race is { } people)
+        {
+            faction.Name = CivilizationName(faction, people);
+            if (baseline is null) faction.RaceView = people.ViewOf(Race); // a baseline given is exactly that
+            faction.Attitude += faction.RaceView;
+        }
         _factions.Add(faction);
         _lastDisposition[faction.Id] = faction.Disposition;
         var likes = culture.Stances.Where(s => s.Value > 0).Select(s => Laws.Get(s.Key).Name).ToList();
         var dislikes = culture.Stances.Where(s => s.Value < 0).Select(s => Laws.Get(s.Key).Name).ToList();
-        AddEvent($"Contact: the {faction.Name}, a {culture.Name} civilization, claim the {star.Name} system. "
+        AddEvent($"Contact: the {faction.Name}, a {culture.Name} {(faction.Race is { } who ? who.Name + " " : "")}civilization, claim the {star.Name} system. "
                  + $"They favour {string.Join(" and ", likes)}" + (dislikes.Count > 0 ? $" and oppose {string.Join(" and ", dislikes)}." : "."), EventKind.Civilization, new TargetRef(CraftId.None, faction.HomeStarId));
         return faction;
+    }
+
+    /// <summary>The races a civilization of a culture can be; the player's own races only when they were allowed to (#118).</summary>
+    private IEnumerable<Construction.RaceDefinition> RacesOf(Culture culture, bool own) =>
+        (Parts?.Races.Races ?? Array.Empty<Construction.RaceDefinition>()).Where(r => r.Civilization && (own || !r.IsCustom) && (r.Cultures.Count == 0 || r.Cultures.Contains(culture.Id))).OrderBy(r => r.Id, StringComparer.Ordinal);
+
+    /// <summary>The race a civilization is: the same for a seed and system, whatever else is rolled.</summary>
+    private Construction.RaceDefinition? RaceFor(Faction faction, bool own)
+    {
+        var races = RacesOf(faction.Culture, own).ToList();
+        if (races.Count == 0) return null;
+        return races[(int)(new DeterministicRandom(Seed ^ (0x5EED_0FACEUL * (ulong)(faction.Id + 1)) ^ ((ulong)faction.HomeStarId.Value << 20)).NextUInt64() % (ulong)races.Count)];
+    }
+
+    private static void SetRace(Faction faction, Construction.RaceDefinition? race)
+    {
+        faction.Race = race;
+        faction.RaceId = race?.Id ?? "";
+    }
+
+    private string CivilizationName(Faction faction, Construction.RaceDefinition race)
+    {
+        var free = race.CivilizationNames.Where(n => _factions.All(f => f.Name != n)).ToList();
+        return free.Count == 0 ? faction.Name : free[(int)(new DeterministicRandom(Seed ^ (0xCA11EDUL * (ulong)(faction.Id + 1))).NextUInt64() % (ulong)free.Count)];
+    }
+
+    /// <summary>A loaded civilization's race: as saved (a copy for a race of the player's own), or one that fits for a save from before they had any. How it sees the player doesn't change.</summary>
+    public void RestoreFactionRace(int factionId, string? raceId, double view, Construction.RaceDefinition? copy)
+    {
+        if (FactionById(factionId) is not { } faction) return;
+        if (raceId is null) { SetRace(faction, RaceFor(faction, own: false)); return; }
+        faction.RaceId = raceId;
+        faction.RaceView = view;
+        faction.Race = copy ?? (Parts is { } parts && parts.Races.TryGet(raceId, out var race) && !race.IsCustom ? race : null);
     }
 
     private static readonly string[] NameStarts = { "Ve", "Kor", "Thal", "Ys", "Mar", "Oru", "Zen", "Ash", "Quel", "Dra", "Ulo", "Ner" };

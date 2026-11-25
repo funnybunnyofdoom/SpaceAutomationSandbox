@@ -24,7 +24,8 @@ public partial class RaceCreatorScreen : Control
     private LineEdit _name = null!, _description = null!, _shipName = null!, _yardName = null!;
     private ColorPickerButton _accent = null!;
     private SpinBox _crew = null!;
-    private CheckBox _robots = null!, _supplies = null!;
+    private CheckBox _robots = null!, _supplies = null!, _civilization = null!;
+    private readonly Dictionary<string, CheckBox> _cultures = new();
     private readonly Dictionary<string, (HSlider Slider, Label Value)> _traits = new(), _stock = new(), _wants = new(), _opposes = new();
     private readonly Dictionary<string, CheckBox> _tech = new(), _blocked = new();
     private VBoxContainer _fields = null!;
@@ -142,6 +143,19 @@ public partial class RaceCreatorScreen : Control
             blocked.Toggled += on => Set(_race with { BlockedLaws = With(_race.BlockedLaws, law.Id, on ? "Your people won't have it." : "", "") });
             _fields.AddChild(blocked);
             _blocked[law.Id] = blocked;
+        }
+
+        Section("As a civilization you can meet");
+        _civilization = new CheckBox { Text = "Civilizations in your new games can be of this race" };
+        _civilization.Toggled += on => { Set(_race with { Civilization = on }); Fill(); };
+        _fields.AddChild(_civilization);
+        var cultures = Grid(3);
+        foreach (var culture in Culture.All)
+        {
+            var check = new CheckBox { Text = culture.Name, TooltipText = "Such a civilization may have this culture. None ticked: any." };
+            check.Toggled += on => Set(_race with { Cultures = Culture.All.Select(c => c.Id).Where(id => id == culture.Id ? on : _race.Cultures.Contains(id)).ToList() });
+            cultures.AddChild(check);
+            _cultures[culture.Id] = check;
         }
 
         // --- What it comes to ---
@@ -286,7 +300,7 @@ public partial class RaceCreatorScreen : Control
         // A new race: notes and designs are the old one's own.
         _race = race with
         {
-            Id = RaceFiles.CustomPrefix + "new", Name = $"{race.Name} copy", Notes = new(), GoalHints = new(), Order = 100, Ship = null, Shipyard = null, SchemaVersion = RaceCatalog.SchemaVersion,
+            Id = RaceFiles.CustomPrefix + "new", Name = $"{race.Name} copy", Notes = new(), GoalHints = new(), Order = 100, Civilization = false, CivilizationNames = new(), Ship = null, Shipyard = null, SchemaVersion = RaceCatalog.SchemaVersion,
             Picture = race.IsCustom ? race.Picture : race.Id,
         };
         (_saved, _picture) = (null, null);
@@ -309,6 +323,8 @@ public partial class RaceCreatorScreen : Control
         _crew.Value = _race.Crew;
         _robots.ButtonPressed = _race.ShipyardParts.ContainsKey("habitat");
         _supplies.ButtonPressed = _race.Supplies;
+        _civilization.ButtonPressed = _race.Civilization;
+        foreach (var (id, check) in _cultures) { check.ButtonPressed = _race.Cultures.Contains(id); check.Disabled = !_race.Civilization; }
         foreach (var (id, row) in _traits) Put(row, _race.Traits.GetValueOrDefault(id));
         foreach (var (id, row) in _stock) Put(row, _race.StockKg.GetValueOrDefault(id) / 1000.0);
         foreach (var (id, row) in _wants) Put(row, _race.Leanings.GetValueOrDefault(id)?.Wants ?? 0);
