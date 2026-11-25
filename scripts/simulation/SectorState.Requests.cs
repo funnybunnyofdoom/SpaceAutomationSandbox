@@ -208,7 +208,7 @@ public sealed partial class SectorState
     {
         if (job.State == HaulJobState.Waiting)
         {
-            if (Tick < job.RetryAtTick) { craft.Controls = new ShipControls(0, 0, !craft.IsDocked); return; }
+            if (Tick < job.RetryAtTick && !DoneRecharging(craft)) { craft.Controls = new ShipControls(0, 0, !craft.IsDocked); return; }
             job.State = job.ResumeState;
             job.WaitReason = null;
             if (!allowResume) { craft.Controls = new ShipControls(0, 0, true); return; }
@@ -282,6 +282,7 @@ public sealed partial class SectorState
                     job.CompletedCycles++;
                     job.Contract = null;
                     job.State = HaulJobState.ToPickup; // next tick: look for the next trip
+                    if (NeedsRecharge(craft)) WaitServe(craft, job, HaulJobState.ToPickup, $"recharging at {destination.Name}", RechargeMaxS);
                 }
                 else if (room == 0)
                 {

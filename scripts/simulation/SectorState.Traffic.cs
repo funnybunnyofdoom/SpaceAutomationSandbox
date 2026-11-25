@@ -31,6 +31,9 @@ public sealed partial class SectorState
     public const double TrafficHorizonS = 3;
     public const double HoldDistanceM = 150;
 
+    /// <summary>A ship joins the holding ring (and stops giving way) only once this slow relative to the station: a harmless bump.</summary>
+    public const double HoldMaxSpeedMps = 6;
+
     /// <summary>Craft claim a berth only once this close to the station's hull.</summary>
     public const double ClaimRangeM = 1_500;
 

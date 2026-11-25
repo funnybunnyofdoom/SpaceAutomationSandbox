@@ -29,6 +29,18 @@ public sealed partial class SectorState
     /// </summary>
     public const double JobStationRetryS = 30;
 
+    /// <summary>An automated ship that has unloaded stays docked until its battery is this full, so it doesn't leave too flat to brake.</summary>
+    public const double RechargeShare = 0.25;
+
+    /// <summary>...but never longer than this, so a station short of power doesn't keep its ports blocked.</summary>
+    public const double RechargeMaxS = 30;
+
+    private static bool NeedsRecharge(CraftState craft) =>
+        craft.IsDocked && !craft.LegacyFreePower && craft.StoredEnergyKJ < RechargeShare * craft.Stats.EnergyCapacityKJ;
+
+    /// <summary>Docked with enough charge to go. (Every other timed wait is spent undocked.)</summary>
+    private static bool DoneRecharging(CraftState craft) => craft.IsDocked && !NeedsRecharge(craft);
+
     /// <summary>Gives a craft a mining job, refusing (with the reason) if it or the job can't work.</summary>
     public ActionResult StartJob(CraftId craftId, MiningJob job)
     {
@@ -121,7 +133,7 @@ public sealed partial class SectorState
         switch (job.State)
         {
             case MiningJobState.Waiting:
-                if (Tick < job.RetryAtTick) { craft.Controls = new ShipControls(0, 0, !craft.IsDocked); return; }
+                if (Tick < job.RetryAtTick && !DoneRecharging(craft)) { craft.Controls = new ShipControls(0, 0, !craft.IsDocked); return; }
                 // Try again from where we were; the step re-enters Waiting if still blocked.
                 job.State = job.ResumeState;
                 job.WaitReason = null;
@@ -174,6 +186,8 @@ public sealed partial class SectorState
                     var anchor = craft.IsAnchored ? new ActionResult(true, "") : TryAnchor(craft.Id);
                     if (anchor.Done) job.State = MiningJobState.Mining;
                     else if (craft.Stats.CanAnchor && !AnchorTouchesGround(craft)) Lift(craft, job, MiningJobState.ToSource); // wrong side down: try again
+                    else if (NeedsService(craft) && craft.Stats.TotalThrustN > 0 && NearestShipyard(craft) is not null)
+                        Lift(craft, job, MiningJobState.ToSource); // its clamp broke off: up, then off for repairs (#3)
                     else Wait(craft, job, MiningJobState.Landing, anchor.Message);
                     return;
                 }
@@ -223,6 +237,7 @@ public sealed partial class SectorState
                     job.CompletedCycles++;
                     job.SpotBearingRad = null; // a new spot next trip
                     job.State = MiningJobState.ToSource;
+                    if (NeedsRecharge(craft)) Wait(craft, job, MiningJobState.ToSource, $"recharging at {destination.Name}", RechargeMaxS);
                 }
                 else if (amount == 0)
                 {

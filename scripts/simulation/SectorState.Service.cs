@@ -16,9 +16,10 @@ namespace SpaceAutomationSandbox.Simulation;
 /// (the materials become the part again). Damaged parts first, then missing ones in blueprint
 /// order. No wear from use yet: only crash damage needs repair.</item>
 /// <item><b>Servicing:</b> any automated job takes its craft to the nearest shipyard when a part is
-/// below <see cref="ServiceHealthThreshold"/> or broken off, waits docked until fully repaired (or,
-/// if the yard lacks materials, until nothing serious is left), then carries on. Not while landed
-/// or mining. The job's status says what it is doing and why it's waiting.</item>
+/// below <see cref="ServiceHealthThreshold"/> or broken off, stays docked until fully repaired (or,
+/// if the yard lacks materials, until nothing serious is left), then carries on. While the yard lacks
+/// materials for its next repair it waits off the port, on the holding ring, so deliveries can dock.
+/// Not while landed, mining or climbing off. The job's status says what it is doing and why it's waiting.</item>
 /// <item><b>Survey jobs</b> (<see cref="SurveyJob"/>): automated scouts survey bodies by the same rule
 /// as the player.</item>
 /// </list>
@@ -189,10 +190,13 @@ public sealed partial class SectorState
         return best;
     }
 
-    /// <summary>Jobs mid-landing or mining finish that first (a miner breaks off on its way out).</summary>
+    /// <summary>
+    /// Jobs mid-landing, mining or climbing off finish that first (a miner breaks off on its way out). Breaking off
+    /// mid-climb would cut across other miners, and resume the climb at full throttle beside the yard afterwards.
+    /// </summary>
     private static bool CanBreakForService(ShipJob job) => job switch
     {
-        MiningJob m => (m.State == MiningJobState.Waiting ? m.ResumeState : m.State) is not (MiningJobState.Landing or MiningJobState.Mining),
+        MiningJob m => (m.State == MiningJobState.Waiting ? m.ResumeState : m.State) is not (MiningJobState.Landing or MiningJobState.Mining or MiningJobState.Lifting),
         _ => true,
     };
 
@@ -226,14 +230,26 @@ public sealed partial class SectorState
         var damaged = craft.HealthList.Count;
         var missing = MissingParts(craft);
         var what = string.Join(", ", new[] { damaged > 0 ? $"{damaged} damaged" : "", missing > 0 ? $"{missing} broken off" : "" }.Where(s => s.Length > 0));
-        switch (FlyToDock(craft, yard))
+        // A repair the yard lacks materials for doesn't hold (or claim) a port: whatever brings the materials needs
+        // one. The ship waits on the holding ring until the yard has them. One that can't fly stays docked.
+        var shortfall = RepairShortfall(yard, craft);
+        var blocked = shortfall.Count > 0 && craft.Stats.TotalThrustN > 0;
+        if (blocked && craft.DockedToCraftId == yard.Id) TryUndock(craft.Id);
+        var approach = FlyToDock(craft, yard, claimBerth: !blocked);
+        if (shortfall.Count > 0)
+        {
+            if (approach == DockApproach.Docked) craft.Controls = ShipControls.Idle;
+            else if (approach == DockApproach.NoFreePort) craft.Controls = new ShipControls(0, 0, true);
+            job.ServiceStatus = craft.Position.DistanceTo(yard.Position) - yard.CollisionRadiusM > ClaimRangeM
+                ? $"flying to {yard.Name} for repairs ({what})"
+                : $"waiting: repairs at {yard.Name} need {Describe(shortfall)} more";
+            return true;
+        }
+        switch (approach)
         {
             case DockApproach.Docked:
                 craft.Controls = ShipControls.Idle;
-                var shortfall = RepairShortfall(yard, craft);
-                job.ServiceStatus = shortfall.Count > 0
-                    ? $"waiting: repairs at {yard.Name} need {Describe(shortfall)} more"
-                    : $"in for repairs at {yard.Name} ({what})";
+                job.ServiceStatus = $"in for repairs at {yard.Name} ({what})";
                 break;
             case DockApproach.NoFreePort:
                 craft.Controls = new ShipControls(0, 0, true);

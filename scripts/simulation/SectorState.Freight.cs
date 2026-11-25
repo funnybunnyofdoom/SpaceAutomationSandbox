@@ -43,7 +43,7 @@ public sealed partial class SectorState
         switch (job.State)
         {
             case HaulJobState.Waiting:
-                if (Tick < job.RetryAtTick) { craft.Controls = new ShipControls(0, 0, !craft.IsDocked); return; }
+                if (Tick < job.RetryAtTick && !DoneRecharging(craft)) { craft.Controls = new ShipControls(0, 0, !craft.IsDocked); return; }
                 job.State = job.ResumeState;
                 job.WaitReason = null;
                 if (allowResume) StepHaul(craft, job, allowResume: false);
@@ -93,6 +93,7 @@ public sealed partial class SectorState
                 {
                     job.CompletedCycles++;
                     job.State = HaulJobState.ToPickup;
+                    if (NeedsRecharge(craft)) WaitHaul(craft, job, HaulJobState.ToPickup, $"recharging at {destination.Name}", RechargeMaxS);
                 }
                 else if (room == 0)
                 {
@@ -170,7 +171,7 @@ public sealed partial class SectorState
     /// One tick of getting docked at a station: lift off if landed, undock from anything else, fly to
     /// its first free berth and dock when close and matched. Shared by mining and freight jobs.
     /// </summary>
-    private DockApproach FlyToDock(CraftState craft, CraftState station)
+    private DockApproach FlyToDock(CraftState craft, CraftState station, bool claimBerth = true)
     {
         if (craft.IsDocked && craft.DockedToCraftId == station.Id) { ReleaseClaim(craft); return DockApproach.Docked; }
         if (craft.IsLanded)
@@ -193,14 +194,16 @@ public sealed partial class SectorState
             craft.Controls = NavigateTo(craft, HoldPoint(craft, station), stationVelocity, ignore, DockingSpeedLimit(craft, station), 0, station.Id);
             return DockApproach.Underway;
         }
-        var port = ClaimPort(craft, station, FreePorts(station));
+        if (!claimBerth) ReleaseClaim(craft);
+        var port = claimBerth ? ClaimPort(craft, station, FreePorts(station)) : -1;
         if (port < 0)
         {
             // Every berth is taken or claimed: wait on the holding ring, out of the approach lanes (#55).
             var hold = HoldPoint(craft, station);
-            if (Math.Abs(craft.Position.DistanceTo(station.Position) - hold.DistanceTo(station.Position)) > 50)
+            if (Math.Abs(craft.Position.DistanceTo(station.Position) - hold.DistanceTo(station.Position)) > 50
+                || (craft.Velocity - stationVelocity).Length > HoldMaxSpeedMps)
             {
-                // Not on the ring yet (too close, or still on the way): fly to it first.
+                // Not on the ring yet (too close, or still on the way), or still too fast to join the queue: fly to it first.
                 craft.Controls = NavigateTo(craft, hold, stationVelocity, ignore, DockingSpeedLimit(craft, station), 0, station.Id);
                 return DockApproach.Underway;
             }

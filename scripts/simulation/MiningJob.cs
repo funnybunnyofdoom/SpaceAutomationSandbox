@@ -70,6 +70,9 @@ public abstract class ShipJob
     /// <summary>Recent state changes, oldest first. Kept in memory only (not saved).</summary>
     public IReadOnlyCollection<JobEvent> History => _history;
 
+    /// <summary>A wait in words; recharging is part of the round, not something to wait for, so it needs nobody.</summary>
+    protected static string Waits(string? why) => why is not null && why.StartsWith("recharging", StringComparison.Ordinal) ? why : $"waiting: {why}";
+
     /// <summary>A number that changes whenever the job's state (or trip) changes; wait reasons are compared separately.</summary>
     protected abstract int StateKey { get; }
 
@@ -138,7 +141,7 @@ public sealed class MiningJob : ShipJob
     protected override int StateKey => (int)State;
 
     protected override string JobStatus => !Active ? "stopped"
-        : State == MiningJobState.Waiting ? $"waiting: {WaitReason}"
+        : State == MiningJobState.Waiting ? Waits(WaitReason)
         : State switch
         {
             MiningJobState.ToSource => "flying to the source",
@@ -196,7 +199,7 @@ public sealed class HaulJob : ShipJob
     protected override int StateKey => (int)State;
 
     protected override string JobStatus => !Active ? "stopped"
-        : State == HaulJobState.Waiting ? $"waiting: {WaitReason}"
+        : State == HaulJobState.Waiting ? Waits(WaitReason)
         : State switch
         {
             HaulJobState.ToPickup => "flying to the pickup",
