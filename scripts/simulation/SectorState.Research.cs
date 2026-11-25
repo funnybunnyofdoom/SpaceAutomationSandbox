@@ -102,13 +102,13 @@ public sealed partial class SectorState
         foreach (var craft in _crafts)
         {
             craft.LabStatus = null;
-            var labRate = craft.Stats.ResearchRatePerS;
+            var labRate = craft.Stats.ResearchRatePerS * Trait(craft, _research);
             if (labRate <= 0) continue;
             if (!Operational(craft)) { craft.LabStatus = $"lab stopped: {craft.CrewShortReason}"; continue; }
             var due = craft.LabRemainderKg + labRate * LabElectronicsKgPerPoint * FixedStepClock.TickSeconds;
             var whole = (long)Math.Floor(due);
             if (craft.Inventory["electronics"] < Math.Max(whole, 1)) { craft.LabStatus = "lab idle: no electronics in stock"; continue; }
-            if (!TryUsePower(craft, craft.Stats.LabPowerKW * FixedStepClock.TickSeconds)) { craft.LabStatus = "lab idle: no power"; continue; }
+            if (!UseMachinePower(craft, craft.Stats.LabPowerKW * FixedStepClock.TickSeconds)) { craft.LabStatus = "lab idle: no power"; continue; }
             if (whole > 0)
             {
                 craft.Inventory.TryRemove(new Dictionary<string, long> { ["electronics"] = whole });

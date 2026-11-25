@@ -354,7 +354,7 @@ public static class SaveGameSerializer
         try
         {
             var sector = new SectorState(dto.Seed, dto.Tick) { Recipes = catalog.Recipes, Parts = catalog };
-            if (!catalog.Races.TryGet(dto.Race ?? RaceCatalog.HumanId, out var race)) throw new FormatException($"Unknown race '{dto.Race}'.");
+            if (!catalog.Races.TryGet(dto.Race ?? RaceCatalog.HumanId, out var race)) throw new FormatException($"This game is played as the race '{dto.Race}', which isn't installed or can't be used (data/races/{dto.Race}).");
             sector.Race = race;
             if (dto.Tuning is { } t)
             {

@@ -1,6 +1,7 @@
 using System;
 using Godot;
 using System.Collections.Generic;
+using System.Linq;
 using SpaceAutomationSandbox.Construction;
 using SpaceAutomationSandbox.Simulation;
 
@@ -24,16 +25,20 @@ public partial class NewGameScreen : Control
     private OptionButton _supplies = null!;
     private readonly Random _random = new();
     private readonly Func<RaceCatalog> _races;
+    private readonly Func<RaceDefinition, IReadOnlyList<string>> _describe;
     private HBoxContainer _raceRow = null!;
+    private ScrollContainer _raceScroll = null!, _infoScroll = null!;
     private Label _raceInfo = null!, _suppliesTitle = null!;
     private readonly Dictionary<RaceDefinition, Button> _raceButtons = new();
+    private Label _raceProblems = null!;
     private RaceDefinition _race = RaceCatalog.HumanOnly.Default;
 
-    public NewGameScreen() : this(() => RaceCatalog.HumanOnly) { }
+    public NewGameScreen() : this(() => RaceCatalog.HumanOnly, _ => Array.Empty<string>()) { }
 
-    public NewGameScreen(Func<RaceCatalog> races)
+    public NewGameScreen(Func<RaceCatalog> races, Func<RaceDefinition, IReadOnlyList<string>> describe)
     {
         _races = races;
+        _describe = describe;
         Name = "NewGameScreen";
         SetAnchorsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Stop;
@@ -79,10 +84,15 @@ public partial class NewGameScreen : Control
         _raceRow.AddThemeConstantOverride("separation", 8);
         var raceBox = new HBoxContainer();
         raceBox.AddThemeConstantOverride("separation", 14);
-        raceBox.AddChild(_raceRow);
-        _raceInfo = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(320, 0), SizeFlagsVertical = SizeFlags.ShrinkBegin };
-        raceBox.AddChild(_raceInfo); // beside the portraits, so that it fits a small window
+        _raceScroll = new ScrollContainer { VerticalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
+        _raceScroll.AddChild(_raceRow); // more races than fit (#116)
+        raceBox.AddChild(_raceScroll);
+        _raceInfo = new Label { ThemeTypeVariation = "HudText", AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(320, 0), SizeFlagsVertical = SizeFlags.ShrinkBegin };
+        _infoScroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, CustomMinimumSize = new Vector2(336, 0) };
+        _infoScroll.AddChild(_raceInfo);
+        raceBox.AddChild(_infoScroll); // beside the portraits, so that it fits a small window
         grid.AddChild(raceBox);
+        _raceProblems = new Label { ThemeTypeVariation = "HudText", AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(460, 0) };
 
         grid.AddChild(_suppliesTitle = new Label { Text = "Food and water" });
         _supplies = new OptionButton { TooltipText = "What the starting shipyard has for its 4 crew" };
@@ -95,6 +105,7 @@ public partial class NewGameScreen : Control
         _goals = new CheckBox { Text = "Goal list for new players", ButtonPressed = true, TooltipText = "A checklist of the core loop on the left of the screen. Turn it off or restart it from the pause menu." };
         grid.AddChild(_goals);
 
+        box.AddChild(_raceProblems); // not in the grid: hidden, it would shift it
         var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
         buttons.AddThemeConstantOverride("separation", 8);
         box.AddChild(buttons);
@@ -127,17 +138,21 @@ public partial class NewGameScreen : Control
         var group = new ButtonGroup();
         foreach (var race in _races().Races)
         {
-            var path = $"res://assets/art/races/{race.Id}.webp";
             var button = new Button
             {
-                Text = race.Name, ToggleMode = true, ButtonGroup = group, SizeFlagsVertical = SizeFlags.ShrinkBegin, Icon = ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null, ExpandIcon = true,
-                IconAlignment = HorizontalAlignment.Center, VerticalIconAlignment = VerticalAlignment.Top, CustomMinimumSize = new Vector2(212, 290), TextureFilter = TextureFilterEnum.LinearWithMipmaps, // painted, not pixel art
+                Text = race.Name, ToggleMode = true, ButtonGroup = group, SizeFlagsVertical = SizeFlags.ShrinkBegin, Icon = RaceLibrary.Portrait(race), ExpandIcon = true,
+                IconAlignment = HorizontalAlignment.Center, VerticalIconAlignment = VerticalAlignment.Top, CustomMinimumSize = new Vector2(172, 240), TextureFilter = TextureFilterEnum.LinearWithMipmaps, // painted, not pixel art
             };
-            button.AddThemeConstantOverride("icon_max_width", 200);
+            button.AddThemeConstantOverride("icon_max_width", 160);
             button.Pressed += () => ChooseRace(race);
             _raceRow.AddChild(button);
             _raceButtons[race] = button;
         }
+        _raceScroll.CustomMinimumSize = new Vector2(Math.Min(_raceButtons.Count, 4) * 180 - 8, 0); // four at once
+        var problems = _races().Problems;
+        _raceProblems.Visible = problems.Count > 0;
+        _raceProblems.Text = string.Join("\n", problems.Select(p => $"Race not usable: {p}"));
+        _raceProblems.AddThemeColorOverride("font_color", UiTheme.Of(Severity.Warning));
         ChooseRace(_races().Default);
     }
 
@@ -145,7 +160,7 @@ public partial class NewGameScreen : Control
     {
         _race = race;
         _raceButtons[race].SetPressedNoSignal(true);
-        _raceInfo.Text = race.Description + string.Concat(race.Effects.ConvertAll(e => $"\n•  {e}"));
+        _raceInfo.Text = race.Description + string.Concat(_describe(race).Select(e => $"\n•  {e}"));
         _supplies.Visible = _suppliesTitle.Visible = race.Supplies;
     }
 

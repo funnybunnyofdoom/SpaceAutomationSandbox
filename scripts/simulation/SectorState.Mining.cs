@@ -38,9 +38,9 @@ public sealed partial class SectorState
         {
             var material = MiningMaterial(craft);
             if (material is null || craft.FreeCargoKg <= 0 || !Operational(craft)) continue;
-            if (!TryUsePower(craft, (material == BiomassMaterial ? craft.Stats.HarvestPowerKW : craft.Stats.DrillPowerKW) * FixedStepClock.TickSeconds)) continue; // drill idle without power
+            if (!UseMachinePower(craft, (material == BiomassMaterial ? craft.Stats.HarvestPowerKW : craft.Stats.DrillPowerKW) * FixedStepClock.TickSeconds)) continue; // drill idle without power
 
-            var drilled = craft.MiningRemainderKg + ExtractionRateKgPerS(craft, material) * Tuning.DrillRateMultiplier * FixedStepClock.TickSeconds;
+            var drilled = craft.MiningRemainderKg + ExtractionRateKgPerS(craft, material) * Tuning.DrillRateMultiplier * Trait(craft, _mining) * FixedStepClock.TickSeconds;
             var whole = (long)Math.Floor(drilled);
             var body = GetBody(craft.LandedOnBodyId);
             var bearing = LandedBearing(craft);

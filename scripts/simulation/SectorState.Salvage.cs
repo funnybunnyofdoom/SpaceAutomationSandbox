@@ -58,7 +58,7 @@ public sealed partial class SectorState
             Strip(wreck);
             var lastOnly = wreck.Design.Cells.Count == 1 && wreck.Inventory.TotalKg == 0;
             if (craft.FreeCargoKg <= 0 || (lastOnly && craft.FreeCargoKg < LastPartKg(wreck))) { craft.SalvageStatus = "salvage: the hold is full"; continue; }
-            if (!TryUsePower(craft, craft.Stats.SalvagePowerKW * FixedStepClock.TickSeconds)) { craft.SalvageStatus = "salvage: no power"; continue; }
+            if (!UseMachinePower(craft, craft.Stats.SalvagePowerKW * FixedStepClock.TickSeconds)) { craft.SalvageStatus = "salvage: no power"; continue; }
             craft.SalvageProgressKg += craft.Stats.SalvageRateKgPerS * FixedStepClock.TickSeconds;
 
             if (wreck.Inventory.TotalKg > 0)
@@ -257,8 +257,8 @@ public sealed partial class SectorState
             if (patient.RepairProgressKg < work)
             {
                 var rate = next.Missing ? 0 : craft.RobotsWorking * RobotRepairKgPerS;
-                if (patient == craft && craft.Stats.NanoRepairKgPerS > 0 && TryUsePower(craft, craft.Stats.NanoPowerKW * FixedStepClock.TickSeconds)) rate += craft.Stats.NanoRepairKgPerS;
-                if (!next.Missing && craft.Stats.RepairRateKgPerS > 0 && TryUsePower(craft, craft.Stats.RepairPowerKW * FixedStepClock.TickSeconds)) rate += craft.Stats.RepairRateKgPerS;
+                if (patient == craft && craft.Stats.NanoRepairKgPerS > 0 && UseMachinePower(craft, craft.Stats.NanoPowerKW * FixedStepClock.TickSeconds)) rate += craft.Stats.NanoRepairKgPerS;
+                if (!next.Missing && craft.Stats.RepairRateKgPerS > 0 && UseMachinePower(craft, craft.Stats.RepairPowerKW * FixedStepClock.TickSeconds)) rate += craft.Stats.RepairRateKgPerS;
                 if (rate <= 0) { patient.RepairStatus = "field repairs stopped: no power"; continue; }
                 patient.RepairProgressKg = Math.Min(work, patient.RepairProgressKg + rate * FixedStepClock.TickSeconds);
                 patient.RepairStatus = $"field repair of {part.Name} ({patient.RepairProgressKg / work * 100:0}%)";

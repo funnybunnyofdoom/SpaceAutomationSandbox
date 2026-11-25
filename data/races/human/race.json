@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "id": "human",
+  "name": "Human",
+  "description": "People, with everything people need.",
+  "order": 0,
+  "accent": "#5cd6ff",
+  "crew": 4,
+  "supplies": true,
+  "notes": [
+    "Crew grow slowly in habitats, or are recruited for food and water"
+  ]
+}

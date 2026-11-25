@@ -292,11 +292,11 @@ public sealed partial class SectorState
         }
         var load = swarm.LoadKg;
         var outS = Leg(stats.TotalMassKg) + SwarmLandS;
-        var mineS = load / Math.Max(stats.MiningRateKgPerS * Tuning.DrillRateMultiplier, 1e-9);
+        var mineS = load / Math.Max(stats.MiningRateKgPerS * Tuning.DrillRateMultiplier * _mining, 1e-9);
         var backS = Leg(stats.TotalMassKg + load) + SwarmLiftS + SwarmBerthS;
         var cycle = outS + mineS + backS;
         // Energy a trip needs against what its panels make: batteries only smooth it out.
-        var needKJ = stats.DrillPowerKW * mineS + stats.ThrustPowerKW * (ThrustS(stats.TotalMassKg) + ThrustS(stats.TotalMassKg + load));
+        var needKJ = stats.DrillPowerKW * _power * mineS + stats.ThrustPowerKW * (ThrustS(stats.TotalMassKg) + ThrustS(stats.TotalMassKg + load));
         var solarKW = stats.PowerGenerationKW * SolarFactorAt(destination.Position);
         var powerS = solarKW > 0 ? needKJ / solarKW : double.PositiveInfinity;
         return new SwarmRate(outS, mineS, backS, Math.Max(cycle, powerS), powerS > cycle);

@@ -54,12 +54,6 @@ public sealed partial class SectorState
         if (_events.Count > MaxEvents) _events.RemoveAt(0);
     }
 
-    /// <summary>Who the player is (#97): Human, as before there were races, unless the game was started as another.</summary>
-    public Construction.RaceDefinition Race { get; internal set; } = Construction.RaceCatalog.HumanOnly.Default;
-
-    /// <summary>Why the player can't pass a law, or null.</summary>
-    public string? LawBlocker(string lawId) => Race.BlockedLaws.GetValueOrDefault(lawId);
-
     public ActionResult SetLaw(string lawId, bool on)
     {
         if (Laws.All.All(l => l.Id != lawId)) return new(false, $"No law '{lawId}'.");

@@ -196,11 +196,13 @@ public partial class PowerPanel : PanelContainer
                 var s = m.Stats;
                 void U(string icon, string name, double kw) { if (kw > 0) users.Add((icon, Of(m, name), kw)); }
                 U("speed", "thrusters", s.ThrustPowerKW + s.ReversePowerKW + s.LeftPowerKW + s.RightPowerKW);
-                U("mining", "drills", s.DrillPowerKW); U("work", "refinery", s.RefineryPowerKW); U("shipyard", "fabricator", s.FabricatorPowerKW);
-                U("mat_slag", "ejector", s.EjectorPowerKW); U("crew", "habitats", s.HabitatPowerKW); U("mat_food", "farms", s.FarmPowerKW);
-                U("crew", "robots", s.RobotPowerKW); U("research", "labs", s.LabPowerKW); U("shield", "shields", s.ShieldPowerKW);
-                U("salvage", "salvage arms", s.SalvagePowerKW); U("hull", "repair drones", s.RepairPowerKW); U("hull", "nanites", s.NanoPowerKW);
-                U("life", "harvesters", s.HarvestPowerKW); U("life", "repellers", s.RepelPowerKW); U("mat_food", "ranches", s.RanchPowerKW);
+                var factor = SectorState.IsPlayers(m) ? sector.MachinePowerFactor : 1; // #116
+                void M(string icon, string name, double kw) => U(icon, name, kw * factor);
+                M("mining", "drills", s.DrillPowerKW); M("work", "refinery", s.RefineryPowerKW); M("shipyard", "fabricator", s.FabricatorPowerKW);
+                M("mat_slag", "ejector", s.EjectorPowerKW); M("crew", "habitats", s.HabitatPowerKW); M("mat_food", "farms", s.FarmPowerKW);
+                M("crew", "robots", s.RobotPowerKW); M("research", "labs", s.LabPowerKW); U("shield", "shields", s.ShieldPowerKW);
+                M("salvage", "salvage arms", s.SalvagePowerKW); M("hull", "repair drones", s.RepairPowerKW); M("hull", "nanites", s.NanoPowerKW);
+                M("life", "harvesters", s.HarvestPowerKW); M("life", "repellers", s.RepelPowerKW); M("mat_food", "ranches", s.RanchPowerKW);
                 U("mat_antimatter", "containment", s.ContainmentPowerKW); U("speed", "quantum drive", s.QuantumDriveKW);
             }
             var biggest = users.Count == 0 ? 1 : users.Max(u => u.Kw);

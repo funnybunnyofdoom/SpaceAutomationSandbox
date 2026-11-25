@@ -192,7 +192,7 @@ public sealed partial class SectorState
             if (SiteUnder(craft) is not { } site) continue;
             if (s.RepellerCount > 0)
             {
-                craft.RepellerOn = TryUsePower(craft, s.RepelPowerKW * FixedStepClock.TickSeconds);
+                craft.RepellerOn = UseMachinePower(craft, s.RepelPowerKW * FixedStepClock.TickSeconds);
                 if (!craft.RepellerOn) craft.AnimalStatus = "repeller: no power";
             }
             if (s.RanchRateKgPerS > 0) Ranch(craft, body, site);
@@ -206,7 +206,7 @@ public sealed partial class SectorState
         if (!body.HasAnimals || site.Fauna <= 0) { craft.AnimalStatus = "ranch waiting: no animals here"; return; }
         if (craft.FreeCargoKg <= 0) { craft.AnimalStatus = "ranch waiting: no room for the food"; return; }
         if (spare <= 0) { craft.AnimalStatus = "ranch waiting: the herd needs to grow"; craft.RanchRemainderKg = 0; return; }
-        if (!TryUsePower(craft, craft.Stats.RanchPowerKW * FixedStepClock.TickSeconds)) { craft.AnimalStatus = "ranch: no power"; return; }
+        if (!UseMachinePower(craft, craft.Stats.RanchPowerKW * FixedStepClock.TickSeconds)) { craft.AnimalStatus = "ranch: no power"; return; }
         var due = craft.RanchRemainderKg + craft.Stats.RanchRateKgPerS * FixedStepClock.TickSeconds;
         var taken = TakeAnimals(body, site, Math.Min(Math.Min((long)Math.Floor(due), spare), craft.FreeCargoKg));
         craft.RanchRemainderKg = Math.Min(1, due - taken) is var left && left < 1 ? left : 0;

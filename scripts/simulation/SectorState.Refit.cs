@@ -349,12 +349,12 @@ public sealed partial class SectorState
 
         if (craft.YardProgressKg < work)
         {
-            if (!TryUsePower(yard, yard.Stats.FabricatorPowerKW * FixedStepClock.TickSeconds))
+            if (!UseMachinePower(yard, yard.Stats.FabricatorPowerKW * FixedStepClock.TickSeconds))
             {
                 craft.YardStatus = $"waiting: {verb} at {yard.Name} stopped: no power";
                 return true;
             }
-            craft.YardProgressKg = Math.Min(work, craft.YardProgressKg + yard.Stats.FabricationRateKgPerS * Tuning.FabricationRateMultiplier * FixedStepClock.TickSeconds);
+            craft.YardProgressKg = Math.Min(work, craft.YardProgressKg + yard.Stats.FabricationRateKgPerS * Tuning.FabricationRateMultiplier * Trait(yard, _building) * FixedStepClock.TickSeconds);
             craft.YardStatus = $"{verb} at {yard.Name}" + StepLabel(craft, removeCell, addCell, work);
             if (craft.YardProgressKg < work) return true;
         }

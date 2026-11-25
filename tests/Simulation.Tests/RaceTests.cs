@@ -48,6 +48,8 @@ public sealed class RaceTests
     [Theory]
     [InlineData("human")]
     [InlineData("robotic")]
+    [InlineData("alien")]
+    [InlineData("technophile")]
     public void Each_start_can_build_a_first_ship_and_saves_continue_exactly(string race)
     {
         var game = Start(race);
@@ -112,22 +114,172 @@ public sealed class RaceTests
     }
 
     [Fact]
-    public void The_data_names_real_laws_and_bad_files_are_refused()
+    public void Every_race_is_usable_and_says_what_it_does()
     {
-        foreach (var race in Catalog.Races.Races)
-            foreach (var law in race.BlockedLaws.Keys.Concat(race.Leanings.Keys)) Assert.Contains(Laws.All, l => l.Id == law);
-        foreach (var bad in new[]
+        Assert.Empty(Catalog.Races.Problems);
+        Assert.Equal(new[] { "human", "robotic", "alien", "technophile" }, Catalog.Races.Races.Select(r => r.Id));
+        Assert.Contains("Researches 25% faster", SectorState.Describe(Race("technophile"), Catalog));
+        Assert.Contains("Machines use 10% more power", SectorState.Describe(Race("alien"), Catalog));
+        Assert.Contains("The shipyard has a robot bay instead of a habitat", SectorState.Describe(Race("robotic"), Catalog));
+        Assert.Contains("Knows Automation", SectorState.Describe(Race("robotic"), Catalog));
+        Assert.Contains("5 t less metal at the start", SectorState.Describe(Race("technophile"), Catalog));
+        Assert.Contains(SectorState.Describe(Race("robotic"), Catalog), l => l.Contains("Organic crews only") && l.Contains("20 colder") && l.Contains("10 warmer"));
+        var yard = Start("technophile") is var t ? t.Sector.GetCraft(t.ShipyardId) : null!;
+        Assert.Equal((25_000, 9_000), (yard.Inventory["metal"], yard.Inventory["electronics"]));
+        Assert.Equal("Hive yard", Start("alien") is var a ? a.Sector.GetCraft(a.ShipyardId).Name : "");
+    }
+
+    // --- Each trait, measured ---
+
+    private static SectorState With(string trait, int percent, out CraftState yard)
+    {
+        var game = NewGame.Create(NewGame.DefaultSeed, Catalog, TestData.StarterShip(), TestData.StarterShipyard(),
+            race: Race("human") with { Traits = new() { [trait] = percent } });
+        yard = game.Sector.GetCraft(game.ShipyardId);
+        return game.Sector;
+    }
+
+    private static void Run(SectorState sector, double seconds)
+    {
+        for (var i = 0; i < seconds * FixedStepClock.TicksPerSecond; i++) sector.Step();
+    }
+
+    private static double Ratio(string trait, Func<SectorState, CraftState, double> measure)
+    {
+        var plain = measure(With(trait, 0, out var a), a);
+        Assert.True(plain > 0);
+        return measure(With(trait, 50, out var b), b) / plain;
+    }
+
+    [Fact]
+    public void Building_speed() => Assert.Equal(1.5, Ratio(RaceTraits.Building, (s, yard) =>
+    {
+        s.OrderBuild(yard.Id, TestData.StarterShip(), Catalog);
+        Run(s, 3);
+        return yard.BuildQueue[0].ProgressKg;
+    }), 6);
+
+    [Fact]
+    public void Refining_speed() => Assert.Equal(1.5, Ratio(RaceTraits.Refining, (s, yard) =>
+    {
+        yard.Inventory.Add("iron_ore", 20_000);
+        Run(s, 1);
+        return yard.RefiningBatch!.ProgressKg;
+    }), 6);
+
+    [Fact]
+    public void Research_speed() => Assert.Equal(1.5, Ratio(RaceTraits.Research, (s, yard) =>
+    {
+        var design = new ShipDesign("lab", "Lab", TestData.StarterShipyard().Cells.Select(c => c.PartId == "fabricator" ? c with { PartId = "research_lab" } : c));
+        yard.Design = design;
+        yard.Stats = design.ComputeStats(Catalog);
+        Run(s, 30);
+        return s.ResearchPoints;
+    }), 6);
+
+    [Fact]
+    public void Mining_speed_and_machines_power()
+    {
+        double Mined(int percent, string trait, out double usedKJ)
         {
-            """{ "schemaVersion": 2, "races": [ { "id": "human", "name": "H" } ] }""",
-            """{ "schemaVersion": 1, "races": [] }""",
-            """{ "schemaVersion": 1, "races": [ { "id": "robotic", "name": "R" } ] }""",
-            """{ "schemaVersion": 1, "races": [ { "id": "human", "name": "H" }, { "id": "human", "name": "H" } ] }""",
-            """{ "schemaVersion": 1, "races": [ { "id": "human", "name": "H", "tech": ["nope"] } ] }""",
-            """{ "schemaVersion": 1, "races": [ { "id": "human", "name": "H", "shipyardParts": { "habitat": "nope" } } ] }""",
-        })
-            Assert.Throws<FormatException>(() => RaceCatalog.FromJson(bad, Catalog));
+            var sector = With(trait, percent, out _);
+            var ship = sector.GetCraft(sector.PilotCraftId);
+            var rock = TestData.HomeRocks(sector).First(b => b.DepositsKg.ContainsKey("iron_ore"));
+            var site = rock.Sites.First(x => x.DepositsKg.ContainsKey("iron_ore"));
+            var offset = new Vector2D(Math.Cos(site.CentreRad), Math.Sin(site.CentreRad)) * (rock.RadiusM + ship.CollisionRadiusM + 1);
+            ship.Position = ship.PreviousPosition = sector.GetPosition(rock.Id) + offset;
+            ship.HeadingRad = ship.PreviousHeadingRad = FlightModel.WrapAngle(site.CentreRad + Math.PI / 2);
+            ship.Velocity = sector.GetVelocityAt(rock.Id, sector.TimeS);
+            sector.RestoreLanding(ship.Id, rock.Id, offset);
+            Assert.True(sector.TryAnchor(ship.Id).Done);
+            ship.StoredEnergyKJ = 30_000;
+            var solar = ship.Stats.PowerGenerationKW;
+            ship.Stats = ship.Stats with { PowerGenerationKW = 0 };
+            Run(sector, 20);
+            ship.Stats = ship.Stats with { PowerGenerationKW = solar };
+            usedKJ = 30_000 - ship.StoredEnergyKJ;
+            return ship.CargoKg - NewGame.PlayerStartingFuelKg;
+        }
+        var plain = Mined(0, RaceTraits.Mining, out var power);
+        Assert.True(plain > 1_000 && power > 100);
+        Assert.Equal(1.5, Mined(50, RaceTraits.Mining, out var same) / plain, 2);
+        Assert.Equal(power, same, 3);
+        Assert.Equal(plain, Mined(-50, RaceTraits.Power, out var half), 3);
+        Assert.Equal(0.5, half / power, 3);
+    }
+
+    [Fact]
+    public void Crew_supplies_growth_and_recruiting()
+    {
+        Assert.Equal(1.5, Ratio(RaceTraits.CrewSupplies, (s, yard) =>
+        {
+            var before = yard.Inventory["food"] - yard.FoodRemainderKg;
+            Run(s, 1_200);
+            return before - yard.Inventory["food"] + yard.FoodRemainderKg;
+        }), 1); // the crew grow meanwhile, the same in both
+        Assert.Equal(1.5, Ratio(RaceTraits.CrewGrowth, (s, yard) => { Run(s, 60); return yard.CrewGrowthProgressS; }), 6);
+        var sector = With(RaceTraits.RecruitCost, -30, out var home);
+        var food = home.Inventory["food"];
+        var water = home.Inventory["water"];
+        Assert.True(sector.TryRecruit(home.Id, 1).Done);
+        Assert.Equal((35, 70), (food - home.Inventory["food"], water - home.Inventory["water"]));
+        Assert.Equal((35, 70), sector.RecruitCostKg);
+    }
+
+    [Fact]
+    public void Traits_leave_others_craft_alone()
+    {
+        var sector = With(RaceTraits.Building, 50, out var yard);
+        yard.FactionId = 4;
+        sector.OrderBuild(yard.Id, TestData.StarterShip(), Catalog);
+        Run(sector, 3);
+        var plain = With(RaceTraits.Building, 0, out var other);
+        plain.OrderBuild(other.Id, TestData.StarterShip(), Catalog);
+        Run(plain, 3);
+        Assert.Equal(other.BuildQueue[0].ProgressKg, yard.BuildQueue[0].ProgressKg, 6);
+    }
+
+    // --- Files ---
+
+    [Theory]
+    [InlineData(null, "no race.json")]
+    [InlineData("{ nope", "invalid")]
+    [InlineData("""{ "schemaVersion": 1, "id": "x", "name": "X" }""", "schemaVersion 1")]
+    [InlineData("""{ "schemaVersion": 2, "id": "y", "name": "X" }""", "folder")]
+    [InlineData("""{ "schemaVersion": 2, "id": "x" }""", "no name")]
+    [InlineData("""{ "schemaVersion": 2, "id": "x", "name": "X", "crew": -1 }""", "crew")]
+    [InlineData("""{ "schemaVersion": 2, "id": "x", "name": "X", "accent": "red" }""", "#rrggbb")]
+    [InlineData("""{ "schemaVersion": 2, "id": "x", "name": "X", "traits": { "luck": 10 } }""", "luck")]
+    [InlineData("""{ "schemaVersion": 2, "id": "x", "name": "X", "traits": { "mining": 51 } }""", "51%")]
+    [InlineData("""{ "schemaVersion": 2, "id": "x", "name": "X", "tech": ["nope"] }""", "tech 'nope'")]
+    [InlineData("""{ "schemaVersion": 2, "id": "x", "name": "X", "stockKg": { "nope": 1 } }""", "material 'nope'")]
+    [InlineData("""{ "schemaVersion": 2, "id": "x", "name": "X", "shipyardParts": { "habitat": "nope" } }""", "part 'nope'")]
+    [InlineData("""{ "schemaVersion": 2, "id": "x", "name": "X", "blockedLaws": { "nope": "" } }""", "law 'nope'")]
+    public void A_bad_race_is_left_out_with_the_reason(string? json, string reason)
+    {
+        var races = RaceCatalog.Load(new[] { new RaceSource("x", json) }, Catalog, Laws.All.Select(l => l.Id).ToList());
+        Assert.Contains(reason, Assert.Single(races.Problems));
+        Assert.Equal("human", Assert.Single(races.Races).Id); // the game still plays
+    }
+
+    [Fact]
+    public void A_race_can_bring_its_own_ship_and_shipyard()
+    {
+        var laws = Laws.All.Select(l => l.Id).ToList();
+        const string json = """{ "schemaVersion": 2, "id": "x", "name": "X", "crew": 2, "supplies": true, "shipName": "Seed" }""";
+        var ship = new ShipDesign("seed", "Seed pod", TestData.StarterShip().Cells.Append(new DesignCell(new GridPos(0, 9), "hull")).Where(c => c.Pos.Y < 9));
+        var race = RaceCatalog.Read(new RaceSource("x", json, ship.ToJson()), Catalog, laws);
+        var game = NewGame.Create(1, Catalog, TestData.StarterShip(), TestData.StarterShipyard(), race: race);
+        Assert.Equal(("Seed", "seed"), (game.Sector.GetCraft(game.PlayerCraftId).Name, game.Sector.GetCraft(game.PlayerCraftId).Design.Id));
+        var bad = new ShipDesign("bad", "Bad", new[] { new DesignCell(new GridPos(0, 0), "hull") });
+        Assert.Contains("ship.json", Assert.Throws<FormatException>(() => RaceCatalog.Read(new RaceSource("x", json, bad.ToJson()), Catalog, laws)).Message);
+    }
+
+    [Fact]
+    public void A_save_whose_race_is_missing_says_so()
+    {
         var game = Start("robotic");
         var json = SaveGameSerializer.ToJson(game.Sector, game.PlayerCraftId).Replace("\"race\": \"robotic\"", "\"race\": \"slime\"");
-        Assert.Contains("slime", Assert.Throws<FormatException>(() => SaveGameSerializer.FromJson(json, Catalog)).Message);
+        Assert.Contains("data/races/slime", Assert.Throws<FormatException>(() => SaveGameSerializer.FromJson(json, Catalog)).Message);
     }
 }

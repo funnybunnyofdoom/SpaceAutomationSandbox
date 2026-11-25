@@ -102,7 +102,7 @@ public partial class CargoPanel : PanelContainer
         crewButtons.AddChild(_crewIn);
         crewButtons.AddChild(_crewOut);
         _recruit = MoveButton("Recruit 1",
-            $"Take on one crew member now, for {SectorState.RecruitFoodKg} kg food and {SectorState.RecruitWaterKg} kg water from that craft's stock",
+            "Take on one crew member now, for food and water from that craft's stock",
             () =>
             {
                 if (RecruitAt() is not { } at) return;
@@ -226,6 +226,8 @@ public partial class CargoPanel : PanelContainer
                 c.Crew > 0 && hours < 24 ? Severity.Warning : Severity.Normal, c.Crew / (double)Math.Max(1, c.Stats.CrewCapacity));
         }).ToList());
         _crewIn.Visible = _crewOut.Visible = canMove;
+        var (recruitFood, recruitWater) = _sector().RecruitCostKg;
+        _recruit.TooltipText = $"Take on one crew member now, for {recruitFood} kg food and {recruitWater} kg water from that craft's stock"; // #116
         _recruit.Visible = RecruitAt() is { } at;
         if (RecruitAt() is { } where) _recruit.Text = $"Recruit 1 at {where.Name}";
     }

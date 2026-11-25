@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 2,
+  "id": "alien",
+  "name": "Ixari",
+  "description": "An alien hive people: many hands, few scholars.",
+  "order": 20,
+  "accent": "#63d68a",
+  "crew": 6,
+  "supplies": true,
+  "traits": {
+    "crewGrowth": 50,
+    "recruitCost": -30,
+    "mining": 15,
+    "research": -20,
+    "power": 10
+  },
+  "leanings": {
+    "protect_life": {
+      "wants": 10,
+      "opposes": 0
+    },
+    "organic_crews": {
+      "wants": 10,
+      "opposes": -5
+    }
+  },
+  "shipyardName": "Hive yard"
+}

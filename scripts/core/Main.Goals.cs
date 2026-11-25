@@ -42,7 +42,7 @@ public partial class Main
         {
             var mark = _goalsDone.Contains(step.Id) ? "[x]" : step == current ? "-> " : "[ ]";
             text.Append(mark).Append(' ').Append(step.Title).Append('\n');
-            if (step == current) text.Append("     ").Append(WithKeys(step.Hint)).Append('\n');
+            if (step == current) text.Append("     ").Append(WithKeys(_sector.Race.GoalHints.GetValueOrDefault(step.Id, step.Hint))).Append('\n');
         }
         if (current is null) text.Append("All done. Hide this list from the pause menu.\n");
         return text.ToString();

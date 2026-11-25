@@ -46,8 +46,8 @@ public sealed partial class SectorState
     public static double SuppliesLastHours(CraftState craft)
     {
         if (craft.Crew <= 0) return double.PositiveInfinity;
-        var food = craft.Inventory[FoodMaterial] / (craft.Crew * FoodKgPerCrewPerS);
-        var water = craft.Inventory[WaterMaterial] / (craft.Crew * WaterKgPerCrewPerS);
+        var food = craft.Inventory[FoodMaterial] / (craft.Crew * FoodKgPerCrewPerS * craft.CrewSupplyFactor);
+        var water = craft.Inventory[WaterMaterial] / (craft.Crew * WaterKgPerCrewPerS * craft.CrewSupplyFactor);
         return Math.Min(food, water) / 3600;
     }
 
@@ -55,6 +55,7 @@ public sealed partial class SectorState
     {
         foreach (var craft in _crafts)
         {
+            craft.CrewSupplyFactor = Trait(craft, _crewSupplies);
             StepFarm(craft);
             if (craft.LegacyNoCrew) { craft.CrewShortReason = null; continue; }
 
@@ -62,16 +63,16 @@ public sealed partial class SectorState
             var supplied = false;
             if (craft.Crew > 0)
             {
-                if (!TryUsePower(craft, craft.Stats.HabitatPowerKW * FixedStepClock.TickSeconds)) reason = "no power for life support";
-                else if (!Consume(craft, FoodMaterial, craft.FoodRemainderKg, craft.Crew * FoodKgPerCrewPerS, out var food)) reason = "no food";
-                else if (!Consume(craft, WaterMaterial, craft.WaterRemainderKg, craft.Crew * WaterKgPerCrewPerS, out var water)) { reason = "no water"; craft.FoodRemainderKg = food; }
+                if (!UseMachinePower(craft, craft.Stats.HabitatPowerKW * FixedStepClock.TickSeconds)) reason = "no power for life support";
+                else if (!Consume(craft, FoodMaterial, craft.FoodRemainderKg, craft.Crew * FoodKgPerCrewPerS * craft.CrewSupplyFactor, out var food)) reason = "no food";
+                else if (!Consume(craft, WaterMaterial, craft.WaterRemainderKg, craft.Crew * WaterKgPerCrewPerS * craft.CrewSupplyFactor, out var water)) { reason = "no water"; craft.FoodRemainderKg = food; }
                 else { craft.FoodRemainderKg = food; craft.WaterRemainderKg = water; supplied = true; }
             }
 
             // Growth: a supplied habitat with room slowly gains crew.
             if (supplied && craft.Crew < craft.Stats.CrewCapacity)
             {
-                craft.CrewGrowthProgressS += FixedStepClock.TickSeconds;
+                craft.CrewGrowthProgressS += FixedStepClock.TickSeconds * Trait(craft, _crewGrowth);
                 if (craft.CrewGrowthProgressS >= CrewGrowthS) { craft.Crew++; craft.CrewGrowthProgressS = 0; }
             }
             else craft.CrewGrowthProgressS = 0;
@@ -80,7 +81,7 @@ public sealed partial class SectorState
             var robots = craft.Stats.RobotCount;
             string? robotReason = null;
             if (robots > 0 && LawActive(Laws.OrganicCrews)) { robots = 0; robotReason = "robots don't count as crew (Organic crews only)"; } // #36
-            if (robots > 0 && !TryUsePower(craft, craft.Stats.RobotPowerKW * FixedStepClock.TickSeconds))
+            if (robots > 0 && !UseMachinePower(craft, craft.Stats.RobotPowerKW * FixedStepClock.TickSeconds))
             {
                 robots = 0;
                 robotReason = "no power for the robots";
@@ -117,7 +118,7 @@ public sealed partial class SectorState
     {
         var rate = craft.Stats.FoodRateKgPerS;
         if (rate <= 0 || !Operational(craft) || craft.Inventory[WaterMaterial] < 1) return;
-        if (!TryUsePower(craft, craft.Stats.FarmPowerKW * FixedStepClock.TickSeconds)) return;
+        if (!UseMachinePower(craft, craft.Stats.FarmPowerKW * FixedStepClock.TickSeconds)) return;
         var due = craft.FarmRemainderKg + rate * FixedStepClock.TickSeconds;
         var whole = Math.Min((long)Math.Floor(due), craft.Inventory[WaterMaterial]);
         if (whole > 0)
@@ -143,10 +144,11 @@ public sealed partial class SectorState
         var room = craft.Stats.CrewCapacity - craft.Crew;
         if (room <= 0) return new(false, $"{craft.Name} has no habitat room{(craft.Stats.CrewCapacity == 0 ? " (no habitat)" : "")}.");
         if (count > room) return new(false, $"{craft.Name} has habitat room for {room} more.");
-        var cost = new Dictionary<string, long> { [FoodMaterial] = RecruitFoodKg * count, [WaterMaterial] = RecruitWaterKg * count };
+        var (foodKg, waterKg) = RecruitCostKg;
+        var cost = new Dictionary<string, long> { [FoodMaterial] = foodKg * count, [WaterMaterial] = waterKg * count };
         var shortfall = craft.Inventory.Shortfall(cost);
         if (shortfall.Count > 0)
-            return new(false, $"Recruiting {count} needs {RecruitFoodKg * count} kg food and {RecruitWaterKg * count} kg water: "
+            return new(false, $"Recruiting {count} needs {foodKg * count} kg food and {waterKg * count} kg water: "
                               + string.Join(", ", shortfall.Select(kv => $"{kv.Key} short by {kv.Value} kg")) + ".");
         craft.Inventory.TryRemove(cost);
         foreach (var (material, kg) in cost) _ejectedKg[material] = _ejectedKg.GetValueOrDefault(material) + kg;

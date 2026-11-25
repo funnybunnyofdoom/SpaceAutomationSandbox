@@ -111,13 +111,13 @@ public sealed partial class SectorState
             if (!Operational(yard)) { patient.RepairStatus = $"repairs at {yard.Name} stopped: {yard.CrewShortReason}"; continue; }
             if (patient.RepairProgressKg < work)
             {
-                if (!TryUsePower(yard, yard.Stats.FabricatorPowerKW * FixedStepClock.TickSeconds))
+                if (!UseMachinePower(yard, yard.Stats.FabricatorPowerKW * FixedStepClock.TickSeconds))
                 {
                     patient.RepairStatus = $"repairs at {yard.Name} stopped: no power";
                     continue;
                 }
                 patient.RepairProgressKg = Math.Min(work,
-                    patient.RepairProgressKg + yard.Stats.FabricationRateKgPerS * Tuning.FabricationRateMultiplier * FixedStepClock.TickSeconds);
+                    patient.RepairProgressKg + yard.Stats.FabricationRateKgPerS * Tuning.FabricationRateMultiplier * Trait(yard, _building) * FixedStepClock.TickSeconds);
                 patient.RepairStatus = $"{verb} {part.Name} at {yard.Name} ({patient.RepairProgressKg / work * 100:0}%)";
                 if (patient.RepairProgressKg < work) continue;
             }

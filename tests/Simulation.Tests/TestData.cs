@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using SpaceAutomationSandbox.Construction;
 
 namespace SpaceAutomationSandbox.Simulation.Tests;
@@ -23,7 +24,14 @@ internal static class TestData
     public static PartCatalog Catalog()
     {
         var catalog = PartCatalog.FromJson(Read("data/parts/parts.json"), Materials(), Recipes()).WithResearch(Research());
-        return catalog.WithRaces(RaceCatalog.FromJson(Read("data/races/races.json"), catalog));
+        return catalog.WithRaces(Races(catalog));
+    }
+
+    public static RaceCatalog Races(PartCatalog catalog)
+    {
+        static string? Text(string path) => File.Exists(path) ? File.ReadAllText(path) : null;
+        return RaceCatalog.Load(Directory.GetDirectories(Path.Combine(RepoRoot.Value, "data", "races"))
+            .Select(d => new RaceSource(Path.GetFileName(d), Text(Path.Combine(d, "race.json")), Text(Path.Combine(d, "ship.json")), Text(Path.Combine(d, "shipyard.json")))), catalog, Laws.All.Select(l => l.Id).ToList());
     }
 
     public static ResearchCatalog Research() => ResearchCatalog.FromJson(Read("data/research/research.json"));

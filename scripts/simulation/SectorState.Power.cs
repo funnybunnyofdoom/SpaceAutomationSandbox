@@ -249,7 +249,7 @@ public sealed partial class SectorState
             if (craft.Inventory[SpentFuelMaterial] > 0) { EjectSpentFuel(craft); continue; } // spent fuel first, none kept (#79)
             var surplus = craft.Inventory["slag"] - SlagReserveKg;
             if (surplus <= 0) { craft.EjectionRemainderKg = 0; continue; }
-            if (!TryUsePower(craft, craft.Stats.EjectorPowerKW * FixedStepClock.TickSeconds)) continue;
+            if (!UseMachinePower(craft, craft.Stats.EjectorPowerKW * FixedStepClock.TickSeconds)) continue;
 
             var due = craft.EjectionRemainderKg + craft.Stats.EjectionRateKgPerS * FixedStepClock.TickSeconds;
             var whole = Math.Min((long)Math.Floor(due), surplus);
@@ -268,7 +268,7 @@ public sealed partial class SectorState
 
     private void EjectSpentFuel(CraftState craft)
     {
-        if (!TryUsePower(craft, craft.Stats.EjectorPowerKW * FixedStepClock.TickSeconds)) return;
+        if (!UseMachinePower(craft, craft.Stats.EjectorPowerKW * FixedStepClock.TickSeconds)) return;
         var due = craft.EjectionRemainderKg + craft.Stats.EjectionRateKgPerS * FixedStepClock.TickSeconds;
         var whole = Math.Min((long)Math.Floor(due), craft.Inventory[SpentFuelMaterial]);
         craft.Inventory.TryRemove(new Dictionary<string, long> { [SpentFuelMaterial] = whole });

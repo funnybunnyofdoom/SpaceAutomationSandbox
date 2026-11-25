@@ -36,8 +36,8 @@ public sealed partial class SectorState
         var seconds = AutoSupplyHours * 3600;
         return fuel + materialId switch
         {
-            FoodMaterial => (long)Math.Ceiling(station.Crew * FoodKgPerCrewPerS * seconds),
-            WaterMaterial => (long)Math.Ceiling(station.Crew * WaterKgPerCrewPerS * seconds + station.Stats.FoodRateKgPerS * seconds),
+            FoodMaterial => (long)Math.Ceiling(station.Crew * FoodKgPerCrewPerS * station.CrewSupplyFactor * seconds),
+            WaterMaterial => (long)Math.Ceiling(station.Crew * WaterKgPerCrewPerS * station.CrewSupplyFactor * seconds + station.Stats.FoodRateKgPerS * seconds),
             _ => 0,
         };
     }
@@ -102,7 +102,7 @@ public sealed partial class SectorState
         var seconds = AutoSupplyHours * 3600;
         foreach (var (material, rate) in new[] { (FoodMaterial, FoodKgPerCrewPerS), (WaterMaterial, WaterKgPerCrewPerS) })
         {
-            var need = (long)Math.Ceiling(ship.Crew * rate * seconds) - ship.Inventory[material];
+            var need = (long)Math.Ceiling(ship.Crew * rate * ship.CrewSupplyFactor * seconds) - ship.Inventory[material];
             if (need <= 0) continue;
             var spare = station.Inventory[material] - WantedKg(station, material);
             var amount = Math.Min(Math.Min(need, spare), MaxTransferKg(station.Id, ship.Id, material));

@@ -25,7 +25,6 @@ public partial class Main : Node2D
     private const string PartsPath = "res://data/parts/parts.json";
     private const string RecipesPath = "res://data/recipes/recipes.json";
     private const string ResearchPath = "res://data/research/research.json";
-    private const string RacesPath = "res://data/races/races.json";
     private const string StarterDesignPath = "res://data/blueprints/starter_ship.json";
     private const string StarterShipyardPath = "res://data/blueprints/starter_shipyard.json";
 
@@ -492,7 +491,7 @@ public partial class Main : Node2D
             });
         });
         _saveScreen.Closed += () => { if (InMenu) ShowTitle(); else OpenPauseAgain(); };
-        _newGame = new NewGameScreen(() => _catalog?.Races ?? RaceCatalog.HumanOnly);
+        _newGame = new NewGameScreen(() => _catalog?.Races ?? RaceCatalog.HumanOnly, race => _catalog is { } c ? SectorState.Describe(race, c) : System.Array.Empty<string>());
         _newGame.StartChosen += (name, seed, goals, supplies, race) => LeaveTitle(() => { StartNewGame(seed, name, supplies, race); _goalsOn = goals; });
         _newGame.BackChosen += ShowTitle;
         _pause = new PauseMenu();
@@ -687,7 +686,7 @@ public partial class Main : Node2D
             var recipes = RecipeCatalog.FromJson(Godot.FileAccess.GetFileAsString(RecipesPath), materials);
             var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath), materials, recipes)
                 .WithResearch(ResearchCatalog.FromJson(Godot.FileAccess.GetFileAsString(ResearchPath)));
-            catalog.WithRaces(RaceCatalog.FromJson(Godot.FileAccess.GetFileAsString(RacesPath), catalog)); // #97
+            catalog.WithRaces(RaceLibrary.Load(catalog)); // #97, #116
             var design = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterDesignPath));
             var shipyard = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterShipyardPath));
             var errors = design.Validate(catalog, DesignRole.Ship)

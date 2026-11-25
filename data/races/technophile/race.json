@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 2,
+  "id": "technophile",
+  "name": "Technophile",
+  "description": "People who would rather build a machine than do it by hand.",
+  "order": 30,
+  "accent": "#b08cff",
+  "crew": 4,
+  "supplies": true,
+  "traits": {
+    "research": 25,
+    "refining": 10,
+    "power": -10,
+    "mining": -15,
+    "crewGrowth": -30,
+    "crewSupplies": 10
+  },
+  "stockKg": {
+    "electronics": 2000,
+    "metal": -5000
+  },
+  "tech": [
+    "photovoltaics"
+  ],
+  "leanings": {
+    "organic_crews": {
+      "wants": -10,
+      "opposes": 5
+    },
+    "protect_life": {
+      "wants": -5,
+      "opposes": 0
+    }
+  }
+}

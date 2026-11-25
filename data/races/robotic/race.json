@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 2,
+  "id": "robotic",
+  "name": "Robotic",
+  "description": "Machines that run on power alone.",
+  "order": 10,
+  "accent": "#e8a33d",
+  "crew": 0,
+  "supplies": false,
+  "shipyardParts": {
+    "habitat": "robot_bay"
+  },
+  "tech": [
+    "automation"
+  ],
+  "blockedLaws": {
+    "organic_crews": "You are robots: it would stop your own craft."
+  },
+  "leanings": {
+    "organic_crews": {
+      "wants": -20,
+      "opposes": 10
+    }
+  },
+  "notes": [
+    "Robots need power, never food or water; you can still house and recruit people"
+  ]
+}

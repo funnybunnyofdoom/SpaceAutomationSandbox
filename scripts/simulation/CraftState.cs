@@ -150,6 +150,9 @@ public sealed class CraftState
     /// <summary>Crew aboard (#11). Live in habitats; bigger craft need them to fly and work.</summary>
     public int Crew { get; internal set; }
 
+    /// <summary>Crew's food and water, as a multiple of the usual (#116). Set every tick; not saved.</summary>
+    internal double CrewSupplyFactor { get; set; } = 1;
+
     /// <summary>Why the crew can't run the craft this tick ("no food", "needs 3 crew (has 1)"…), or null. Not saved.</summary>
     public string? CrewShortReason { get; internal set; }
 

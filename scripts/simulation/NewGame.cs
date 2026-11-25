@@ -88,6 +88,8 @@ public static class NewGame
         StartingSupplies supplies = StartingSupplies.Standard, RaceDefinition? race = null)
     {
         race ??= catalog.Races.Default;
+        starterShip = race.Ship ?? starterShip; // #116
+        starterShipyard = race.Shipyard ?? starterShipyard;
         if (race.ShipyardParts.Count > 0) // #97
             starterShipyard = new ShipDesign($"{starterShipyard.Id}_{race.Id}", $"{starterShipyard.Name} ({race.Name})",
                 starterShipyard.Cells.Select(c => race.ShipyardParts.TryGetValue(c.PartId, out var instead) ? c with { PartId = instead } : c));
@@ -101,7 +103,7 @@ public static class NewGame
         if (race.Tech.Count > 0) sector.RestoreResearch(0, race.Tech, allUnlocked: false);
         var primary = SectorGenerator.HomePlanet(sector);
 
-        var player = new CraftState(sector.AllocateCraftId(), "Player", starterShip, starterShip.ComputeStats(catalog),
+        var player = new CraftState(sector.AllocateCraftId(), race.ShipName, starterShip, starterShip.ComputeStats(catalog),
             SectorGenerator.PlayerSpawnPoint(sector), headingRad: 0)
         {
             // In a circular orbit around Home (#32): it doesn't fall, and it keeps pace with the yard.
@@ -113,7 +115,7 @@ public static class NewGame
         player.Inventory.Add(SectorState.FuelMaterial, PlayerStartingFuelKg);
         sector.PilotCraftId = player.Id;
 
-        var yard = new CraftState(sector.AllocateCraftId(), "Shipyard", starterShipyard, starterShipyard.ComputeStats(catalog),
+        var yard = new CraftState(sector.AllocateCraftId(), race.ShipyardName, starterShipyard, starterShipyard.ComputeStats(catalog),
             Vector2D.Zero, headingRad: 0);
         sector.AddCraft(yard);
         // Spawn point is straight "up" (−Y) from the primary, i.e. angle −π/2 on its orbit circle.
@@ -123,8 +125,10 @@ public static class NewGame
         foreach (var (material, kg) in StartingStockKg)
         {
             if (!catalog.Materials.Contains(material)) throw new InvalidOperationException($"Starting stock uses unknown material '{material}'.");
-            yard.Inventory.Add(material, kg);
+            if (kg + race.StockKg.GetValueOrDefault(material) is > 0 and var stock) yard.Inventory.Add(material, stock);
         }
+        foreach (var (material, kg) in race.StockKg.OrderBy(m => m.Key, StringComparer.Ordinal))
+            if (kg > 0 && !StartingStockKg.ContainsKey(material)) yard.Inventory.Add(material, kg);
         if (race.Supplies)
         {
             var (food, water) = SuppliesKg(supplies);

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cy3lxk5gxolm4"
-path="res://.godot/imported/robotic.webp-b12351a25246cf0d9d3600cd879e3e56.ctex"
+uid="uid://b04myjm12d7rn"
+path="res://.godot/imported/portrait.webp-3ca1404ea7ec53b7ca9977165a58bac3.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/races/robotic.webp"
-dest_files=["res://.godot/imported/robotic.webp-b12351a25246cf0d9d3600cd879e3e56.ctex"]
+source_file="res://data/races/human/portrait.webp"
+dest_files=["res://.godot/imported/portrait.webp-3ca1404ea7ec53b7ca9977165a58bac3.ctex"]
 
 [params]
 
