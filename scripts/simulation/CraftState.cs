@@ -177,7 +177,8 @@ public sealed class CraftState
     public double EjectionRemainderKg { get; internal set; }
 
     public CraftId Id { get; }
-    public string Name { get; }
+    /// <summary>What it's called; only shown, never used to find it (#115).</summary>
+    public string Name { get; internal set; }
     /// <summary>Current design: parts that broke off (#34) are gone from it.</summary>
     public ShipDesign Design { get; internal set; }
 

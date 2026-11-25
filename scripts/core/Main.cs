@@ -179,6 +179,7 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_shipyardPanel);
             _fleetPanel = new FleetPanel(() => _sector, () => _player?.Id) { Visible = false };
             _fleetPanel.CraftChosen += Pilot;
+            _fleetPanel.RenameChosen += AskRename; // #115
             _fleetPanel.Changed += () => _changedSinceSave = true;
             _fleetPanel.CraftTargeted += target =>
             {
@@ -916,6 +917,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Power)) Toggle(_powerPanel, () => _powerPanel!.Open());
         else if (Pressed(InputActions.Map)) ToggleMap();
         else if (Pressed(InputActions.MenuBar)) ToggleTopBar(); // #106
+        else if (Pressed(InputActions.Rename) && _player is { } mine) AskRename(mine.Id); // #115
         else if (Pressed(InputActions.Help)) _hud.ToggleHelp();
         else if (Pressed(InputActions.Fullscreen)) ToggleFullscreen();
         else if (Pressed(InputActions.TimeFaster)) { _warp.Paused = false; _warp.Faster(); ShowStatus($"Time {_warp}."); }

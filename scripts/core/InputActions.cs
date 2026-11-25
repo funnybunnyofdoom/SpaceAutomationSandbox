@@ -51,6 +51,7 @@ public static class InputActions
     public const string Cargo = "open_cargo";
     public const string Job = "open_job";
     public const string Debug = "open_debug";
+    public const string Rename = "rename_craft";
     public const string ClosePanels = "close_panels";
     public const string QuickSave = "game_quicksave";
     public const string QuickLoad = "game_quickload";
@@ -109,7 +110,7 @@ public static class InputActions
         (Diagnostics, "Diagnostics", "Panels"), (Help, "Keys and help", "Panels"),
         (MenuBar, "Show / hide the menu bar", "Panels"),
         (PanelFocus, "Use the open panel with keys / controller", "Panels"),
-        (ClosePanels, "Close panels / pause menu", "Game"), (TimeFaster, "Time faster", "Game"), (TimeSlower, "Time slower", "Game"),
+        (Rename, "Rename what you fly", "Game"), (ClosePanels, "Close panels / pause menu", "Game"), (TimeFaster, "Time faster", "Game"), (TimeSlower, "Time slower", "Game"),
         (TimePause, "Pause time", "Game"), (QuickSave, "Quicksave", "Game"), (QuickLoad, "Quickload", "Game"), (Fullscreen, "Fullscreen", "Game"),
         (EditUndo, "Undo", "Blueprint editor"),
         (EditRedo, "Redo", "Blueprint editor"),
@@ -180,6 +181,7 @@ public static class InputActions
         Add(Cargo, 0.5f, Keys(Key.C));
         Add(Job, 0.5f, Keys(Key.J));
         Add(Debug, 0.5f, Keys(Key.F3));
+        Add(Rename, 0.5f, Keys(Key.F7)); // #115
         Add(ClosePanels, 0.5f, Keys(Key.Escape), Pad(JoyButton.Start)); // closes panels, else opens the pause menu (#59)
         Add(QuickSave, 0.5f, Keys(Key.F6));
         Add(QuickLoad, 0.5f, Keys(Key.F9));

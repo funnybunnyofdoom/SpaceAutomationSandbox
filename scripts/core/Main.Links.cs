@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using SpaceAutomationSandbox.Simulation;
 using SpaceAutomationSandbox.UI;
@@ -49,6 +50,7 @@ public partial class Main
         {
             if (!you) items.Add(("Fly this craft", true, () => { if (_sector.Exists(target)) Pilot(target.Craft); }));
             if (craft.IsShipyard) items.Add(("Open its shipyard", true, () => _shipyardPanel?.Open(target.Craft)));
+            items.Add(("Rename...", true, () => AskRename(target.Craft)));
             items.Add(("Show in the fleet", true, () => _fleetPanel?.OpenAt(name)));
         }
         if (_player is { } p && !you && _sector.FlyToBlocker(p, target) is null)
@@ -56,6 +58,16 @@ public partial class Main
         // With keys or a controller the menu opens at what has focus.
         _clickAt = _navPanel is not null && GetViewport().GuiGetFocusOwner() is { } focused ? focused.GlobalPosition + new Vector2(20, 20) : GetViewport().GetMousePosition();
         Callable.From(() => ShowPopup(items)).CallDeferred(); // after the click that asked for it
+    }
+
+    /// <summary>Asks for a craft's new name (#115).</summary>
+    private void AskRename(CraftId id)
+    {
+        if (_sector.Crafts.FirstOrDefault(c => c.Id == id) is not { IsWreck: false } craft || !SectorState.IsPlayers(craft)) return;
+        var sector = _sector;
+        _confirm.AskText($"Rename {craft.Name}", craft.Name, SectorState.MaxCraftName, "Rename",
+            name => ReferenceEquals(sector, _sector) ? sector.RenameBlocker(id, name) : "That game is closed.",
+            name => { ShowStatus(sector.RenameCraft(id, name).Message); _changedSinceSave = true; });
     }
 
     private void ShowOnMap(TargetRef target)

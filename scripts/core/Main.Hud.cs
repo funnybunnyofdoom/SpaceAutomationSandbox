@@ -104,13 +104,13 @@ public partial class Main
         foreach (var line in Lines(lines))
         {
             var parts = line.Split("   ", StringSplitOptions.RemoveEmptyEntries);
-            var yard = yards.FirstOrDefault(y => parts[0].StartsWith(y.Key, StringComparison.Ordinal)).Value;
+            var yard = yards.OrderByDescending(y => y.Key.Length).FirstOrDefault(y => parts[0].StartsWith(y.Key, StringComparison.Ordinal)).Value;
             if (yard is null)
             {
                 rows.Add(parts[0].Contains("warp gate") ? new HudRow("gate", line, Link: _sector.Crafts.FirstOrDefault(c => SectorState.IsGate(c) && line.StartsWith(c.Name + ":", StringComparison.Ordinal)) is { } g ? TargetRef.Of(g) : null) : Row(line));
                 continue;
             }
-            var wrong = WarningWords.Any(line.Contains);
+            var wrong = WarningWords.Any(line[yard.Name.Length..].Contains); // not for what it's called (#115)
             if (yard.BuildQueue.Count > 0) rows.Add(new HudRow(wrong ? "warn" : "shipyard", parts[0], wrong ? Severity.Warning : Severity.Normal, yard.BuildQueue[0].Fraction, Tip: line, Link: TargetRef.Of(yard)));
             else rows.Add(new HudRow(wrong ? "warn" : "shipyard", parts[0], wrong ? Severity.Warning : Severity.Normal, Tip: line, Link: TargetRef.Of(yard)));
             foreach (var part in parts.Skip(1))

@@ -41,6 +41,9 @@ public partial class FleetPanel : PanelContainer
     /// <summary>Raised when something in the game was changed from here.</summary>
     public event Action? Changed;
 
+    /// <summary>Raised when the player wants to rename a craft (#115).</summary>
+    public event Action<CraftId>? RenameChosen;
+
     /// <summary>Raised by the Swarms button (#30).</summary>
     public event Action? SwarmsChosen;
 
@@ -190,6 +193,7 @@ public partial class FleetPanel : PanelContainer
             var row = new FleetRow();
             row.Fly += id => { CraftChosen?.Invoke(id); Refresh(); };
             row.Target += id => CraftTargeted?.Invoke(id);
+            row.Rename += id => RenameChosen?.Invoke(id);
             row.Gate += id =>
             {
                 if (_sector().Crafts.FirstOrDefault(c => c.Id == id) is not { } gate) return;
@@ -242,10 +246,10 @@ public partial class FleetPanel : PanelContainer
         private readonly Label _name = Line(), _doing = Line();
         private readonly TextureRect _light = UiTheme.Icon(""), _job = UiTheme.Icon("");
         private readonly StatBar _battery = new(), _cargo = new();
-        private readonly Button _fly, _target, _gate;
+        private readonly Button _fly, _target, _gate, _rename;
         private CraftId _id = CraftId.None;
 
-        public event Action<CraftId>? Fly, Target, Gate;
+        public event Action<CraftId>? Fly, Target, Gate, Rename;
 
         private static Label Line() => new()
         {
@@ -270,6 +274,9 @@ public partial class FleetPanel : PanelContainer
             var top = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
             top.AddChild(_light);
             top.AddChild(_name);
+            _rename = Button("", "Rename", () => Rename?.Invoke(_id));
+            (_rename.Icon, _rename.Flat, _rename.TextureFilter) = (UiIcons.Get("tool_draw"), true, TextureFilterEnum.Nearest);
+            row.AddChild(_rename);
             middle.AddChild(top);
             var second = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
             second.AddChild(_job);
@@ -326,6 +333,7 @@ public partial class FleetPanel : PanelContainer
                 _cargo.Set(craft.HasCargoLimit ? craft.CargoKg / (double)craft.CargoCapacityKg : 0,
                     craft.HasCargoLimit ? $"{craft.CargoKg / 1000.0:0.#} / {craft.CargoCapacityKg / 1000.0:0.#} t" : $"{craft.CargoKg / 1000.0:0.#} t");
 
+            _rename.Visible = !craft.IsWreck;
             _fly.Text = you ? "Flying" : "Fly";
             _fly.Disabled = _target.Disabled = you;
             _gate.Visible = SectorState.IsGate(craft) && craft.Stats.GateLockCount > 0; // #95
