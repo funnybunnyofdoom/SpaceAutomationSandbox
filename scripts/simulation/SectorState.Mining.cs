@@ -25,7 +25,7 @@ public sealed partial class SectorState
         var body = GetBody(craft.LandedOnBodyId);
         var bearing = LandedBearing(craft);
         if (LawForbidsMining(body) is not null) return null; // the laws in force (#36)
-        if (craft.Job is MiningJob { Active: true } job) return MineableAt(body, job.MaterialId, bearing) > 0 ? job.MaterialId : null;
+        if (craft.Flown is MiningJob { Active: true } job) return MineableAt(body, job.MaterialId, bearing) > 0 ? job.MaterialId : null;
         if (LifeProtected(body.SiteAt(bearing))) return null; // the law protects its plants (#91)
         if (craft.Stats.MiningRateKgPerS <= 0) return body.BiomassKg(body.SiteAt(bearing)) > 0 ? BiomassMaterial : null; // only a harvester (#92)
         // By hand: the ore at this site first (#70), then the body's bulk (#27) if the laws allow it.

@@ -37,6 +37,13 @@ public partial class JobPanel : PanelContainer
     private GridContainer _defendRows = null!;
     private GridContainer _tradeRows = null!;
     private OptionButton _tradeHome = null!, _tradeGive = null!, _tradeWith = null!, _tradeGet = null!;
+    private VBoxContainer _programRows = null!;
+    private OptionButton _program = null!;
+    private List<int> _programs = new();
+
+    /// <summary>Opens the programs (#120), on this one if any.</summary>
+    public event Action<int?>? ProgramsChosen;
+
     private List<CraftId> _traders = new();
     private List<string> _tradeGoods = new();
     private OptionButton _defendWhat = null!;
@@ -97,9 +104,10 @@ public partial class JobPanel : PanelContainer
         _kind.AddItem("Escort a ship");
         _kind.AddItem("Patrol a system");
         _kind.AddItem("Trade route with a civilization");
+        _kind.AddItem("Program: your own steps");
         kindRow.AddChild(_kind);
         var group = new ButtonGroup();
-        var icons = new[] { "mining", "freight", "cargo", "survey", "salvage", "shield", "fleet", "orbit", "trade" };
+        var icons = new[] { "mining", "freight", "cargo", "survey", "salvage", "shield", "fleet", "orbit", "trade", "edit_program" };
         for (var i = 0; i < icons.Length; i++)
         {
             var index = i;
@@ -181,6 +189,19 @@ public partial class JobPanel : PanelContainer
             AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(250, 0), Modulate = new Color(1, 1, 1, 0.6f),
         });
 
+        _programRows = new VBoxContainer(); // #120
+        box.AddChild(_programRows);
+        _program = new OptionButton { FocusMode = FocusModeEnum.None };
+        _programRows.AddChild(_program);
+        var edit = new Button { Text = "Make or change programs...", Icon = UiIcons.Get("edit_program"), FocusMode = FocusModeEnum.None };
+        edit.Pressed += () => ProgramsChosen?.Invoke(_program.Selected >= 0 && _program.Selected < _programs.Count ? _programs[_program.Selected] : null);
+        _programRows.AddChild(edit);
+        _programRows.AddChild(new Label
+        {
+            Text = "Steps of your own, with conditions. Any number of ships can run the same program.",
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(410, 0), Modulate = new Color(1, 1, 1, 0.6f),
+        });
+
         var buttons = new HBoxContainer();
         var start = new Button { Text = "Start job", Icon = UiIcons.Get("ok"), FocusMode = FocusModeEnum.None, TooltipText = "The craft runs this job on its own until you stop it; the panel shows what it's waiting for" };
         start.Pressed += Start;
@@ -238,6 +259,8 @@ public partial class JobPanel : PanelContainer
         if (_kind.Selected is >= 5 and <= 7) RefreshPosts();
         _tradeRows.Visible = _kind.Selected == 8;
         if (_kind.Selected == 8) RefreshTraders();
+        _programRows.Visible = _kind.Selected == 9;
+        if (_kind.Selected == 9) RefreshPrograms();
     }
 
     private void RefreshChoices()
@@ -297,6 +320,10 @@ public partial class JobPanel : PanelContainer
                 Select(_keepStocked, Array.IndexOf(KeepStocked, haul.KeepStockedKg));
                 RefreshDeposits();
                 break;
+            case ProgramJob:
+                _kind.Select(9);
+                RefreshDeposits();
+                break;
             case TradeJob:
                 _kind.Select(8);
                 RefreshDeposits();
@@ -324,6 +351,15 @@ public partial class JobPanel : PanelContainer
                 break;
         }
         ShowKind();
+    }
+
+    private void RefreshPrograms()
+    {
+        _programs = _sector().Programs.Select(p => p.Id).ToList();
+        _program.Clear();
+        foreach (var p in _sector().Programs) _program.AddItem($"{p.Name}  ({p.Count} steps)");
+        if (_programs.Count == 0) _program.AddItem("(no program yet)");
+        if (_craft()?.Job is ProgramJob job) Select(_program, _programs.IndexOf(job.ProgramId));
     }
 
     /// <summary>The trade stations there are (#89), and the route's current choices.</summary>
@@ -402,6 +438,7 @@ public partial class JobPanel : PanelContainer
                            + $"{Station(m.DestinationId)}, return at {m.ReturnFraction * 100:0}%",
             HaulJob h => $"Freight: {job.MaterialId} from {Station(h.PickupId)} to {Station(h.DestinationId)}"
                          + (h.KeepStockedKg > 0 ? $", keep {h.KeepStockedKg / 1000} t there" : ""),
+            ProgramJob p => $"Program: {sector.ProgramById(p.ProgramId)?.Name ?? "(gone)"}",
             TradeJob t => $"Trading {t.GiveMaterial} from {Station(t.HomeId)} for {t.GetMaterial} at {Station(t.TraderId)}",
             DefendJob d => d.Mode == DefendMode.Patrol ? $"Patrolling the {sector.Bodies.FirstOrDefault(b => b.Id == d.StarId)?.Name ?? "?"} system, {d.CompletedCycles} fights"
                 : $"{(d.Mode == DefendMode.Guard ? "Guarding" : "Escorting")} {Station(d.PostId)}, {d.CompletedCycles} fights",
@@ -443,6 +480,14 @@ public partial class JobPanel : PanelContainer
         {
             case MiningJob m: stops.Add(Body(m.SourceBodyId)); goods.Add("mat_" + m.MaterialId); stops.Add(Station(m.DestinationId)); break;
             case HaulJob h: stops.Add(Station(h.PickupId)); goods.Add("mat_" + h.MaterialId); stops.Add(Station(h.DestinationId)); break;
+            case ProgramJob p when sector.ProgramById(p.ProgramId) is { } program:
+                foreach (var step in program.AllSteps().Where(s => s.StationId != 0 || s.BodyId != 0).Take(3))
+                {
+                    if (stops.Count > 0) goods.Add("cargo");
+                    stops.Add(step.BodyId != 0 ? Body(new BodyId(step.BodyId)) : Station(new CraftId(step.StationId)));
+                }
+                if (stops.Count < 2) { stops.Insert(0, Ship()); if (stops.Count > 1) goods.Add("cargo"); }
+                break;
             case TradeJob t: stops.Add(Station(t.HomeId)); goods.Add("mat_" + t.GiveMaterial); stops.Add(Station(t.TraderId)); goods.Add("mat_" + t.GetMaterial); stops.Add(Station(t.HomeId)); break;
             case DefendJob d: stops.Add(Ship()); goods.Add("shield"); stops.Add(d.Mode == DefendMode.Patrol ? Body(d.StarId) : Station(d.PostId)); break;
             case SalvageJob s: stops.Add(s.WreckId.IsNone ? new("nearest wreck", null, "danger") : Station(s.WreckId)); goods.Add("salvage"); stops.Add(Station(s.DestinationId)); break;
@@ -462,6 +507,7 @@ public partial class JobPanel : PanelContainer
                     case 4: stops.Add(new("nearest wreck", null, "danger")); goods.Add("salvage"); stops.Add(Station(At(_salvageDestination, _stations))); break;
                     case 5 or 6: stops.Add(Ship()); goods.Add("shield"); stops.Add(Station(At(_defendWhat, _posts))); break;
                     case 7: stops.Add(Ship()); goods.Add("shield"); stops.Add(_defendWhat.Selected >= 0 && _defendWhat.Selected < _systems.Count ? Body(_systems[_defendWhat.Selected]) : new("?", null, "star")); break;
+                    case 9: stops.Add(Ship()); goods.Add("edit_program"); stops.Add(new(_program.Selected >= 0 && _program.Selected < _program.ItemCount ? _program.GetItemText(_program.Selected) : "?", null, "job")); break;
                     case 8:
                         stops.Add(Station(At(_tradeHome, _stations)));
                         goods.Add(_tradeGive.Selected >= 0 && _tradeGive.Selected < _materials.Materials.Count ? "mat_" + _materials.Materials[_tradeGive.Selected].Id : "cargo");
@@ -491,6 +537,7 @@ public partial class JobPanel : PanelContainer
         var craft = _craft();
         if (craft is null) return;
         if (_kind.Selected == 3) { Show(_sector().StartJob(craft.Id, new SurveyJob())); return; }
+        if (_kind.Selected == 9) { Show(_program.Selected >= 0 && _program.Selected < _programs.Count ? _sector().StartJob(craft.Id, new ProgramJob(_programs[_program.Selected])) : new ActionResult(false, "Make a program first.")); return; }
         if (_kind.Selected == 8) // trade routes (#89)
         {
             if (_tradeWith.Selected < 0 || _tradeWith.Selected >= _traders.Count || _tradeGet.Selected < 0 || _tradeGet.Selected >= _tradeGoods.Count || _stations.Count == 0)

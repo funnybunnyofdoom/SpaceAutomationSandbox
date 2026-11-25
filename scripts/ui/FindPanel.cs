@@ -22,7 +22,7 @@ public partial class FindPanel : PanelContainer
         (TargetKind.Enemies, "Enemies", "danger"), (TargetKind.Wrecks, "Wrecks", "salvage"), (TargetKind.Others, "Others' ships and stations", "trade"),
     };
 
-    private static readonly string[] Jobs = { "mining", "freight", "requests", "survey", "salvage", "trade", "guard", "escort", "patrol" };
+    private static readonly string[] Jobs = { "mining", "freight", "requests", "survey", "salvage", "trade", "guard", "escort", "patrol", "program" };
 
     private readonly Func<SectorState> _sector;
     private readonly Func<CraftState?> _pilot;

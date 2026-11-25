@@ -234,7 +234,7 @@ public partial class FleetPanel : PanelContainer
     public static string JobIcon(string kind) => kind switch
     {
         "mining" => "mining", "freight" or "requests" => "freight", "survey" => "survey", "salvage" => "salvage", "trade" => "trade",
-        "guard" or "escort" or "patrol" => "weapon", _ => "job",
+        "program" => "edit_program", "guard" or "escort" or "patrol" => "weapon", _ => "job",
     };
 
     private static string FormatDistance(double m) => m >= 1000 ? $"{m / 1000:N1} km" : $"{m:0} m";

@@ -86,7 +86,7 @@ public sealed partial class SectorState
         CraftState? station = null;
         var yardId = craft.YardOrder?.YardId ?? craft.ServiceAt; // going to a yard for a refit (#56) or repairs (#3)
         if (!yardId.IsNone && _craftsById.TryGetValue(yardId, out var yard)) station = yard;
-        else switch (craft.Job)
+        else switch (craft.Flown)
         {
             case SurveyJob { Active: true, State: SurveyJobState.Flying } scout when _byId.TryGetValue(scout.TargetBodyId, out var unsurveyed):
                 // A scout surveys on the way in, so the leg ends where it's in range.
@@ -108,6 +108,13 @@ public sealed partial class SectorState
                 station = wreck; break;
             case SalvageJob { Active: true, State: SalvageJobState.ToDestination } s2 when _craftsById.TryGetValue(s2.DestinationId, out var d5):
                 station = d5; break;
+            case ProgramJob { Active: true } p0 when ProgramLeg(craft, p0) is var (stop0, body0) && (stop0 is not null || body0 is not null):
+                if (body0 is not null)
+                {
+                    var off = craft.Position - GetPosition(body0.Id);
+                    return (body0.Id, CraftId.None, Math.Atan2(off.Y, off.X), SurveyRadius(body0, craft));
+                }
+                station = stop0; break;
             case MiningJob { Active: true, State: MiningJobState.ToSource } mining when _byId.TryGetValue(mining.SourceBodyId, out var source):
                 if (MineableSurveyed(source, mining.MaterialId) == 0) return null; // only surveyed sites count (#70), as the laws allow (#36)
                 SurfacePoint(source, craft, JobHoverAltitudeM, mining); // picks this trip's spot if not yet

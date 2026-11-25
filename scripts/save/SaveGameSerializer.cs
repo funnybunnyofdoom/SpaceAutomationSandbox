@@ -54,7 +54,7 @@ public static class SaveGameSerializer
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 36;
+    public const int SchemaVersion = 37;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -105,6 +105,7 @@ public static class SaveGameSerializer
                 LargeDesigns = sector.LargeDesigns,
                 Race = sector.Race.Id == RaceCatalog.HumanId || sector.Race.IsCustom ? null : sector.Race.Id,
                 CustomRace = sector.Race.IsCustom ? JsonSerializer.SerializeToNode(sector.Race, RaceFiles.Options) : null,
+                Programs = sector.Programs.Count > 0 ? sector.Programs.Select(p => new ProgramDto { Id = p.Id, Name = p.Name, Steps = JsonSerializer.SerializeToNode(p.Steps, JobProgram.JsonOptions) }).ToList() : null,
                 Favourites = sector.Favourites.Any(f => f is not null)
                     ? sector.Favourites.Select((f, i) => (f, i)).Where(x => x.f is not null).Select(x => new FavouriteDto { Slot = x.i + 1, CraftId = x.f!.Target.Craft.Value, BodyId = x.f.Target.Body.Value, Name = x.f.Name }).ToList()
                     : null,
@@ -258,6 +259,16 @@ public static class SaveGameSerializer
                         : null,
                     Job = c.Job switch
                     {
+                        ProgramJob pj => new JobDto
+                        {
+                            Kind = pj.Kind, Active = pj.Active, WaitReason = pj.WaitReason, CompletedCycles = pj.CompletedCycles, DeliveredKg = pj.DeliveredKg, RetryAtTick = pj.RetryAtTick,
+                            Program = new ProgramJobDto
+                            {
+                                ProgramId = pj.ProgramId, StepId = pj.StepId, Begun = pj.Begun, BegunTick = pj.BegunTick, BlockedSince = pj.BlockedSince, Holding = pj.Holding, RepairAsked = pj.RepairAsked, LastMessageTick = pj.LastMessageTick,
+                                Mining = pj.Mining is { } pm ? new JobDto { Kind = pm.Kind, SourceBodyId = pm.SourceBodyId.Value, MaterialId = pm.MaterialId, DestinationId = pm.DestinationId.Value, ReturnFraction = pm.ReturnFraction, Active = pm.Active,
+                                    State = pm.State, ResumeState = pm.ResumeState, SpotBearingRad = pm.SpotBearingRad, WaitReason = pm.WaitReason, RetryAtTick = pm.RetryAtTick } : null,
+                            },
+                        },
                         TradeJob tj => new JobDto
                         {
                             Kind = tj.Kind, DestinationId = tj.HomeId.Value, PickupId = tj.TraderId.Value, MaterialId = tj.GetMaterial, GiveMaterial = tj.GiveMaterial,
@@ -554,6 +565,13 @@ public static class SaveGameSerializer
             }
             sector.MilestonesStarted = dto.MilestonesStarted;
             sector.LargeDesigns = dto.LargeDesigns;
+            foreach (var p in dto.Programs ?? new List<ProgramDto>()) // #120
+            {
+                var steps = p.Steps?.Deserialize<List<ProgramStep>>(JobProgram.JsonOptions);
+                if (JobProgram.Problem(p.Name, steps, catalog.Materials) is { } wrong) throw new FormatException($"Program {p.Id}: {wrong}");
+                if (p.Id <= 0 || sector.ProgramById(p.Id) is not null) throw new FormatException($"Program {p.Id} has an invalid number.");
+                sector.RestoreProgram(new JobProgram(p.Id, p.Name!, steps!));
+            }
             foreach (var f in dto.Favourites ?? new List<FavouriteDto>()) // #109; its target may be gone: it says so
             {
                 if (f.Slot < 1 || f.Slot > SectorState.FavouriteSlots || (f.CraftId == 0) == (f.BodyId == 0)) throw new FormatException($"Favourite {f.Slot} is invalid.");
@@ -647,6 +665,24 @@ public static class SaveGameSerializer
                         CompletedCycles = salvage.CompletedCycles, DeliveredKg = salvage.DeliveredKg, RetryAtTick = salvage.RetryAtTick,
                     });
                 }
+                else if (c.Job is { Kind: "program" } run) // #120; its program may be gone: it says so
+                {
+                    var place = run.Program ?? throw new FormatException($"Craft {c.Id} runs no program.");
+                    MiningJob? digging = null;
+                    if (place.Mining is { } dig)
+                    {
+                        if (!catalog.Materials.Contains(dig.MaterialId ?? "")) throw new FormatException($"Craft {c.Id} job uses unknown material '{dig.MaterialId}'.");
+                        digging = new MiningJob(new BodyId(dig.SourceBodyId), dig.MaterialId!, new CraftId(dig.DestinationId), dig.ReturnFraction)
+                        {
+                            Active = dig.Active, State = dig.State, ResumeState = dig.ResumeState, WaitReason = dig.WaitReason, RetryAtTick = dig.RetryAtTick, SpotBearingRad = dig.SpotBearingRad,
+                        };
+                    }
+                    sector.RestoreJob(restored.Id, new ProgramJob(place.ProgramId)
+                    {
+                        Active = run.Active, WaitReason = run.WaitReason, CompletedCycles = run.CompletedCycles, DeliveredKg = run.DeliveredKg, RetryAtTick = run.RetryAtTick, StepId = place.StepId, Begun = place.Begun,
+                        BegunTick = place.BegunTick, BlockedSince = place.BlockedSince, Holding = place.Holding, RepairAsked = place.RepairAsked, LastMessageTick = place.LastMessageTick, Mining = digging,
+                    });
+                }
                 else if (c.Job is { Kind: "survey" } sj)
                 {
                     // The target may have been mined away since (#27): the scout picks another.
@@ -701,7 +737,7 @@ public static class SaveGameSerializer
             sector.PilotCraftId = player;
             return new LoadedGame(sector, player, file.Header);
         }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or KeyNotFoundException)
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or KeyNotFoundException or JsonException)
         {
             throw new FormatException($"Save file is inconsistent: {e.Message}", e);
         }
@@ -852,6 +888,10 @@ public static class SaveGameSerializer
         /// <summary>v34: who the player is (#97); omitted for Human.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Race { get; set; }
+
+        /// <summary>v37: programs (#120).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<ProgramDto>? Programs { get; set; }
 
         /// <summary>v36: copies of the player's own races that civilizations are (#118).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -1299,8 +1339,34 @@ public static class SaveGameSerializer
         public double ProgressKg { get; set; }
     }
 
+    private sealed class ProgramDto
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+        public JsonNode? Steps { get; set; }
+    }
+
+    private sealed class ProgramJobDto
+    {
+        public int ProgramId { get; set; }
+        public int StepId { get; set; }
+        public bool Begun { get; set; }
+        public long BegunTick { get; set; }
+        public long BlockedSince { get; set; }
+        public bool Holding { get; set; }
+        public bool RepairAsked { get; set; }
+        public long LastMessageTick { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public JobDto? Mining { get; set; }
+    }
+
     private sealed class JobDto
     {
+        /// <summary>v37: a program's place (#120).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ProgramJobDto? Program { get; set; }
+
         /// <summary>"mining" (v6 default), "freight" (v7), "requests" (v11, contract in pickup/destination/material/contractAmountKg) or "survey" (v16, target in sourceBodyId).</summary>
         public string? Kind { get; set; }
         public uint SourceBodyId { get; set; }

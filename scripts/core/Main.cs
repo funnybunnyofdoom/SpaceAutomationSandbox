@@ -115,6 +115,7 @@ public partial class Main : Node2D
 
     /// <summary>The message log (#100).</summary>
     private LogPanel? _logPanel;
+    private ProgramPanel? _programPanel;
 
     /// <summary>Milestones (#38).</summary>
     private MilestonesPanel? _milestonesPanel;
@@ -218,6 +219,11 @@ public partial class Main : Node2D
             _uiRoot.AddChild(_lifePanel);
             _logPanel = new LogPanel(() => _sector, () => Messages) { Visible = false }; // #100
             _uiRoot.AddChild(_logPanel);
+            _programPanel = new ProgramPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false }; // #120
+            _programPanel.Changed += () => _changedSinceSave = true;
+            _programPanel.JobsChosen += () => SwapPanel(_programPanel, _jobPanel, () => _jobPanel!.Open());
+            _jobPanel!.ProgramsChosen += id => SwapPanel(_jobPanel, _programPanel, () => _programPanel.Open(id));
+            _uiRoot.AddChild(_programPanel);
             _findPanel = new FindPanel(() => _sector, () => _player, () => Recent, () => CurrentTarget, t => _sector.Exists(t) ? TargetLabel(t) : "", id => _catalog.Materials.Contains(id) ? _catalog.Materials.Get(id).Name : id) { Visible = false }; // #109
             _findPanel.TargetChosen += ChooseTarget;
             _findPanel.FavouriteChosen += RecallFavourite;
@@ -328,6 +334,7 @@ public partial class Main : Node2D
         DemoHuge(args); // #114
         if (args.FirstOrDefault(x => x.StartsWith("--window=")) is { } size && size["--window=".Length..].Split('x') is [var w, var h]) // dev: test small windows (#96)
             GetWindow().Size = new Vector2I(int.Parse(w), int.Parse(h));
+        if (System.Array.IndexOf(args, "--open-programs") >= 0) DemoProgram(); // #120
         if (System.Array.IndexOf(args, "--open-find") >= 0) _findPanel?.Open(); // #109
         if (System.Array.IndexOf(args, "--open-log") >= 0) _logPanel?.Open(); // #100
         if (System.Array.IndexOf(args, "--open-milestones") >= 0) _milestonesPanel?.Open(); // #38
@@ -755,7 +762,7 @@ public partial class Main : Node2D
         }
         OpenMenuScene(); // #98
         _hud.Visible = false;
-        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel, _findPanel })
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel, _findPanel, _programPanel })
             if (panel != null) panel.Visible = false;
         _title.Open(SaveSummary());
     }
@@ -951,7 +958,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
-            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _logPanel, _findPanel };
+            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _logPanel, _findPanel, _programPanel };
             var anyOpen = _mapMode || _hud.HelpOpen || panels.Any(p => p is { Visible: true });
             if (!anyOpen) OpenPause();
             if (_mapMode) ToggleMap();

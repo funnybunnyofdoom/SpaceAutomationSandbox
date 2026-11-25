@@ -29,6 +29,11 @@ public sealed partial class SectorState
                 case MiningJob m: Add(Body(m.SourceBodyId), Craft(m.DestinationId), 1, waiting); break;
                 case HaulJob h: Add(Craft(h.PickupId), Craft(h.DestinationId), 1, waiting); break;
                 case ServeRequestsJob { Contract: { } c }: Add(Craft(c.PickupId), Craft(c.DestinationId), 1, waiting); break;
+                case ProgramJob p when ProgramById(p.ProgramId) is { } program: // between the places it calls at, in turn
+                    var calls = program.AllSteps().Select(s => s.Kind == StepKind.Mine || s.Kind == StepKind.FlyTo && s.BodyId != 0 ? Body(new BodyId(s.BodyId)) : Craft(new CraftId(s.StationId))).Where(t => !t.IsNone).ToList();
+                    for (var i = 0; i < calls.Count; i++)
+                        if (calls[i] != calls[(i + 1) % calls.Count] && (i + 1 < calls.Count || calls.Count > 2)) Add(calls[i], calls[(i + 1) % calls.Count], 1, waiting);
+                    break;
                 case TradeJob t: Add(Craft(t.HomeId), Craft(t.TraderId), 1, waiting); break;
             }
         }

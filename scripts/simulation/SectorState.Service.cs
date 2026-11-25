@@ -196,6 +196,7 @@ public sealed partial class SectorState
     /// </summary>
     private static bool CanBreakForService(ShipJob job) => job switch
     {
+        ProgramJob { Mining: { } mining } => CanBreakForService(mining),
         MiningJob m => (m.State == MiningJobState.Waiting ? m.ResumeState : m.State) is not (MiningJobState.Landing or MiningJobState.Mining or MiningJobState.Lifting),
         _ => true,
     };

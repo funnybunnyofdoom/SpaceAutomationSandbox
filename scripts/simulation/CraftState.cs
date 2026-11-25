@@ -433,6 +433,9 @@ public sealed class CraftState
 
     public bool IsAutomated => Job is { Active: true };
 
+    /// <summary>The job that flies it: for a program that's mining, the mining (#120).</summary>
+    public ShipJob? Flown => Job is ProgramJob { Active: true, Mining: { } mining } ? mining : Job;
+
     /// <summary>The refinery batch in progress (inputs held here), or null.</summary>
     public RefiningBatch? RefiningBatch { get; internal set; }
 

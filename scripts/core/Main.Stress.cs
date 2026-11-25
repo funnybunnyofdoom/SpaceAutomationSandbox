@@ -67,4 +67,28 @@ public partial class Main
         _frameSamples = null;
         GetTree().Quit();
     }
+
+    /// <summary>Dev/test hook <c>--open-programs</c>: a program with an if and some tests, on the craft flown, with the panel open (#120).</summary>
+    private void DemoProgram()
+    {
+        if (_player is null) return;
+        _sector.DebugSurveyAll();
+        var yard = _sector.Crafts.First(c => c.IsShipyard).Id.Value;
+        var rock = _sector.Bodies.First(b => b.IsMineable && b.DepositsKg.ContainsKey("iron_ore")).Id.Value;
+        var steps = new List<ProgramStep>
+        {
+            new() { Id = 1, Kind = StepKind.Mine, BodyId = rock, Material = "iron_ore", Percent = 80, GiveUpSeconds = 300, Fallback = StepFallback.NextStep },
+            new() { Id = 2, Kind = StepKind.Unload, StationId = yard, UntilDone = true },
+            new()
+            {
+                Id = 3, Kind = StepKind.If, Until = new() { Any = true, Tests = new() { new() { Kind = TestKind.PowerPercent, Below = true, Value = 40 }, new() { Kind = TestKind.FuelTonnes, Below = true, Value = 1 } } },
+                Then = new() { new() { Id = 4, Kind = StepKind.Recharge, StationId = yard, Percent = 90, Seconds = 60 }, new() { Id = 5, Kind = StepKind.Refuel, StationId = yard, Tonnes = 2 } },
+                Otherwise = new() { new() { Id = 6, Kind = StepKind.Message, Text = "all well", OnlyIf = new() { Tests = new() { new() { Kind = TestKind.StationStockTonnes, StationId = yard, Material = "iron_ore", Value = 50 } } } } },
+            },
+            new() { Id = 7, Kind = StepKind.Repair, OnlyIf = new() { Tests = new() { new() { Kind = TestKind.HealthPercent, Below = true, Value = 90 } } } },
+        };
+        _sector.SaveProgram(0, "Iron run", steps, out var id);
+        _sector.StartJob(_player.Id, new ProgramJob(id));
+        _programPanel?.Open(id);
+    }
 }

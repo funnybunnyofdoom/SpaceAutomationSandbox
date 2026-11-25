@@ -133,7 +133,7 @@ public class GridlockTests
             sector.Step();
             Assert.Contains("recharging at Shipyard", job.Status);
             Assert.StartsWith("recharging", job.Status); // not "waiting": it needs nobody
-            Assert.Empty(sector.Alerts().Where(a => a.Target.Craft == ship.Id && a.Kind == AlertKind.Waiting));
+            Assert.DoesNotContain(sector.Alerts(), a => a.Target.Craft == ship.Id && a.Kind == AlertKind.Waiting);
             var ticks = 0;
             while (ship.IsDocked && ticks < 2 * TicksPerMinute) { sector.Step(); ticks++; }
             var seconds = ticks / (double)FixedStepClock.TicksPerSecond;

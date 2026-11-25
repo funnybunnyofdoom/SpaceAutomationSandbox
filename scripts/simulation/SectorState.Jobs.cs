@@ -108,6 +108,7 @@ public sealed partial class SectorState
             if (craft.Job is { Active: true } routed && StepGateRoute(craft, routed)) { routed.NoteTick(Tick); continue; } // via warp gates (#23)
             switch (craft.Job)
             {
+                case ProgramJob { Active: true } program: StepProgram(craft, program); break;
                 case TradeJob { Active: true } trade: StepTradeJob(craft, trade); break;
                 case DefendJob { Active: true } defend: StepDefendJob(craft, defend); break;
                 case SalvageJob { Active: true } salvage: StepSalvageJob(craft, salvage); break;
