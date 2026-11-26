@@ -92,6 +92,49 @@ public class RefitTests
     }
 
     [Fact]
+    public void A_yard_refitting_itself_finishes_even_when_the_refit_takes_its_power_crew_and_storage_on_the_way()
+    {
+        var game = TestData.NewGame();
+        var sector = game.Sector;
+        var yard = sector.GetCraft(game.ShipyardId);
+        // Robots instead of the habitat, every solar panel and the battery swapped (they come off first), and a full stock.
+        var target = new ShipDesign("yard_b", "Yard B", yard.Design.Cells.Select(c => c.PartId switch
+        {
+            "habitat" => c with { PartId = "robot_bay" }, "solar_panel" => c with { PartId = "solar_panel_mk2" }, "battery" => c with { PartId = "battery_mk2" }, _ => c,
+        }));
+        sector.DebugUnlockAllResearch();
+        var (cost, _) = (target.ComputeBillOfMaterials(Catalog).ToWholeKg(), 0);
+        foreach (var (material, kg) in cost) yard.Inventory.Add(material, kg);
+        yard.Inventory.Add("slag", Math.Max(0, yard.FreeCargoKg - 500)); // all but half a tonne of room
+        sector.RestoreCrew(yard.Id, 0, 0, 0, 0, 0, legacyNoCrew: false); // robots will run it: nobody aboard while the habitat goes
+        var ordered = sector.OrderRefit(yard.Id, yard.Id, target);
+        Assert.True(ordered.Done, ordered.Message);
+        Assert.True(RunUntil(sector, () => yard.YardOrder is null, 120 * TicksPerMinute), yard.YardStatus);
+        Assert.Equal("yard_b", yard.Design.Id);
+        for (var i = 0; i < FixedStepClock.TicksPerSecond; i++) { yard.StoredEnergyKJ = yard.Stats.EnergyCapacityKJ; sector.Step(); }
+        Assert.Null(yard.CrewShortReason); // its robots run it now
+    }
+
+    [Fact]
+    public void A_refit_that_couldnt_finish_or_work_is_refused_up_front()
+    {
+        var game = TestData.NewGame();
+        var sector = game.Sector;
+        var yard = sector.GetCraft(game.ShipyardId);
+        sector.DebugUnlockAllResearch();
+        // Many more parts and nobody to run them: it would need more crew or robots than it would have.
+        var big = new ShipDesign("big_yard", "Big yard", yard.Design.Cells.Concat(Enumerable.Range(0, 30).Select(i => new DesignCell(new GridPos(-3 - i / 5, -2 + i % 5), "hull"))));
+        foreach (var (material, kg) in big.ComputeBillOfMaterials(Catalog).ToWholeKg()) yard.Inventory.Add(material, kg);
+        Assert.Contains("crew or robots", sector.OrderRefit(yard.Id, yard.Id, big).Message);
+        // Not enough materials, counting what comes off.
+        var (sector2, ship, dock) = DockedSecondShip();
+        sector2.DebugUnlockAllResearch();
+        var mk2 = new ShipDesign("mk2", "Mk2", TestData.StarterShip().Cells.Select(c => c.PartId == "thruster" ? c with { PartId = "thruster_mk2" } : c));
+        foreach (var (material, kg) in dock.Inventory.Kg.ToList()) dock.Inventory.TryRemove(new Dictionary<string, long> { [material] = kg });
+        Assert.Contains("more to finish the refit", sector2.OrderRefit(dock.Id, ship.Id, mk2).Message);
+    }
+
+    [Fact]
     public void Refit_IsRefused_WithAReason()
     {
         var (sector, ship, yard) = DockedSecondShip();

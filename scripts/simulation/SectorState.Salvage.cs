@@ -56,6 +56,7 @@ public sealed partial class SectorState
             if (!InSalvageRange(craft, wreck)) { craft.SalvageProgressKg = 0; craft.SalvageStatus = $"salvage: come within {SalvageRangeM:0} m and match speed"; continue; }
             if (!Operational(craft)) { craft.SalvageStatus = $"salvage stopped: {craft.CrewShortReason}"; continue; }
             Strip(wreck);
+            wreck.Scrapped = false; // salvage has begun: no taking it back (#135)
             var lastOnly = wreck.Design.Cells.Count == 1 && wreck.Inventory.TotalKg == 0;
             if (craft.FreeCargoKg <= 0 || (lastOnly && craft.FreeCargoKg < LastPartKg(wreck))) { craft.SalvageStatus = "salvage: the hold is full"; continue; }
             if (!UseMachinePower(craft, craft.Stats.SalvagePowerKW * FixedStepClock.TickSeconds)) { craft.SalvageStatus = "salvage: no power"; continue; }

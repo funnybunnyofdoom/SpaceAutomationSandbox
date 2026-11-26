@@ -46,16 +46,42 @@ public class ConstructionTests
     [Fact]
     public void PartCatalog_LoadsTheStarterParts()
     {
-        var ids = TestData.Catalog().Parts.Select(p => p.Id).OrderBy(id => id);
-
-        Assert.Equal(new[]
+        var ids = TestData.Catalog().Parts.Select(p => p.Id).ToHashSet();
+        var singles = new[]
         {
-            "anchor_clamp", "animal_pen", "antimatter_drive", "antimatter_factory", "antimatter_reactor", "armour_plate", "autocannon", "battery", "battery_mk2", "cargo", "cockpit", "containment", "docking_port", "drill", "drill_mk2", "drill_mk3", "electrolyser",
-            "fabricator", "fabricator_mk2", "fabricator_mk3", "farm", "foundation", "fuel_cell", "fuel_generator", "fusion_reactor", "gate_defense", "gate_lock", "geothermal_tap",
-            "habitat", "harvester", "heat_collector", "hull", "ion_drive", "isotope_separator", "laser", "mass_driver", "methalox_rocket", "methane_generator", "missile_launcher", "nanite_bay", "nano_assembler", "nuclear_rocket", "point_defense",
-            "quantum_drive", "ranch", "reactor", "refinery", "refinery_mk2", "repair_drones", "repeller", "research_lab", "robot_bay", "rocket", "salvage_arm", "shield_generator", "slag_ejector", "solar_array", "solar_panel",
-            "solar_panel_mk2", "solar_panel_mk3", "storage_silo", "thruster", "thruster_mk2", "thruster_mk3", "warp_gate",
-        }, ids);
+            "anchor_clamp", "animal_pen", "antimatter_drive", "antimatter_factory", "antimatter_reactor", "cockpit", "containment", "docking_port", "electrolyser",
+            "foundation", "fuel_cell", "fuel_generator", "fusion_reactor", "gate_defense", "gate_lock", "geothermal_tap", "harvester", "heat_collector", "hull", "ion_drive",
+            "isotope_separator", "mass_driver", "methalox_rocket", "methane_generator", "missile_launcher", "nanite_bay", "nano_assembler", "nuclear_rocket", "point_defense",
+            "quantum_drive", "ranch", "reactor", "repeller", "rocket", "slag_ejector", "solar_array", "warp_gate",
+        };
+        var tiered = new[]
+        {
+            "thruster", "drill", "solar_panel", "battery", "cargo", "storage_silo", "refinery", "fabricator", "habitat", "robot_bay", "farm", "research_lab", "salvage_arm",
+            "repair_drones", "armour_plate", "shield_generator", "autocannon", "laser",
+        };
+        var expected = singles.Concat(tiered.SelectMany(b => new[] { b, b + "_mk2", b + "_mk3", b + "_mk4" })).ToHashSet();
+        Assert.Equal(expected.OrderBy(x => x), ids.OrderBy(x => x));
+    }
+
+    /// <summary>Every tier is better than the one before at its main job (#133, #134), costs more, and Mk4 needs Exotic engineering.</summary>
+    [Fact]
+    public void Each_tier_is_better_than_the_last()
+    {
+        var catalog = TestData.Catalog();
+        double Main(PartDefinition p) => new[] { p.ThrustN, p.MiningRateKgPerS, p.PowerGenerationKW, p.EnergyCapacityKJ, p.CargoCapacityKg, p.RefiningRateKgPerS, p.FabricationRateKgPerS,
+            p.CrewCapacity, p.RobotCount, p.FoodRateKgPerS, p.ResearchRatePerS, p.SalvageRateKgPerS, p.RepairRateKgPerS, p.ShieldCapacity, p.Weapon?.DamagePerShot ?? 0,
+            p.IsArmour ? p.Toughness : 0 }.Max();
+        foreach (var base_ in catalog.Parts.Where(p => catalog.TryGet(p.Id + "_mk2", out _)).ToList())
+        {
+            var chain = new[] { base_.Id, base_.Id + "_mk2", base_.Id + "_mk3", base_.Id + "_mk4" }.Select(id => catalog.Get(id)).ToList();
+            for (var i = 1; i < chain.Count; i++)
+            {
+                Assert.True(Main(chain[i]) > Main(chain[i - 1]), $"{chain[i].Id} isn't better than {chain[i - 1].Id}");
+                Assert.True(chain[i].MassKg >= chain[i - 1].MassKg, $"{chain[i].Id} is lighter than {chain[i - 1].Id}");
+            }
+            Assert.Equal("exotic_engineering", catalog.Research.TechFor(chain[3].Id)!.Id);
+            Assert.True(chain[3].Bill.ToWholeKg().ContainsKey("exotic_ore"));
+        }
     }
 
     [Fact]

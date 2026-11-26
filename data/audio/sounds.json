@@ -22,7 +22,6 @@
     "hit": "res://assets/audio/sfx/hit.ogg",
     "shield_hit": "res://assets/audio/sfx/shield_hit.ogg",
     "explosion": "res://assets/audio/sfx/explosion.ogg",
-    "ship_built": "res://assets/audio/sfx/ship_built.ogg",
     "quantum_jump": "res://assets/audio/sfx/quantum_jump.ogg",
     "mega_stage": "res://assets/audio/sfx/mega_stage.ogg",
     "raid_alarm": "res://assets/audio/sfx/raid_alarm.ogg",
@@ -51,7 +50,7 @@
   "captions": {
     "dock": "docked", "undock": "undocked", "land": "touchdown", "anchor": "clamps", "impact": "crash", "cruise_start": "cruise drive on", "cruise_stop": "cruise drive off",
     "warp": "warp jump", "alarm": "power alarm", "part_lost": "a part breaks off", "gun_fire": "gunfire", "laser_fire": "laser fire", "missile_launch": "missile launch",
-    "point_defense": "point defence", "hit": "hit", "shield_hit": "shield hit", "explosion": "explosion", "ship_built": "ship built", "quantum_jump": "quantum jump",
+    "point_defense": "point defence", "hit": "hit", "shield_hit": "shield hit", "explosion": "explosion", "quantum_jump": "quantum jump",
     "mega_stage": "megastructure stage done", "raid_alarm": "raid alarm", "crew_alarm": "crew alarm", "waiting": "a ship is waiting", "contract": "contract offered",
     "discovery": "discovery", "hazard": "hazard warning", "milestone": "milestone", "saved": "saved", "loaded": "loaded", "refused": "can't place that"
   },

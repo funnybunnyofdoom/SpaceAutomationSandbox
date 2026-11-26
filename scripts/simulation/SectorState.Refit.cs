@@ -173,6 +173,14 @@ public sealed partial class SectorState
             return new(false, $"{craft.CargoKg / 1000.0:0.0} t of cargo won't fit in {target.Name} ({stats.CargoCapacityKg / 1000.0:0.0} t): unload some first.");
         if (!craft.LegacyNoCrew && craft.Crew > stats.CrewCapacity)
             return new(false, $"{craft.Crew} crew would have nowhere to live ({target.Name} houses {stats.CrewCapacity}): move them first.");
+        // Once started, a refit always finishes (creator's request, 2026-11-26): what could stop it is checked now.
+        if (!craft.LegacyNoCrew && stats.CrewRequired > craft.Crew + stats.RobotCount)
+            return new(false, $"{target.Name} needs {stats.CrewRequired} crew or robots; {craft.Name} would have {craft.Crew} crew and {stats.RobotCount} robots: it couldn't work.");
+        var (cost, returned) = RefitMaterials(craft, target);
+        var lacking = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        foreach (var (material, kg) in cost)
+            if (kg - returned.GetValueOrDefault(material) - yard.Inventory[material] is > 0 and var more) lacking[material] = more;
+        if (lacking.Count > 0) return new(false, $"{yard.Name} needs {Describe(lacking)} more to finish the refit (what comes off is counted).");
         if (craft.Id == yard.Id && !yard.Design.Cells.Any(c => parts.Get(c.PartId).FabricationRateKgPerS > 0
                                                              && target.Cells.Any(t => t.Pos == c.Pos && t.PartId == c.PartId && t.Rotation == c.Rotation)))
             return new(false, $"{yard.Name} can't refit itself without keeping one of its fabricators where it is.");
@@ -183,6 +191,19 @@ public sealed partial class SectorState
         craft.YardProgressKg = 0;
         var preview = PreviewRefit(craft.Id, target);
         return new(true, $"{craft.Name}: refit to {target.Name} at {yard.Name} ({preview.PartsRemoved} parts off, {preview.PartsAdded} on).");
+    }
+
+    /// <summary>What a refit takes from the yard's stock for the parts it adds, and what the parts it takes off give back.</summary>
+    private (SortedDictionary<string, long> Cost, SortedDictionary<string, long> Returned) RefitMaterials(CraftState craft, ShipDesign target)
+    {
+        var (remove, add) = RefitDiff(craft.Design, target);
+        var cost = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        var returned = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        foreach (var cell in add)
+            foreach (var (material, kg) in Parts!.Get(cell.PartId).Bill.ToWholeKg()) cost[material] = cost.GetValueOrDefault(material) + kg;
+        foreach (var cell in remove)
+            foreach (var (material, kg) in RemovalYield(craft, cell).Returned) returned[material] = returned.GetValueOrDefault(material) + kg;
+        return (cost, returned);
     }
 
     public ActionResult OrderDismantle(CraftId yardId, CraftId craftId)
@@ -323,7 +344,9 @@ public sealed partial class SectorState
         if (craft is null) return false;
         var order = craft.YardOrder!;
         var verb = order.Kind switch { YardWorkKind.Refit => "refitting", YardWorkKind.Dismantle => "dismantling", _ => "packing" };
-        if (!Operational(yard)) { craft.YardStatus = $"waiting: {verb} at {yard.Name} stopped: {yard.CrewShortReason}"; return false; }
+        // A yard refitting itself carries on whatever the refit has done to its crew or power on the way: once started, it finishes.
+        var own = order.Kind == YardWorkKind.Refit && craft.Id == yard.Id;
+        if (!own && !Operational(yard)) { craft.YardStatus = $"waiting: {verb} at {yard.Name} stopped: {yard.CrewShortReason}"; return false; }
 
         // This step's work and what it needs.
         DesignCell? removeCell = null, addCell = null;
@@ -349,7 +372,7 @@ public sealed partial class SectorState
 
         if (craft.YardProgressKg < work)
         {
-            if (!UseMachinePower(yard, yard.Stats.FabricatorPowerKW * FixedStepClock.TickSeconds))
+            if (!UseMachinePower(yard, yard.Stats.FabricatorPowerKW * FixedStepClock.TickSeconds) && !own)
             {
                 craft.YardStatus = $"waiting: {verb} at {yard.Name} stopped: no power";
                 return true;
@@ -363,7 +386,7 @@ public sealed partial class SectorState
         {
             var (back, scrap) = RemovalYield(craft, off);
             var total = back.Values.Sum() + scrap;
-            if (yard.HasCargoLimit && yard.FreeCargoKg < total)
+            if (yard.HasCargoLimit && yard.FreeCargoKg < total && order.Kind != YardWorkKind.Refit) // a refit's parts come off even into a full stock: it mustn't stall half way
             {
                 craft.YardStatus = $"waiting: {verb} at {yard.Name} needs {total / 1000.0:0.0} t of free storage there";
                 return true;

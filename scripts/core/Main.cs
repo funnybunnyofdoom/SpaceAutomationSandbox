@@ -182,6 +182,7 @@ public partial class Main : Node2D
             _fleetPanel = new FleetPanel(() => _sector, () => _player?.Id) { Visible = false };
             _fleetPanel.CraftChosen += Pilot;
             _fleetPanel.RenameChosen += AskRename; // #115
+            _fleetPanel.ScrapChosen += AskScrap; // #135
             _fleetPanel.Changed += () => _changedSinceSave = true;
             _fleetPanel.CraftTargeted += target =>
             {

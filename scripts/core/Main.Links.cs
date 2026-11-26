@@ -53,6 +53,8 @@ public partial class Main
             items.Add(("Show in the fleet", true, () => _fleetPanel?.OpenAt(name)));
         }
         if (craft is null || SectorState.IsPlayers(craft) || craft.IsWreck) items.Add(("Rename...", true, () => AskRename(target))); // #115, #109
+        if (craft is not null && SectorState.IsPlayers(craft) && !craft.IsWreck) items.Add(("Mark as a wreck...", true, () => AskScrap(craft.Id))); // #135
+        if (craft is { Scrapped: true }) items.Add(("Not a wreck after all", true, () => { ShowStatus(_sector.UnscrapCraft(craft.Id).Message); _changedSinceSave = true; }));
         var kept = _sector.Favourites.ToList().FindIndex(f => f?.Target == target);
         var slot = kept >= 0 ? kept : _sector.Favourites.ToList().FindIndex(f => f is null);
         if (slot >= 0 && !you)
@@ -65,6 +67,18 @@ public partial class Main
     }
 
     private void AskRename(CraftId id) => AskRename(new TargetRef(id, BodyId.None));
+
+    /// <summary>Marks a craft of yours as a wreck for salvagers to clean up, once you say so (#135).</summary>
+    private void AskScrap(CraftId id)
+    {
+        if (_sector.Crafts.FirstOrDefault(c => c.Id == id) is not { } craft) return;
+        if (_sector.ScrapBlocker(craft) is { } why) { ShowStatus(why); return; }
+        var sector = _sector;
+        var salvagers = sector.Crafts.Count(c => SectorState.IsPlayers(c) && !c.IsWreck && c.Stats.SalvageRateKgPerS > 0);
+        _confirm.Ask($"Mark {craft.Name} as a wreck? Its crew go to your nearest craft with room, and salvagers take it apart with its cargo for the materials."
+                     + (salvagers == 0 ? " You have no craft with a salvage arm yet." : "") + " Until salvage starts you can take it back.",
+            ("Mark as a wreck", () => { if (ReferenceEquals(sector, _sector)) { ShowStatus(sector.ScrapCraft(id).Message); _changedSinceSave = true; } }));
+    }
 
     /// <summary>Asks for a craft's or body's new name (#115, #109).</summary>
     private void AskRename(TargetRef target)

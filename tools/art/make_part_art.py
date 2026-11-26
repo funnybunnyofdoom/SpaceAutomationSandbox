@@ -159,7 +159,7 @@ def solar(a, tier=1):
     b = Img()
     b.rect(0, 0, 15, 15, (150, 156, 168, 255)); b.outline(0, 0, 15, 15, OUT)
     d = Img()
-    cell = {1: 4, 2: 3, 3: 2}[tier]
+    cell = {1: 4, 2: 3, 3: 2, 4: 2}[tier]
     dark = shade(a, 0.55)
     d.rect(1, 1, 14, 14, dark)
     for y in range(1, 15):
@@ -668,6 +668,17 @@ DRAW = {
 }
 
 
+def tiered(fn, tier):
+    """A higher tier (#133, #134): its Mk I drawing (with the tier if it draws its own pips), and pips if it doesn't."""
+    import inspect
+    def draw(a):
+        if "tier" in inspect.signature(fn).parameters: return fn(a, tier)
+        b, d = fn(a)
+        pips(d, tier, a)
+        return b, d
+    return draw
+
+
 def flatten(base, detail):
     return [[detail.px[y][x] if detail.px[y][x][3] else base.px[y][x] for x in range(N)] for y in range(N)]
 
@@ -676,6 +687,9 @@ def main():
     parts = json.load(open(os.path.join("data", "parts", "parts.json"), encoding="utf-8"))["parts"]
     out = os.path.join("art_source", "pixelorama", "ship_parts")
     os.makedirs(out, exist_ok=True)
+    for p in parts:  # tiers drawn from their Mk I
+        base, _, tier = p["id"].rpartition("_mk")
+        if p["id"] not in DRAW and base in DRAW and tier.isdigit(): DRAW[p["id"]] = tiered(DRAW[base], int(tier))
     missing = [p["id"] for p in parts if p["id"] not in DRAW]
     if missing:
         sys.exit(f"no drawing for: {', '.join(missing)}")

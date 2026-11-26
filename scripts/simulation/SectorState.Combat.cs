@@ -500,9 +500,9 @@ public sealed partial class SectorState
     }
 
     /// <summary>The craft is done for: it keeps its parts and everything it holds, and drifts (or stays on its orbit).</summary>
-    private void MakeWreck(CraftState craft, bool wasGate)
+    private void MakeWreck(CraftState craft, bool wasGate, bool destroyed = true)
     {
-        Make("explosion", craft.Position); // #129
+        if (destroyed) Make("explosion", craft.Position); // #129
         craft.IsWreck = true;
         craft.Controls = ShipControls.Idle;
         craft.Job = null;
@@ -521,7 +521,7 @@ public sealed partial class SectorState
             if (ship.DockedToCraftId == craft.Id) ship.DockedToCraftId = CraftId.None; // left floating there
             if (ship.DockClaimStation == craft.Id) ReleaseClaim(ship);
         }
-        AddEvent(IsPlayers(craft) ? $"{craft.Name} was destroyed: its wreck is adrift." : $"{craft.Name} was destroyed.", IsPlayers(craft) ? EventKind.Danger : EventKind.Fleet, TargetRef.Of(craft));
+        if (destroyed) AddEvent(IsPlayers(craft) ? $"{craft.Name} was destroyed: its wreck is adrift." : $"{craft.Name} was destroyed.", IsPlayers(craft) ? EventKind.Danger : EventKind.Fleet, TargetRef.Of(craft));
         if (!wasGate) return;
         // Its twin stays tied to this system (#36): the next jump sends a new far gate through, from its own stock.
         var star = StarAt(craft.Position);

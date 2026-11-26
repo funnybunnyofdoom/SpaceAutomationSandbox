@@ -179,4 +179,55 @@ public sealed class SalvageTests
         Assert.Equal(1, SectorState.MissingParts(ship));
         Assert.Equal(5_000, ship.Inventory["metal"]);
     }
+
+    // --- Marking your own craft as a wreck (#135) ---
+
+    [Fact]
+    public void Your_craft_marked_as_a_wreck_sends_its_crew_home_and_is_salvaged_cargo_and_all()
+    {
+        var (sector, ship, raider, yard) = Game();
+        sector.RemoveCraftForTest(raider.Id);
+        // A damaged freighter of yours with crew and cargo, beside the salvager.
+        var design = new ShipDesign("old", "Old freighter", TestData.StarterShip().Cells.Concat(Enumerable.Range(0, 6).Select(i => new DesignCell(new GridPos(-3 + i % 2 * 6 - 0, -2 + i / 2), "hull"))));
+        var old = new CraftState(sector.AllocateCraftId(), "Old freighter", design, design.ComputeStats(Catalog), ship.Position + new Vector2D(-90, 0), 0) { Velocity = ship.Velocity };
+        sector.AddCraft(old);
+        old.Inventory.Add("metal", 500);
+        sector.RestoreCrew(old.Id, 2, 0, 0, 0, 0, legacyNoCrew: false);
+        var yardCrew = yard.Crew;
+        var mass = sector.ComputeMassLedger().TotalKg;
+        sector.PilotCraftId = old.Id;
+        Assert.Contains("flying", sector.ScrapCraft(old.Id).Message);
+        sector.PilotCraftId = CraftId.None;
+        var done = sector.ScrapCraft(old.Id);
+        Assert.True(done.Done, done.Message);
+        Assert.True(old.IsWreck && old.Scrapped && SectorState.IsPlayers(old));
+        Assert.Equal(0, old.Crew);
+        Assert.Equal(yardCrew + 2, yard.Crew);
+        Assert.Contains(sector.Events, e => e.Text.Contains("marked as a wreck"));
+        Assert.DoesNotContain(sector.Events, e => e.Text.Contains("destroyed"));
+        // It can be taken back until salvage begins.
+        Assert.True(sector.UnscrapCraft(old.Id).Done);
+        Assert.False(old.IsWreck);
+        Assert.True(sector.ScrapCraft(old.Id).Done);
+        Assert.Equal(SaveGameSerializer.ToJson(sector, ship.Id), SaveGameSerializer.ToJson(SaveGameSerializer.FromJson(SaveGameSerializer.ToJson(sector, ship.Id), Catalog).Sector, ship.Id));
+        sector.SetTargetCraft(ship.Id, old.Id);
+        Run(sector, 2 * Minute, () => !old.Scrapped);
+        Assert.False(old.Scrapped);
+        Assert.False(sector.UnscrapCraft(old.Id).Done);
+        Run(sector, 30 * Minute, () => !sector.Crafts.Contains(old));
+        Assert.DoesNotContain(old, sector.Crafts);
+        Assert.Equal(mass, sector.ComputeMassLedger().TotalKg);
+        Assert.True(ship.Inventory["metal"] >= 500); // its cargo came too
+    }
+
+    [Fact]
+    public void Crew_with_nowhere_to_go_keep_it_from_being_marked()
+    {
+        var (sector, ship, _, yard) = Game();
+        var design = TestData.StarterShip();
+        var full = new CraftState(sector.AllocateCraftId(), "Crewed", design, design.ComputeStats(Catalog), ship.Position + new Vector2D(0, 200), 0);
+        sector.AddCraft(full);
+        sector.RestoreCrew(full.Id, 50, 0, 0, 0, 0, legacyNoCrew: false);
+        Assert.Contains("nowhere to go", sector.ScrapCraft(full.Id).Message);
+    }
 }

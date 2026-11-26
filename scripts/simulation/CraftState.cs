@@ -259,6 +259,9 @@ public sealed class CraftState
     /// <summary>Shot to pieces: it drifts with what it holds and does nothing. Saved.</summary>
     public bool IsWreck { get; internal set; }
 
+    /// <summary>Marked as a wreck by you (#135) and not yet salvaged at all: it can be taken back. Saved.</summary>
+    public bool Scrapped { get; internal set; }
+
     /// <summary>The player's order not to fire. Saved.</summary>
     public bool HoldFire { get; set; }
 

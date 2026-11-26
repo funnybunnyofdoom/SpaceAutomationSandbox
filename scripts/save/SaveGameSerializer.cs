@@ -246,6 +246,7 @@ public static class SaveGameSerializer
                     Jumps = c.Jumps,
                     FactionId = c.FactionId,
                     IsWreck = c.IsWreck,
+                    Scrapped = c.Scrapped,
                     IsPatrol = c.IsPatrol,
                     IsStranded = c.IsStranded,
                     PatrolStop = c.PatrolStop,
@@ -471,6 +472,7 @@ public static class SaveGameSerializer
                     (c.PartHealth ?? new List<HealthDto>()).ToDictionary(h => new GridPos(h.X, h.Y), h => h.Health), c.PartsLost);
                 craft.FactionId = c.FactionId; // #84
                 craft.IsWreck = c.IsWreck;
+                craft.Scrapped = c.Scrapped && c.IsWreck;
                 if (c.PatrolStop < 0) throw new FormatException($"Craft {c.Id} has an invalid patrol.");
                 craft.IsPatrol = c.IsPatrol;
                 craft.IsStranded = c.IsStranded;
@@ -1315,6 +1317,10 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool IsWreck { get; set; }
+
+        /// <summary>#135; no schema change: older saves have none.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool Scrapped { get; set; }
 
         /// <summary>v24: a civilization's standing patrol (#89).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
