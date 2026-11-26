@@ -351,6 +351,7 @@ public partial class Main : Node2D
         if (System.Array.IndexOf(args, "--open-programs") >= 0) DemoProgram(); // #120
         if (System.Array.IndexOf(args, "--open-contracts") >= 0) DemoContracts(); // #124
         if (System.Array.IndexOf(args, "--open-mega") >= 0) DemoMega(); // #126
+        if (System.Array.IndexOf(args, "--demo-fx") >= 0) DemoEffects(); // #130
         if (args.FirstOrDefault(a => a.StartsWith("--open-planner")) is { } planner) DemoPlanner(planner.Contains("=rate")); // #121
         if (args.FirstOrDefault(a => a.StartsWith("--hazard=")) is { } happens) DemoHazard(happens.Split('=').Last()); // #123
         if (args.FirstOrDefault(a => a.StartsWith("--open-discoveries")) is { } discover) DemoPoints(discover.Split('=').Last()); // #122
@@ -1348,6 +1349,7 @@ public partial class Main : Node2D
         DrawSwarms(renderTimeS); // #30
         FlushBatch();
         DrawCombat(); // #84
+        DrawEffects(RenderTimeS); // #130
         DrawSystemMap(renderTimeS); // #104
         DrawPoints(renderTimeS); // #122
         DrawHazards(renderTimeS); // #123
@@ -1424,7 +1426,7 @@ public partial class Main : Node2D
             var corners = (World(rect.Position), World(rect.Position + new Vector2(rect.Size.X, 0)), World(rect.End), World(rect.Position + new Vector2(0, rect.Size.Y)));
             if (sprites && PartSprites.TryCorners(cell.PartId, cell.Rotation, out var uv0, out var uv1, out var uv2, out var uv3))
                 // Damaged parts (#34) darken towards black-red as they lose health (the sprite is tinted).
-                BatchSprite(corners, (uv0, uv1, uv2, uv3), Colors.White.Lerp(new Color(0.35f, 0.12f, 0.12f), damaged));
+                BatchSprite(corners, (uv0, uv1, uv2, uv3), HullTint(craft).Lerp(new Color(0.35f, 0.12f, 0.12f), damaged));
             else
                 BatchQuad(corners.Item1, corners.Item2, corners.Item3, corners.Item4,
                     _partColors.GetValueOrDefault(cell.PartId, Colors.Magenta).Lerp(new Color(0.25f, 0.05f, 0.05f), damaged));
@@ -1438,8 +1440,9 @@ public partial class Main : Node2D
             {
                 var flameTop = local + new Vector2(0, cellPx / 2);
                 var length = cell.PartId is "rocket" or "methalox_rocket" ? 1.6f : cell.PartId == "antimatter_drive" ? 2.4f : cell.PartId is "ion_drive" or "nuclear_rocket" ? 1.2f : 0.9f;
-                BatchTriangle(World(flameTop + new Vector2(-cellPx * 0.3f, 0)), World(flameTop + new Vector2(cellPx * 0.3f, 0)),
-                    World(flameTop + new Vector2(0, cellPx * length)), cell.PartId == "ion_drive" ? IonGlowColor : FlameColor);
+                if (!Flame(cell.PartId, craft, flameTop, length, cellPx, World)) // a pixel flame (#130), else the plain one
+                    BatchTriangle(World(flameTop + new Vector2(-cellPx * 0.3f, 0)), World(flameTop + new Vector2(cellPx * 0.3f, 0)),
+                        World(flameTop + new Vector2(0, cellPx * length)), cell.PartId == "ion_drive" ? IonGlowColor : FlameColor);
             }
         }
     }

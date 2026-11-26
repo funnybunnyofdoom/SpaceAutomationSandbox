@@ -141,6 +141,8 @@ public sealed partial class SectorState
     /// <summary>Moves a craft (with everything aboard) to the far gate: docked there if a port is free.</summary>
     private void Jump(CraftState craft, CraftState to)
     {
+        Make("warp", craft.Position); // #130: a flash where it left
+        Make("warp", to.Position); // and where it comes out
         craft.DockedToCraftId = CraftId.None;
         craft.JumpRequestTick = 0;
         craft.Transit = null;

@@ -5,6 +5,7 @@
   "description": "An alien hive people: many hands, few scholars.",
   "order": 20,
   "accent": "#63d68a",
+  "hullTint": "#bfe8c8",
   "crew": 6,
   "supplies": true,
   "traits": {

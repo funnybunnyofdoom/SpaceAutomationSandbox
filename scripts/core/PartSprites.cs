@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 
 namespace SpaceAutomationSandbox.Core;
@@ -17,6 +18,9 @@ public static class PartSprites
     private const int Slot = CellPixels + 2;
     public const string Folder = "res://assets/art/ship_parts";
 
+    /// <summary>Effect sprites (#130), in the same atlas under "fx:" and their name.</summary>
+    public const string FxFolder = "res://assets/art/fx";
+
     private static readonly Dictionary<string, Rect2> UvRects = new();
     private static readonly Dictionary<string, Texture2D> Icons = new();
 
@@ -29,9 +33,10 @@ public static class PartSprites
         UvRects.Clear();
         Icons.Clear();
         var images = new List<(string Id, Image Image)>();
-        foreach (var id in partIds)
+        var fx = DirAccess.DirExistsAbsolute(FxFolder) ? DirAccess.GetFilesAt(FxFolder).Where(f => f.EndsWith(".png")).Select(f => "fx:" + f[..^4]).OrderBy(f => f, StringComparer.Ordinal) : Enumerable.Empty<string>();
+        foreach (var id in partIds.Concat(fx))
         {
-            var path = $"{Folder}/{id}.png";
+            var path = id.StartsWith("fx:", StringComparison.Ordinal) ? $"{FxFolder}/{id[3..]}.png" : $"{Folder}/{id}.png";
             if (!ResourceLoader.Exists(path) || GD.Load<Texture2D>(path) is not { } texture) continue;
             var image = texture.GetImage();
             if (image is null || image.GetWidth() != CellPixels || image.GetHeight() != CellPixels) continue;

@@ -24,7 +24,7 @@ public partial class RaceCreatorScreen : Control
     private LineEdit _name = null!, _description = null!, _shipName = null!, _yardName = null!;
     private ColorPickerButton _accent = null!;
     private SpinBox _crew = null!;
-    private CheckBox _robots = null!, _supplies = null!, _civilization = null!;
+    private CheckBox _robots = null!, _supplies = null!, _civilization = null!, _tint = null!;
     private readonly Dictionary<string, CheckBox> _cultures = new();
     private readonly Dictionary<string, (HSlider Slider, Label Value)> _traits = new(), _stock = new(), _wants = new(), _opposes = new();
     private readonly Dictionary<string, CheckBox> _tech = new(), _blocked = new(), _favours = new();
@@ -103,8 +103,9 @@ public partial class RaceCreatorScreen : Control
         pictureRow.AddChild(Press("From a file...", "A PNG, JPG or WebP picture. It's cropped to 4:5 and copied, so the original can move.", () => Pick(FileDialog.FileModeEnum.OpenFile, "*.png,*.jpg,*.jpeg,*.webp;Pictures", "", TakePicture)));
         who.AddChild(new Label { Text = "Colour" });
         _accent = new ColorPickerButton { CustomMinimumSize = new Vector2(0, 28), EditAlpha = false };
-        _accent.ColorChanged += c => Set(_race with { Accent = "#" + c.ToHtml(false) });
+        _accent.ColorChanged += c => Set(_race with { Accent = "#" + c.ToHtml(false), HullTint = _race.HullTint.Length > 0 ? "#" + c.Lightened(0.6f).ToHtml(false) : "" });
         who.AddChild(_accent);
+        _tint = Check(who, "Tint its ships in its colour", on => _race with { HullTint = on ? "#" + _accent.Color.Lightened(0.6f).ToHtml(false) : "" }); // #130
         _shipName = Text(who, "First ship's name", RaceCatalog.MaxName, t => _race with { ShipName = t });
         _yardName = Text(who, "Shipyard's name", RaceCatalog.MaxName, t => _race with { ShipyardName = t });
 
@@ -307,7 +308,7 @@ public partial class RaceCreatorScreen : Control
         {
             _from.AddItem(race.Name);
             if (race.Id == current.Id) _from.Select(_from.ItemCount - 1);
-            if (!race.IsCustom) Portrait($"{race.Name}'s", race.Id);
+            if (!race.IsCustom && RaceLibrary.HasBuiltInPortrait(race.Id)) Portrait($"{race.Name}'s", race.Id); // only those with a picture
         }
         void Portrait(string text, string id)
         {
@@ -352,6 +353,7 @@ public partial class RaceCreatorScreen : Control
         _crew.Value = _race.Crew;
         _robots.ButtonPressed = _race.ShipyardParts.ContainsKey("habitat");
         _supplies.ButtonPressed = _race.Supplies;
+        _tint.ButtonPressed = _race.HullTint.Length > 0;
         _civilization.ButtonPressed = _race.Civilization;
         foreach (var (id, check) in _cultures) { check.ButtonPressed = _race.Cultures.Contains(id); check.Disabled = !_race.Civilization; }
         foreach (var (id, row) in _civTraits) Put(row, _race.CivTraits.GetValueOrDefault(id));

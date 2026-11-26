@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://xrgppj187yy"
-path="res://.godot/imported/portrait.webp-b0dbc0a3613b5dc04ecb484578110595.ctex"
+uid="uid://ywb8uorrloat"
+path="res://.godot/imported/explosion_1.png-3a8d27f535678abf8643a82234400aec.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://data/races/robotic/portrait.webp"
-dest_files=["res://.godot/imported/portrait.webp-b0dbc0a3613b5dc04ecb484578110595.ctex"]
+source_file="res://assets/art/fx/explosion_1.png"
+dest_files=["res://.godot/imported/explosion_1.png-3a8d27f535678abf8643a82234400aec.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

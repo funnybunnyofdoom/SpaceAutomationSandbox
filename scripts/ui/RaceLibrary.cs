@@ -84,6 +84,9 @@ public static class RaceLibrary
 
     public static bool HasPicture(string id) => File.Exists(PictureOf(id));
 
+    /// <summary>A built-in race has a portrait file in its folder (none at the moment: they're to come).</summary>
+    public static bool HasBuiltInPortrait(string id) => new[] { "webp", "png" }.Any(e => ResourceLoader.Exists($"{Dir}/{id}/portrait.{e}"));
+
     /// <summary>Reads a picture from disk: checked, cropped to 4:5 and scaled. Null with the reason when it can't be used.</summary>
     public static Image? ReadPicture(string path, out string problem)
     {

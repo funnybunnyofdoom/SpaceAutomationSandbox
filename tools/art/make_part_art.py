@@ -631,6 +631,17 @@ def fusion_reactor(a):
     return b, d
 
 
+def mass_driver(a):
+    """A long launch rail pointing up, with coils along it and a hopper of rock at the bottom (#127)."""
+    b, d = panel(), Img()
+    d.rect(6, 1, 9, 12, DARK); d.vline(6, 1, 12, OUT); d.vline(9, 1, 12, OUT)
+    for y in (2, 5, 8, 11): d.hline(5, 10, y, a); d.set(5, y, shade(a, 0.6)); d.set(10, y, shade(a, 0.6))
+    d.rect(7, 0, 8, 1, shade(a, 1.5))
+    d.rect(3, 12, 12, 14, SHADOW); d.outline(3, 12, 12, 14, OUT)
+    for x in (5, 7, 9, 11): d.set(x, 13, (150, 120, 90, 255))
+    return b, d
+
+
 DRAW = {
     "hull": hull, "cockpit": cockpit, "thruster": thruster, "battery": battery, "solar_panel": solar,
     "cargo": cargo, "drill": drill, "fabricator": fabricator, "anchor_clamp": anchor_clamp,
@@ -653,7 +664,7 @@ DRAW = {
     "rocket": rocket, "ion_drive": ion_drive,
     "solar_array": solar_array, "heat_collector": heat_collector, "methane_generator": methane_generator,
     "methalox_rocket": methalox_rocket, "nuclear_rocket": nuclear_rocket, "isotope_separator": isotope_separator,
-    "fusion_reactor": fusion_reactor,
+    "fusion_reactor": fusion_reactor, "mass_driver": mass_driver,
 }
 
 

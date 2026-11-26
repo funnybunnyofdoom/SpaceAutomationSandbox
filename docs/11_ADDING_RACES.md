@@ -19,6 +19,7 @@ A race is a folder in `data/races/`. Add one and it's in the New Game screen; no
 | `name`, `description` | `name` | Shown on the New Game screen |
 | `order` | no | Place in the list (Human is always first) |
 | `accent` | no | Interface colour, `#rrggbb` |
+| `hullTint` | no | A light tint for its ships' parts, `#rrggbb` (#130) |
 | `crew`, `supplies` | no | People at the starting shipyard; whether it has food and water |
 | `traits` | no | Percent, from -50 to 50, by trait (below) |
 | `tech` | no | Tech it starts with (ids from `data/research`) |

@@ -5,6 +5,7 @@
   "description": "Machines that run on power alone.",
   "order": 10,
   "accent": "#e8a33d",
+  "hullTint": "#f2cf96",
   "crew": 0,
   "supplies": false,
   "shipyardParts": {

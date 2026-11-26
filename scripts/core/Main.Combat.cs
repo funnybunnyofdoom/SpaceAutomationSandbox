@@ -34,6 +34,7 @@ public partial class Main
             var px = ToPixels(at);
             var length = Mathf.Clamp((float)shot.Velocity.Length * 0.02f * _pixelsPerMetre, 3f, 24f);
             var direction = new Vector2((float)shot.Velocity.X, (float)shot.Velocity.Y).Normalized();
+            if (shot.IsMissile && MissileSprite(px, direction)) continue; // #130
             DrawLine(px - direction * length, px, shot.IsMissile ? MissileColor : ShotColor, shot.IsMissile ? 4f : 2f);
             if (shot.IsMissile) DrawLine(px - direction * (length + 10), px - direction * length, FlameColor, 2f);
         }

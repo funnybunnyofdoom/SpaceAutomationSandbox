@@ -81,6 +81,9 @@ public sealed record RaceDefinition
     /// <summary>The interface's accent colour, "#rrggbb"; empty for the usual one.</summary>
     public string Accent { get; init; } = "";
 
+    /// <summary>A light tint for its ships' parts, "#rrggbb" (#130); empty for none.</summary>
+    public string HullTint { get; init; } = "";
+
     /// <summary>By <see cref="RaceTraits"/> id: percent.</summary>
     public Dictionary<string, int> Traits { get; init; } = new();
 
@@ -218,7 +221,7 @@ public sealed class RaceCatalog
             Name = given.Name ?? "", Description = given.Description ?? "", Accent = given.Accent ?? "", Picture = given.Picture ?? "", Notes = given.Notes ?? new(), Traits = given.Traits ?? new(), StockKg = given.StockKg ?? new(),
             ShipyardParts = given.ShipyardParts ?? new(), Tech = given.Tech ?? new(), BlockedLaws = given.BlockedLaws ?? new(), Leanings = given.Leanings ?? new(), GoalHints = given.GoalHints ?? new(),
             Cultures = given.Cultures ?? new(), Views = given.Views ?? new(), CivilizationNames = given.CivilizationNames ?? new(), ShipName = given.ShipName ?? "", ShipyardName = given.ShipyardName ?? "",
-            CivTraits = given.CivTraits ?? new(), Favours = given.Favours ?? new(), ShipDesign = given.ShipDesign is { Length: > 0 } ship ? ship : null, ShipyardDesign = given.ShipyardDesign is { Length: > 0 } yard ? yard : null,
+            CivTraits = given.CivTraits ?? new(), Favours = given.Favours ?? new(), HullTint = given.HullTint ?? "", ShipDesign = given.ShipDesign is { Length: > 0 } ship ? ship : null, ShipyardDesign = given.ShipyardDesign is { Length: > 0 } yard ? yard : null,
         };
         if (race.Leanings.Values.Any(l => l is null) || race.Tech.Any(t => t is null) || race.ShipyardParts.Values.Any(p => p is null) || race.Cultures.Any(c => c is null) || race.CivilizationNames.Any(string.IsNullOrWhiteSpace)) throw new FormatException("something in it is empty.");
         if (race.SchemaVersion != SchemaVersion) throw new FormatException($"race.json is schemaVersion {race.SchemaVersion}; this build reads {SchemaVersion}.");
@@ -226,6 +229,7 @@ public sealed class RaceCatalog
         if (race.Name.Length > MaxName || race.ShipName.Length > MaxName || race.ShipyardName.Length > MaxName || race.Description.Length > MaxDescription) throw new FormatException($"names have at most {MaxName} characters, descriptions {MaxDescription}.");
         if (race.Crew < 0) throw new FormatException("crew can't be below 0.");
         if (race.Accent.Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(race.Accent, "^#[0-9a-fA-F]{6}$")) throw new FormatException($"accent '{race.Accent}' isn't #rrggbb.");
+        if (race.HullTint.Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(race.HullTint, "^#[0-9a-fA-F]{6}$")) throw new FormatException($"hullTint '{race.HullTint}' isn't #rrggbb.");
         if (string.IsNullOrWhiteSpace(race.ShipName) || string.IsNullOrWhiteSpace(race.ShipyardName)) throw new FormatException("the ship and the shipyard need names.");
         foreach (var (trait, percent) in race.Traits)
         {

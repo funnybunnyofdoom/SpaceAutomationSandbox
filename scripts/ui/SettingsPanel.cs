@@ -19,6 +19,7 @@ public partial class SettingsPanel : PanelContainer
     private Label _info = null!;
     private readonly Dictionary<string, (HSlider Slider, CheckBox Mute, Label Value)> _audio = new();
     private CheckBox _captions = null!;
+    private OptionButton _effects = null!;
     private CheckBox _muteUnfocused = null!;
     private OptionButton _autosave = null!;
     private OptionButton _textSize = null!;
@@ -123,6 +124,15 @@ public partial class SettingsPanel : PanelContainer
             audio.AddChild(mute);
             _audio[bus] = (slider, mute, value);
         }
+        var effectsRow = new HBoxContainer(); // #130
+        effectsRow.AddChild(new Label { Text = "Effects", CustomMinimumSize = new Vector2(90, 0) });
+        _effects = new OptionButton { TooltipText = "Explosions, flames, sparks, smoke and dust. Reduced keeps flames, flashes and explosions. Nothing flashes more than three times a second." };
+        _effects.AddItem("Full");
+        _effects.AddItem("Reduced");
+        _effects.AddItem("Off");
+        _effects.ItemSelected += i => Change(() => _settings.Effects = (int)i);
+        effectsRow.AddChild(_effects);
+        box.AddChild(effectsRow);
         _muteUnfocused = new CheckBox { Text = "Mute while the game is in the background" };
         _muteUnfocused.Toggled += on => Change(() => _settings.MuteWhenUnfocused = on);
         box.AddChild(_muteUnfocused);
@@ -195,6 +205,7 @@ public partial class SettingsPanel : PanelContainer
         }
         _muteUnfocused.ButtonPressed = _settings.MuteWhenUnfocused;
         _captions.ButtonPressed = _settings.Captions;
+        _effects.Select(_settings.Effects);
         _textSize.Select(Math.Max(0, Array.FindIndex(GameSettings.TextScales, t => Math.Abs(t - _settings.TextScale) < 0.001f)));
         _colorblind.ButtonPressed = _settings.ColorblindSafe;
         _autosave.Select(Math.Max(0, Array.IndexOf(GameSettings.AutosaveChoices, _settings.AutosaveMinutes)));

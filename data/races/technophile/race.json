@@ -5,6 +5,7 @@
   "description": "People who would rather build a machine than do it by hand.",
   "order": 30,
   "accent": "#b08cff",
+  "hullTint": "#d8ccff",
   "crew": 4,
   "supplies": true,
   "traits": {

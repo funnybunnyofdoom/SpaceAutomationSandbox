@@ -59,6 +59,9 @@ public sealed class GameSettings
     /// <summary>Captions for important sounds (#129).</summary>
     public bool Captions { get; set; }
 
+    /// <summary>Effects (#130): 0 full, 1 reduced (no debris, smoke, sparks or dust), 2 off.</summary>
+    public int Effects { get; set; }
+
     /// <summary>HUD areas folded away (#51), by title.</summary>
     public System.Collections.Generic.HashSet<string> HudCollapsed { get; } = new(StringComparer.Ordinal);
 
@@ -102,6 +105,7 @@ public sealed class GameSettings
         }
         settings.MuteWhenUnfocused = file.GetValue("audio", "mute_when_unfocused", true).AsBool();
         settings.Captions = file.GetValue("audio", "captions", false).AsBool();
+        settings.Effects = Math.Clamp(file.GetValue("display", "effects", 0).AsInt32(), 0, 2);
         var autosave = file.GetValue("game", "autosave_minutes", 10).AsInt32();
         settings.AutosaveMinutes = Array.IndexOf(AutosaveChoices, autosave) >= 0 ? autosave : 10;
         var text = (float)file.GetValue("accessibility", "text_scale", 1f).AsDouble();
@@ -130,6 +134,7 @@ public sealed class GameSettings
         }
         file.SetValue("audio", "mute_when_unfocused", MuteWhenUnfocused);
         file.SetValue("audio", "captions", Captions);
+        file.SetValue("display", "effects", Effects);
         file.SetValue("game", "autosave_minutes", AutosaveMinutes);
         file.SetValue("accessibility", "text_scale", TextScale);
         file.SetValue("accessibility", "colorblind_safe", ColorblindSafe);
