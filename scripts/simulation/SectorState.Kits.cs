@@ -88,20 +88,24 @@ public sealed partial class SectorState
         return new(true, $"Deployed {station.Name} ({station.Id}).");
     }
 
-    /// <summary>Puts a station on a circular rail orbit around the nearest body, at the carrier's distance, first free spot.</summary>
+    /// <summary>
+    /// Puts a station on a circular rail orbit around the nearest body, level with the carrier, in the first free lane outside the
+    /// carrier's own distance from the body. The station circles the body while the carrier, matched to the body, hangs still: on the
+    /// carrier's circle it would sweep round into it within moments (the creator lost a ship and kit that way). A lane further out
+    /// never comes nearer the carrier than the gap between their hulls.
+    /// </summary>
     private void PlaceInOrbitNear(CraftState carrier, CraftState station)
     {
         var (body, _) = NearestBody(carrier.Position);
         var offset = carrier.Position - GetPosition(body.Id);
-        var radius = Math.Max(offset.Length, body.RadiusM + station.CollisionRadiusM + ParkingGapM);
         var phaseNow = Math.Atan2(offset.Y, offset.X);
-        var period = CircularOrbitPeriodS(body, radius, DeployOrbitPeriodS);
-        for (var slot = 1; slot <= 1000; slot++)
+        for (var lane = 0; lane < 1000; lane++)
         {
-            var distance = carrier.CollisionRadiusM + station.CollisionRadiusM + ParkingGapM
-                           + (slot - 1) * (2 * station.CollisionRadiusM + ParkingGapM);
-            var orbit = new CircularOrbit(body.Id, radius, period,
-                phaseNow - distance / radius - 2.0 * Math.PI * (TimeS / period));
+            var radius = Math.Max(offset.Length + carrier.CollisionRadiusM + station.CollisionRadiusM + ParkingGapM
+                                  + lane * (2 * station.CollisionRadiusM + ParkingGapM),
+                body.RadiusM + station.CollisionRadiusM + ParkingGapM);
+            var period = CircularOrbitPeriodS(body, radius, DeployOrbitPeriodS);
+            var orbit = new CircularOrbit(body.Id, radius, period, phaseNow - 2.0 * Math.PI * (TimeS / period));
             if (!IsFree(RailPositionAt(orbit, TimeS), station)) continue;
             PutOnRails(station.Id, orbit);
             return;

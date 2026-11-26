@@ -157,9 +157,20 @@ public class StationBuildTests
         Assert.True(sector.TryDeployKit(carrier.Id, carrier.Kits[0].Id).Done);
         var station = sector.Crafts.Single(c => c.Design.Id == TestData.StarterShipyard().Id && c.Id != yard.Id);
         Assert.Equal(rock.Id, station.RailOrbit!.Parent);
-        Assert.InRange(station.RailOrbit.RadiusM, rock.RadiusM + 1_999, rock.RadiusM + 2_001);
-        RunSeconds(sector, 30);
-        Assert.InRange(station.Position.DistanceTo(sector.GetPosition(rock.Id)), rock.RadiusM + 1_999, rock.RadiusM + 2_001); // stays with the rock
+        var lane = station.RailOrbit.RadiusM;
+        Assert.InRange(lane, rock.RadiusM + 2_000 + carrier.CollisionRadiusM + station.CollisionRadiusM, rock.RadiusM + 2_200); // just outside the carrier
+        // The carrier hangs still over the rock while the station circles it: a whole lap passes without them touching (the creator's
+        // carrier was rammed by a station deployed on its own circle).
+        var period = station.RailOrbit.PeriodS;
+        for (var t = 0.0; t < period * 1.05; t += 1)
+        {
+            carrier.Position = sector.GetPosition(rock.Id) + new Vector2D(rock.RadiusM + 2_000, 0);
+            carrier.Velocity = sector.GetVelocityAt(rock.Id, sector.TimeS);
+            RunSeconds(sector, 1);
+            Assert.True(station.Position.DistanceTo(carrier.Position) >= station.CollisionRadiusM + carrier.CollisionRadiusM, $"touched at {t} s");
+        }
+        Assert.Contains(sector.Crafts, c => c.Id == carrier.Id);
+        Assert.InRange(station.Position.DistanceTo(sector.GetPosition(rock.Id)), lane - 1, lane + 1); // stays with the rock
     }
 
     [Fact]
