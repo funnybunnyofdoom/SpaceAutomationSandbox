@@ -1,4 +1,4 @@
-# 08 — Save format (schema 40)
+# 08 — Save format (schema 42)
 
 The code is `scripts/save/SaveGameSerializer.cs` and `scripts/save/SaveStore.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs` and `SaveStoreTests.cs`.
 
@@ -142,6 +142,8 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 38 | `sector.options` (world options that aren't off, by id, #119) and `sector.points[]` (points of interest, hidden ones too: kind, name, place, `roll`, what's been found and done, and the craft or body it became, #122). Older saves have neither: everything off. |
 | 39 | `sector.hazards` (forecast and under way, when the next are due, rocks in flight), a comet's ellipse (`eccentricity`, `periapsisRad` of an orbit), and a craft's `keepWorking` and `shelterAtId` (#123). Older saves have no hazards and their options off. |
 | 40 | `sector.contracts` (contracts offered, under way and lately closed, and when each civilization offers next), a civilization's `miningAccessUntilTick`, and a craft's `isStranded` (#124). Older saves have none, with the option off. |
+| 41 | A civilization's `playsByRace`: met since #125, it behaves by its race's traits and designs. Older saves have it off. |
+| 42 | `sector.megastructures[]` (#126): kind, name, body, hub, stages done, whether a stage is being worked and for how long, paused, neglected, and the kg built into it (part of the mass ledger). Older saves have none. |
 | 18 | Warp gates and further star systems: `gateLinkId`, `gateReadyTick`, `jumpRequestTick`, `jumps` per craft; `sector.discoveredKg` | An older save has one system and no gates; nothing changes. |
 | 17 (later additions, optional) | Kits record `originalCraftId` and `requestsKg` (a packed station comes back as itself, #24). Bodies record `originalMassKg` once mining has changed their mass, and `nextBodyId` is saved (#27); jobs may name bodies that are gone | Older kits are new kits: they deploy with a fresh id. Older bodies take their current mass as the starting mass. |
 | 17 | Refit, dismantle and pack orders (`yardOrder`, `yardProgressKg` per craft) and `sector.nextCraftId`. Jobs may now name craft that no longer exist (they were dismantled) | Nothing changes; the craft id counter follows from the craft. |

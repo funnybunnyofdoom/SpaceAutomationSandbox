@@ -113,4 +113,21 @@ public sealed partial class SectorState
         faction.NextPatrolTick = 0;
         faction.NextStationTick = 0;
     }
+
+    /// <summary>DEBUG: a megastructure's stages done at once, from outside the sector (#126).</summary>
+    public void DebugBuildMega(int id, int stages)
+    {
+        var project = _megas.First(m => m.Id == id);
+        var kind = KindOf(project)!;
+        for (var i = 0; i < stages && project.Stages < kind.Stages.Count; i++)
+        {
+            var kg = kind.Stages[project.Stages].MaterialsKg.Values.Sum();
+            project.BuiltKg += kg;
+            DiscoveredKg += kg;
+            project.Stages++;
+        }
+        project.Working = false;
+        project.WorkTicks = 0;
+        if (_craftsById.TryGetValue(project.HubId, out var hub)) PostMegaRequests(project, kind, hub);
+    }
 }

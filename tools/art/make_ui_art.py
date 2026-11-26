@@ -147,6 +147,7 @@ def pick(d): line(d, 3, 12, 9, 6, C); line(d, 4, 12, 10, 6, C); d.rect(9, 3, 12,
 def replace(d): d.rect(2, 2, 6, 6, C); d.rect(9, 9, 13, 13, W); d.hline(8, 12, 4, Y); d.vline(12, 4, 7, Y); d.hline(3, 7, 11, Y); d.vline(3, 8, 11, Y)
 def edit_program(d):
     for y in (3, 7, 11): d.rect(2, y, 3, y + 1, C); d.hline(6, 13, y, W); d.hline(6, 10, y + 1, G)
+def mega(d): d.ring(8, 8, 5.5, 6.8, C); d.disc(8, 8, 2.8, G); d.rect(13, 7, 14, 8, W); d.rect(1, 7, 2, 8, W); d.rect(7, 1, 8, 2, W)
 def contract(d):
     d.rect(4, 2, 12, 13, W); d.outline(4, 2, 12, 13, G)
     for y in (5, 7, 9): d.hline(6, 10, y, G)
@@ -169,7 +170,7 @@ def fit(d):
 
 MENU = {"undo": undo, "redo": redo, "mirror_h": mirror_h, "mirror_v": mirror_v, "tool_draw": tool_draw, "tool_line": tool_line, "tool_rect": tool_rect,
         "tool_outline": tool_outline, "tool_fill": tool_fill, "tool_select": tool_select, "copy": copy, "paste": paste, "cut": cut, "trash": trash,
-        "turn": turn, "pick": pick, "replace": replace, "fit": fit, "find": find, "discovery": discovery, "ruin": ruin, "comet": comet, "contract": contract, "edit_program": edit_program, "favourite": favourite,
+        "turn": turn, "pick": pick, "replace": replace, "fit": fit, "find": find, "discovery": discovery, "ruin": ruin, "comet": comet, "contract": contract, "mega": mega, "edit_program": edit_program, "favourite": favourite,
         "pause": pause, "editor": editor, "shipyard": shipyard, "fleet": fleet, "swarm": swarm, "cargo": cargo, "trade": trade, "job": job,
         "map": map_icon, "research": research, "power": power, "laws": laws, "life": life, "milestones": milestones, "settings": settings,
         "help": help_icon, "debug": debug, "diagnostics": diagnostics, "battery": battery, "hull": hull, "shield": shield, "speed": speed,

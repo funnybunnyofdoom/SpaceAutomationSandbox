@@ -410,7 +410,10 @@ public sealed class CraftState
     /// <summary>Set only by the v8→v9 save migration on stations that had no storage at all.</summary>
     public bool LegacyUnlimitedStorage { get; internal set; }
 
-    public long CargoCapacityKg => HasCargoLimit ? (long)Stats.CargoCapacityKg : long.MaxValue;
+    public long CargoCapacityKg => HasCargoLimit ? (long)Stats.CargoCapacityKg + ExtraStorageKg : long.MaxValue;
+
+    /// <summary>Storage a megastructure adds to its hub (#126); set each tick.</summary>
+    public long ExtraStorageKg { get; internal set; }
 
     public long FreeCargoKg => HasCargoLimit ? Math.Max(0, CargoCapacityKg - CargoKg) : long.MaxValue;
 

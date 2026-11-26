@@ -38,6 +38,7 @@ public static class Milestones
         new("antimatter", "Antimatter", "Hold some in containment.", s => Any(s, c => c.Inventory[SectorState.AntimatterMaterial] > 0)),
         new("quantum", "Quantum jump", "Jump across a system.", s => Any(s, c => c.QuantumReadyTick > 0)),
         new("dismantled", "A world dismantled", "Mine a body away completely.", _ => false), // noted when it happens
+        new("megastructure", "Builder of worlds", "Finish a megastructure.", _ => false), // #126: noted when it happens
     };
 }
 

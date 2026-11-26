@@ -38,6 +38,12 @@
       "description": "Nanite bays mend their craft and regrow lost parts; nano-assemblers build ships and kits anywhere, slowly." },
     { "id": "antimatter", "name": "Antimatter", "cost": 500, "requires": ["fusion_power"], "parts": ["antimatter_factory", "containment", "antimatter_reactor", "antimatter_drive"],
       "description": "Antimatter made from hydrogen with huge power, held in containment that explodes without power, for 100 MW reactors and mighty drives." },
+    { "id": "orbital_engineering", "name": "Orbital engineering", "cost": 450, "requires": ["heavy_fabrication", "superconductors"], "parts": [],
+      "description": "Megastructures round planets: orbital rings (storage and power) and space elevators (cargo up and down without fuel)." },
+    { "id": "stellar_engineering", "name": "Stellar engineering", "cost": 550, "requires": ["orbital_engineering", "fusion_power"], "parts": [],
+      "description": "A solar swarm: collectors round a star that power every station of yours in its system." },
+    { "id": "orbital_docks", "name": "Orbital docks", "cost": 500, "requires": ["orbital_engineering", "nanotechnology"], "parts": [],
+      "description": "An orbital shipyard dock: a great frame that builds far faster than any shipyard." },
     { "id": "quantum_jumps", "name": "Quantum jumps", "cost": 500, "requires": ["superconductors", "warp_theory"], "parts": ["quantum_drive"],
       "description": "Quantum drives: charge up, then jump to a target anywhere in the same star system." }
   ]

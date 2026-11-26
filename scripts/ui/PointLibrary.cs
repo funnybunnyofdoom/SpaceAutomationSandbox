@@ -10,6 +10,16 @@ public static class PointLibrary
 {
     public const string Dir = "res://data/points";
 
+    /// <summary>The kinds of megastructure (#126): every file in data/megastructures.</summary>
+    public static MegaCatalog LoadMegastructures(PartCatalog catalog)
+    {
+        const string dir = "res://data/megastructures";
+        var files = DirAccess.DirExistsAbsolute(dir) ? DirAccess.GetFilesAt(dir).Where(f => f.EndsWith(".json")).Select(f => (f[..^5], FileAccess.GetFileAsString($"{dir}/{f}"))).ToList() : new();
+        var kinds = MegaCatalog.Load(files, catalog);
+        foreach (var problem in kinds.Problems) GD.PushWarning($"Megastructure not usable: {problem}");
+        return kinds;
+    }
+
     public static PointCatalog Load(PartCatalog catalog)
     {
         var sources = new List<PointSource>();

@@ -61,7 +61,7 @@ public sealed partial class SectorState
             if (craft.Stats.FabricationRateKgPerS > 0 && craft.IsShipyard)
             {
                 scope.Yards.Add(craft);
-                scope.FabricationPerHour += craft.Stats.FabricationRateKgPerS * Tuning.FabricationRateMultiplier * Trait(craft, _building) * 3600;
+                scope.FabricationPerHour += FabricationRate(craft) * Tuning.FabricationRateMultiplier * Trait(craft, _building) * 3600;
             }
             if (craft.Flown is MiningJob { Active: true } mining && _byId.TryGetValue(mining.SourceBodyId, out var source) && _craftsById.TryGetValue(mining.DestinationId, out var to))
             {

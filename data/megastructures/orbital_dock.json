@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "orbital_dock",
+  "name": "Orbital dock",
+  "description": "A great frame round a planet whose hub builds ships and kits far faster than any shipyard.",
+  "tech": "orbital_docks",
+  "place": "planet",
+  "altitudeM": 3000,
+  "hubBuilds": true,
+  "stages": [
+    {
+      "name": "Keel",
+      "materialsKg": {
+        "metal": 80000,
+        "electronics": 20000,
+        "superconductors": 2000
+      },
+      "workMinutes": 25
+    },
+    {
+      "name": "Gantries",
+      "materialsKg": {
+        "metal": 80000,
+        "electronics": 20000,
+        "superconductors": 2000
+      },
+      "workMinutes": 25
+    },
+    {
+      "name": "Assembly lines",
+      "materialsKg": {
+        "metal": 80000,
+        "electronics": 20000,
+        "superconductors": 2000
+      },
+      "workMinutes": 25
+    }
+  ],
+  "effect": {
+    "fabricationKgPerS": 60,
+    "storageKg": 1000000
+  },
+  "upkeepKgPerHour": {
+    "metal": 300
+  },
+  "grievance": 8
+}

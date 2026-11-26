@@ -354,7 +354,7 @@ public sealed partial class SectorState
                 craft.YardStatus = $"waiting: {verb} at {yard.Name} stopped: no power";
                 return true;
             }
-            craft.YardProgressKg = Math.Min(work, craft.YardProgressKg + yard.Stats.FabricationRateKgPerS * Tuning.FabricationRateMultiplier * Trait(yard, _building) * FixedStepClock.TickSeconds);
+            craft.YardProgressKg = Math.Min(work, craft.YardProgressKg + FabricationRate(yard) * Tuning.FabricationRateMultiplier * Trait(yard, _building) * FixedStepClock.TickSeconds);
             craft.YardStatus = $"{verb} at {yard.Name}" + StepLabel(craft, removeCell, addCell, work);
             if (craft.YardProgressKg < work) return true;
         }

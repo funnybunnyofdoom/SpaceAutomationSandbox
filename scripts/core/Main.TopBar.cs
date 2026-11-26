@@ -37,6 +37,8 @@ public partial class Main
             Panel("find", "Find", InputActions.Find, _findPanel, () => _findPanel!.Open(), () => _player is null ? "Fly a craft first" : null),
             Panel("contract", "Contracts", InputActions.Contracts, _contractsPanel, () => _contractsPanel!.Open(), badge: () => _sector.CivilizationContracts.Count(c => c.State == ContractState.Offered) is > 0 and var n ? $"{n} offered" : null),
             Panel("discovery", "Discoveries", InputActions.Discoveries, _discoveriesPanel, () => _discoveriesPanel!.Open(), badge: () => PointsToDecide() is > 0 and var n ? $"{n} to decide here" : null),
+            Panel("mega", "Megastructures", InputActions.Megastructures, _megaPanel, () => _megaPanel!.Open(), () => _sector.Megas.Count == 0 && !_sector.Parts!.Megastructures.Kinds.Any(k => _sector.IsTechUnlocked(k.Tech)) ? "Research Orbital engineering first" : null,
+                () => _sector.Megas.FirstOrDefault(m => m.Neglected) is { } neglected ? $"{neglected.Name} has stopped" : null),
             Panel("research", "Research", InputActions.Research, _researchPanel, () => _researchPanel!.Open(), badge: () =>
                 _sector.ResearchPoints > 0 && _catalog!.Research.Techs.Count(t => !_sector.IsTechUnlocked(t.Id) && _sector.ResearchBlocker(t.Id) is null) is > 0 and var n ? $"{n} can be researched" : null),
             Panel("power", "Power", InputActions.Power, _powerPanel, () => _powerPanel!.Open(),

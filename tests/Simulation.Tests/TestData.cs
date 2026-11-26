@@ -26,6 +26,7 @@ internal static class TestData
         var catalog = PartCatalog.FromJson(Read("data/parts/parts.json"), Materials(), Recipes()).WithResearch(Research());
         RaceFiles.Catalog = catalog;
         RacePoints.SetUsual(StarterShip(), StarterShipyard(), catalog);
+        catalog.WithMegastructures(MegaCatalog.Load(Directory.GetFiles(Path.Combine(RepoRoot.Value, "data", "megastructures"), "*.json").Select(f => (Path.GetFileNameWithoutExtension(f), File.ReadAllText(f))), catalog));
         return catalog.WithRaces(Races(catalog)).WithPoints(Points(catalog));
     }
 

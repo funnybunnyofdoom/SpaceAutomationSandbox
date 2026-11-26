@@ -224,6 +224,9 @@ public partial class Main : Node2D
             _programPanel.JobsChosen += () => SwapPanel(_programPanel, _jobPanel, () => _jobPanel!.Open());
             _jobPanel!.ProgramsChosen += id => SwapPanel(_jobPanel, _programPanel, () => _programPanel.Open(id));
             _uiRoot.AddChild(_programPanel);
+            _megaPanel = new MegaPanel(() => _sector, () => _player, _catalog.Materials) { Visible = false }; // #126
+            _megaPanel.Acted += r => { ShowStatus(r.Message); _changedSinceSave = true; };
+            _uiRoot.AddChild(_megaPanel);
             _plannerPanel = new PlannerPanel(() => _sector, () => _player, _catalog.Materials, () => _shipyardPanel!.DesignChoices) { Visible = false }; // #121
             _plannerPanel.IssueChosen += GoToIssue;
             _shipyardPanel!.PlanChosen += design => SwapPanel(_shipyardPanel, _plannerPanel, () => _plannerPanel.Open(design));
@@ -346,6 +349,7 @@ public partial class Main : Node2D
             GetWindow().Size = new Vector2I(int.Parse(w), int.Parse(h));
         if (System.Array.IndexOf(args, "--open-programs") >= 0) DemoProgram(); // #120
         if (System.Array.IndexOf(args, "--open-contracts") >= 0) DemoContracts(); // #124
+        if (System.Array.IndexOf(args, "--open-mega") >= 0) DemoMega(); // #126
         if (args.FirstOrDefault(a => a.StartsWith("--open-planner")) is { } planner) DemoPlanner(planner.Contains("=rate")); // #121
         if (args.FirstOrDefault(a => a.StartsWith("--hazard=")) is { } happens) DemoHazard(happens.Split('=').Last()); // #123
         if (args.FirstOrDefault(a => a.StartsWith("--open-discoveries")) is { } discover) DemoPoints(discover.Split('=').Last()); // #122
@@ -722,6 +726,7 @@ public partial class Main : Node2D
             var catalog = PartCatalog.FromJson(Godot.FileAccess.GetFileAsString(PartsPath), materials, recipes)
                 .WithResearch(ResearchCatalog.FromJson(Godot.FileAccess.GetFileAsString(ResearchPath)));
             catalog.WithPoints(PointLibrary.Load(catalog)); // #122
+            catalog.WithMegastructures(PointLibrary.LoadMegastructures(catalog)); // #126
             RaceFiles.Catalog = catalog; // #125
             catalog.WithRaces(RaceLibrary.Load(catalog)); // #97, #116
             var design = ShipDesign.FromJson(Godot.FileAccess.GetFileAsString(StarterDesignPath));
@@ -781,7 +786,7 @@ public partial class Main : Node2D
         }
         OpenMenuScene(); // #98
         _hud.Visible = false;
-        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel, _contractsPanel, _plannerPanel })
+        foreach (var panel in new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _researchPanel, _lawsPanel, _powerPanel, _mapPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel, _contractsPanel, _plannerPanel, _megaPanel })
             if (panel != null) panel.Visible = false;
         _title.Open(SaveSummary());
     }
@@ -964,6 +969,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.Laws)) Toggle(_lawsPanel, () => _lawsPanel!.Open());
         else if (Pressed(InputActions.Log)) Toggle(_logPanel, () => _logPanel!.Open());
         else if (Pressed(InputActions.Milestones)) Toggle(_milestonesPanel, () => _milestonesPanel!.Open());
+        else if (Pressed(InputActions.Megastructures)) Toggle(_megaPanel, () => _megaPanel!.Open());
         else if (Pressed(InputActions.Planner)) Toggle(_plannerPanel, () => _plannerPanel!.Open());
         else if (Pressed(InputActions.Contracts)) Toggle(_contractsPanel, () => _contractsPanel!.Open());
         else if (Pressed(InputActions.Discoveries)) Toggle(_discoveriesPanel, () => _discoveriesPanel!.Open());
@@ -980,7 +986,7 @@ public partial class Main : Node2D
         else if (Pressed(InputActions.ClosePanels))
         {
             // Esc closes what's open (map, help, panels); with nothing open it's the pause menu (#59).
-            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel, _contractsPanel, _plannerPanel };
+            var panels = new Control?[] { _shipyardPanel, _fleetPanel, _swarmPanel, _tradePanel, _lifePanel, _milestonesPanel, _cargoPanel, _jobPanel, _debugPanel, _diagnosticsPanel, _settingsPanel, _researchPanel, _lawsPanel, _powerPanel, _logPanel, _findPanel, _programPanel, _discoveriesPanel, _contractsPanel, _plannerPanel, _megaPanel };
             var anyOpen = _mapMode || _hud.HelpOpen || panels.Any(p => p is { Visible: true });
             if (!anyOpen) OpenPause();
             if (_mapMode) ToggleMap();
@@ -1340,6 +1346,7 @@ public partial class Main : Node2D
         DrawSystemMap(renderTimeS); // #104
         DrawPoints(renderTimeS); // #122
         DrawHazards(renderTimeS); // #123
+        DrawMegas(renderTimeS); // #126
         DrawEdgeArrows(renderTimeS); // #101
         DrawHover(renderTimeS); // #108
         // Name tags, not when zoomed far out; in a crowd only stations and the target get one, so the text stays readable and cheap.

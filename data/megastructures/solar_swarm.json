@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "id": "solar_swarm",
+  "name": "Solar swarm",
+  "description": "Collectors round a star. Each cloud of them powers every station of yours in its system.",
+  "tech": "stellar_engineering",
+  "place": "star",
+  "altitudeM": 60000,
+  "stages": [
+    {
+      "name": "First cloud",
+      "materialsKg": {
+        "electronics": 15000,
+        "superconductors": 3000,
+        "metal": 20000
+      },
+      "workMinutes": 20
+    },
+    {
+      "name": "Second cloud",
+      "materialsKg": {
+        "electronics": 15000,
+        "superconductors": 3000,
+        "metal": 20000
+      },
+      "workMinutes": 20
+    },
+    {
+      "name": "Third cloud",
+      "materialsKg": {
+        "electronics": 15000,
+        "superconductors": 3000,
+        "metal": 20000
+      },
+      "workMinutes": 20
+    },
+    {
+      "name": "Fourth cloud",
+      "materialsKg": {
+        "electronics": 15000,
+        "superconductors": 3000,
+        "metal": 20000
+      },
+      "workMinutes": 20
+    },
+    {
+      "name": "Fifth cloud",
+      "materialsKg": {
+        "electronics": 15000,
+        "superconductors": 3000,
+        "metal": 20000
+      },
+      "workMinutes": 20
+    }
+  ],
+  "effect": {
+    "powerKW": 50000,
+    "powerToSystem": true
+  },
+  "upkeepKgPerHour": {
+    "electronics": 250
+  },
+  "grievance": 15
+}

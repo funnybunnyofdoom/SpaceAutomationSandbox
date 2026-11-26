@@ -54,7 +54,7 @@ public static class SaveGameSerializer
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 41;
+    public const int SchemaVersion = 42;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -131,6 +131,9 @@ public static class SaveGameSerializer
                             Research = c.Research, AccessHours = c.AccessHours, Result = c.Result.Length > 0 ? c.Result : null,
                         }).ToList(),
                     }
+                    : null,
+                Megastructures = sector.Megas.Count > 0
+                    ? sector.Megas.Select(m => new MegaDto { Id = m.Id, Kind = m.KindId, Name = m.Name, BodyId = m.BodyId.Value, HubId = m.HubId.Value, Stages = m.Stages, Working = m.Working, WorkTicks = m.WorkTicks, Paused = m.Paused, Neglected = m.Neglected, BuiltKg = m.BuiltKg }).ToList()
                     : null,
                 Points = sector.Points.Count > 0
                     ? sector.Points.Select(p => new PointDto
@@ -607,6 +610,11 @@ public static class SaveGameSerializer
             sector.MilestonesStarted = dto.MilestonesStarted;
             sector.LargeDesigns = dto.LargeDesigns;
             foreach (var (id, amount) in dto.Options ?? new SortedDictionary<string, WorldAmount>()) sector.Options[id] = amount; // #119
+            foreach (var m in dto.Megastructures ?? new List<MegaDto>()) // #126; its kind or hub may be gone since: it waits
+            {
+                if (m.Stages < 0 || m.WorkTicks < 0 || m.BuiltKg < 0 || sector.Megas.Any(x => x.Id == m.Id)) throw new FormatException($"Megastructure {m.Id} is invalid.");
+                sector.RestoreMega(new MegaProject(m.Id, m.Kind ?? "", m.Name ?? "", new BodyId(m.BodyId), new CraftId(m.HubId)) { Stages = m.Stages, Working = m.Working, WorkTicks = m.WorkTicks, Paused = m.Paused, Neglected = m.Neglected, BuiltKg = m.BuiltKg });
+            }
             if (dto.Contracts is { } contracts) // #124; whoever or whatever they're about may be gone: they end by themselves
             {
                 sector.RestoreContractState(contracts.NextId, contracts.NextOffers ?? new SortedDictionary<int, long>());
@@ -972,6 +980,10 @@ public static class SaveGameSerializer
         /// <summary>v34: who the player is (#97); omitted for Human.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Race { get; set; }
+
+        /// <summary>v41: megastructures (#126).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<MegaDto>? Megastructures { get; set; }
 
         /// <summary>v40: contracts (#124).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -1462,6 +1474,21 @@ public static class SaveGameSerializer
         public string? RecipeId { get; set; }
         public SortedDictionary<string, long>? InputsKg { get; set; }
         public double ProgressKg { get; set; }
+    }
+
+    private sealed class MegaDto
+    {
+        public int Id { get; set; }
+        public string? Kind { get; set; }
+        public string? Name { get; set; }
+        public uint BodyId { get; set; }
+        public uint HubId { get; set; }
+        public int Stages { get; set; }
+        public bool Working { get; set; }
+        public long WorkTicks { get; set; }
+        public bool Paused { get; set; }
+        public bool Neglected { get; set; }
+        public long BuiltKg { get; set; }
     }
 
     private sealed class ContractsDto

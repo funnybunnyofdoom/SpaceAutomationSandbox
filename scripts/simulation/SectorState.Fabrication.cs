@@ -96,7 +96,7 @@ public sealed partial class SectorState
             if (_repairingYards.Contains(yard.Id)) continue; // repairs come first (#3)
             if (!UseMachinePower(yard, yard.Stats.FabricatorPowerKW * FixedStepClock.TickSeconds)) continue; // no power: no progress
             order.ProgressKg = Math.Min(order.TotalKg,
-                order.ProgressKg + yard.Stats.FabricationRateKgPerS * Tuning.FabricationRateMultiplier * Trait(yard, _building) * FixedStepClock.TickSeconds);
+                order.ProgressKg + FabricationRate(yard) * Tuning.FabricationRateMultiplier * Trait(yard, _building) * FixedStepClock.TickSeconds);
             if (order.ProgressKg >= order.TotalKg) (finished ??= new()).Add((yard, order));
         }
         if (finished is null) return;

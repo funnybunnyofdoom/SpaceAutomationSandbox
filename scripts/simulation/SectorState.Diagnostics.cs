@@ -54,6 +54,7 @@ public sealed partial class SectorState
             stock += swarm.Inventory.TotalKg;
             craftKg += swarm.Count * (long)Math.Round(swarm.Stats.TotalMassKg);
         }
+        craftKg += MegaBuiltKg(); // megastructures (#126)
         long ejected = 0;
         foreach (var kg in _ejectedKg.Values) ejected += kg;
         return new MassLedger(deposits, stock, kits, orders, refining, craftKg, ejected, DiscoveredKg);

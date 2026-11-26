@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "space_elevator",
+  "name": "Space elevator",
+  "description": "A cable from a rocky world's ground to orbit: it lifts goods between your landed stations and its hub without fuel.",
+  "tech": "orbital_engineering",
+  "place": "rockyPlanet",
+  "altitudeM": 6000,
+  "stages": [
+    {
+      "name": "Anchor and counterweight",
+      "materialsKg": {
+        "composites": 50000,
+        "superconductors": 4000,
+        "metal": 30000
+      },
+      "workMinutes": 15
+    },
+    {
+      "name": "Lower cable",
+      "materialsKg": {
+        "composites": 50000,
+        "superconductors": 4000,
+        "metal": 30000
+      },
+      "workMinutes": 15
+    },
+    {
+      "name": "Upper cable",
+      "materialsKg": {
+        "composites": 50000,
+        "superconductors": 4000,
+        "metal": 30000
+      },
+      "workMinutes": 15
+    }
+  ],
+  "effect": {
+    "liftKgPerMinute": 20000
+  },
+  "upkeepKgPerHour": {
+    "composites": 150
+  },
+  "grievance": 6
+}

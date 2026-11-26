@@ -212,6 +212,15 @@ public sealed class PartCatalog
         return this;
     }
 
+    /// <summary>Megastructures there are to build (#126).</summary>
+    public MegaCatalog Megastructures { get; private set; } = MegaCatalog.Empty;
+
+    public PartCatalog WithMegastructures(MegaCatalog megastructures)
+    {
+        Megastructures = megastructures;
+        return this;
+    }
+
     /// <summary>What there is to find (#122).</summary>
     public PointCatalog Points { get; private set; } = PointCatalog.Empty;
 

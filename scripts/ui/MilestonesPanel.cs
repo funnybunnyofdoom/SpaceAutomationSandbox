@@ -16,7 +16,7 @@ public partial class MilestonesPanel : PanelContainer
     {
         ["automated"] = "work", ["ships_10"] = "fleet", ["researched"] = "research", ["new_star"] = "gate", ["stars_5"] = "star", ["contact"] = "message",
         ["friend"] = "ok", ["trade"] = "trade", ["victory"] = "weapon", ["life"] = "life", ["thriving"] = "planet", ["swarm_1000"] = "swarm", ["ships_1000"] = "fleet",
-        ["giant_ship"] = "shipyard", ["fusion"] = "power", ["antimatter"] = "mat_antimatter", ["quantum"] = "speed", ["dismantled"] = "mining",
+        ["giant_ship"] = "shipyard", ["fusion"] = "power", ["antimatter"] = "mat_antimatter", ["quantum"] = "speed", ["dismantled"] = "mining", ["megastructure"] = "mega",
     };
 
     private readonly Func<SectorState> _sector;

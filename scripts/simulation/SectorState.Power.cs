@@ -63,7 +63,7 @@ public sealed partial class SectorState
             craft.SolarKJThisTick = craft.Stats.PowerGenerationKW * craft.SolarFactor * FixedStepClock.TickSeconds;
             craft.GeothermalKJThisTick = craft.Stats.GeothermalKW > 0 && GeothermalHeat(craft) is null
                 ? craft.Stats.GeothermalKW * FixedStepClock.TickSeconds : 0; // #77: steady while on a hot spot or near the star
-            root.EnergyPoolKJ += craft.StoredEnergyKJ + craft.SolarKJThisTick + craft.GeothermalKJThisTick + craft.StellarHeatKJThisTick;
+            root.EnergyPoolKJ += craft.StoredEnergyKJ + craft.SolarKJThisTick + craft.GeothermalKJThisTick + craft.StellarHeatKJThisTick + MegaPowerKW(craft) * FixedStepClock.TickSeconds; // megastructures (#126)
             root.NetworkStartKJ += craft.StoredEnergyKJ;
             root.NetworkCapacityKJ += craft.Stats.EnergyCapacityKJ;
         }

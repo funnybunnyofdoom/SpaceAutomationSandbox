@@ -54,3 +54,7 @@ Validation (`ShipDesign.Validate`) reports, rather than throws: unknown part IDs
 ## Points of interest (`points/<id>/`)
 
 A kind is a folder with `kind.json` (`schemaVersion` 1, `id` the folder's name, `type` `derelict`, `ruin` or `anomaly`): how many a system has (`perSystem`), how near a ship finds it (`detectM`) and uses it (`useM`), how wide its hint on the map is (`hintM`), its orbit's height (not ruins), names, and what it gives. A derelict's other files are its designs. A folder that can't be used is left out with a warning saying why.
+
+## Megastructures (`megastructures/<id>.json`)
+
+`schemaVersion` 1, `id` the file's name, `name`, `description`, `tech` (a research id), `place` (`planet`, `rockyPlanet` or `star`), `altitudeM` of its hub, `stages` (each `name`, `materialsKg`, `workMinutes`), `effect` (`storageKg`, `powerKW` with `powerToSystem`, `liftKgPerMinute`, `fabricationKgPerS`; each finished stage gives its share), `upkeepKgPerHour`, `grievance` per stage, and `hubBuilds` for a hub with a fabricator.

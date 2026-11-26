@@ -118,7 +118,7 @@ public sealed partial class SectorState
                     continue;
                 }
                 patient.RepairProgressKg = Math.Min(work,
-                    patient.RepairProgressKg + yard.Stats.FabricationRateKgPerS * Tuning.FabricationRateMultiplier * Trait(yard, _building) * FixedStepClock.TickSeconds);
+                    patient.RepairProgressKg + FabricationRate(yard) * Tuning.FabricationRateMultiplier * Trait(yard, _building) * FixedStepClock.TickSeconds);
                 patient.RepairStatus = $"{verb} {part.Name} at {yard.Name} ({patient.RepairProgressKg / work * 100:0}%)";
                 if (patient.RepairProgressKg < work) continue;
             }

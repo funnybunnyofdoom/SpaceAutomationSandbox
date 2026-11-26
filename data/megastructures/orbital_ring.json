@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "id": "orbital_ring",
+  "name": "Orbital ring",
+  "description": "A ring round a planet. Each quarter stores more and gathers power for its hub.",
+  "tech": "orbital_engineering",
+  "place": "planet",
+  "altitudeM": 4000,
+  "stages": [
+    {
+      "name": "First arc",
+      "materialsKg": {
+        "metal": 60000,
+        "composites": 30000,
+        "electronics": 8000
+      },
+      "workMinutes": 20
+    },
+    {
+      "name": "Second arc",
+      "materialsKg": {
+        "metal": 60000,
+        "composites": 30000,
+        "electronics": 8000
+      },
+      "workMinutes": 20
+    },
+    {
+      "name": "Third arc",
+      "materialsKg": {
+        "metal": 60000,
+        "composites": 30000,
+        "electronics": 8000
+      },
+      "workMinutes": 20
+    },
+    {
+      "name": "The ring closed",
+      "materialsKg": {
+        "metal": 60000,
+        "composites": 30000,
+        "electronics": 8000
+      },
+      "workMinutes": 20
+    }
+  ],
+  "effect": {
+    "storageKg": 4000000,
+    "powerKW": 6000
+  },
+  "upkeepKgPerHour": {
+    "metal": 200
+  },
+  "grievance": 10
+}
