@@ -253,6 +253,7 @@ public sealed partial class SectorState
             if (PickTarget(craft, mount, endS) is not { } aim || !PayForShot(craft, weapon)) continue;
             craft.WeaponReadyTicks[mount.Pos] = Tick + Math.Max(1, (long)Math.Round(weapon.IntervalS * FixedStepClock.TicksPerSecond));
             var muzzle = MountPosition(craft, mount);
+            Make(weapon.Kind switch { WeaponKind.Laser => "laser_fire", WeaponKind.Missile => "missile_launch", _ => "gun_fire" }, muzzle); // #129
             if (weapon.Kind == WeaponKind.Laser)
             {
                 var (cell, at) = NearestCell(aim, muzzle);
@@ -303,6 +304,7 @@ public sealed partial class SectorState
         if (craft.WeaponReadyTicks.GetValueOrDefault(mount.Pos) > Tick || !PayForShot(craft, mount.Weapon)) return true;
         craft.WeaponReadyTicks[mount.Pos] = Tick + Math.Max(1, (long)Math.Round(mount.Weapon.IntervalS * FixedStepClock.TicksPerSecond));
         _beams.Add(new Beam(Tick, muzzle, nearest.Position, craft.FactionId));
+        Make("point_defense", muzzle);
         if (rng.NextDouble() < PointDefenseKillChance * mount.Health) _shots.Remove(nearest);
         return true;
     }
@@ -471,6 +473,7 @@ public sealed partial class SectorState
     {
         if (craft.IsWreck || Parts is null || cellIndex >= craft.Design.Cells.Count) return;
         damage = AbsorbWithShield(craft, damage); // #90
+        Make(damage <= 0 ? "shield_hit" : "hit", craft.Position); // #129
         if (damage <= 0) return;
         var cell = craft.Design.Cells[cellIndex];
         damage /= Math.Max(1, Parts.Get(cell.PartId).Toughness);
@@ -499,6 +502,7 @@ public sealed partial class SectorState
     /// <summary>The craft is done for: it keeps its parts and everything it holds, and drifts (or stays on its orbit).</summary>
     private void MakeWreck(CraftState craft, bool wasGate)
     {
+        Make("explosion", craft.Position); // #129
         craft.IsWreck = true;
         craft.Controls = ShipControls.Idle;
         craft.Job = null;

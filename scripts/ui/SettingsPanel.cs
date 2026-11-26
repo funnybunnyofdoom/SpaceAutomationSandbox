@@ -18,6 +18,7 @@ public partial class SettingsPanel : PanelContainer
     private OptionButton _mode = null!, _size = null!, _scale = null!;
     private Label _info = null!;
     private readonly Dictionary<string, (HSlider Slider, CheckBox Mute, Label Value)> _audio = new();
+    private CheckBox _captions = null!;
     private CheckBox _muteUnfocused = null!;
     private OptionButton _autosave = null!;
     private OptionButton _textSize = null!;
@@ -125,6 +126,9 @@ public partial class SettingsPanel : PanelContainer
         _muteUnfocused = new CheckBox { Text = "Mute while the game is in the background" };
         _muteUnfocused.Toggled += on => Change(() => _settings.MuteWhenUnfocused = on);
         box.AddChild(_muteUnfocused);
+        _captions = new CheckBox { Text = "Captions for important sounds", TooltipText = "Short words for sounds in a corner, such as [laser fire] or [raid alarm]" }; // #129
+        _captions.Toggled += on => Change(() => _settings.Captions = on);
+        box.AddChild(_captions);
 
         // A way out that works everywhere, including the title screen (#58), where F2 isn't read.
         var bottom = new HBoxContainer();
@@ -190,6 +194,7 @@ public partial class SettingsPanel : PanelContainer
             mute.ButtonPressed = _settings.Muted.Contains(bus);
         }
         _muteUnfocused.ButtonPressed = _settings.MuteWhenUnfocused;
+        _captions.ButtonPressed = _settings.Captions;
         _textSize.Select(Math.Max(0, Array.FindIndex(GameSettings.TextScales, t => Math.Abs(t - _settings.TextScale) < 0.001f)));
         _colorblind.ButtonPressed = _settings.ColorblindSafe;
         _autosave.Select(Math.Max(0, Array.IndexOf(GameSettings.AutosaveChoices, _settings.AutosaveMinutes)));

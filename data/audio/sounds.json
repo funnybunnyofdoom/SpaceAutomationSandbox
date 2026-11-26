@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "_comment": "Audio (#64): which file each game event plays, and the music playlist. Paths are res:// files (OGG Vorbis). A missing file is skipped silently, so the game runs with any subset. Sources and licences: assets/ASSET_MANIFEST.md.",
+  "_comment": "Audio (#64, #129): which file each game event plays, the calm music playlist and the mood layers. Paths are res:// files (OGG Vorbis, or WAV). A missing file is skipped silently, so the game runs with any subset. Captions are shown for these sounds when captions are on in Settings. Sources and licences: assets/ASSET_MANIFEST.md.",
   "effects": {
     "thrust_loop": "res://assets/audio/sfx/thrust_loop.ogg",
     "drill_loop": "res://assets/audio/sfx/drill_loop.ogg",
@@ -14,15 +14,53 @@
     "cruise_stop": "res://assets/audio/sfx/cruise_stop.ogg",
     "warp": "res://assets/audio/sfx/warp.ogg",
     "alarm": "res://assets/audio/sfx/alarm.ogg",
-    "part_lost": "res://assets/audio/sfx/part_lost.ogg"
+    "part_lost": "res://assets/audio/sfx/part_lost.ogg",
+    "gun_fire": "res://assets/audio/sfx/gun_fire.ogg",
+    "laser_fire": "res://assets/audio/sfx/laser_fire.ogg",
+    "missile_launch": "res://assets/audio/sfx/missile_launch.ogg",
+    "point_defense": "res://assets/audio/sfx/point_defense.ogg",
+    "hit": "res://assets/audio/sfx/hit.ogg",
+    "shield_hit": "res://assets/audio/sfx/shield_hit.ogg",
+    "explosion": "res://assets/audio/sfx/explosion.ogg",
+    "ship_built": "res://assets/audio/sfx/ship_built.ogg",
+    "quantum_jump": "res://assets/audio/sfx/quantum_jump.ogg",
+    "mega_stage": "res://assets/audio/sfx/mega_stage.ogg",
+    "raid_alarm": "res://assets/audio/sfx/raid_alarm.ogg",
+    "crew_alarm": "res://assets/audio/sfx/crew_alarm.ogg",
+    "waiting": "res://assets/audio/sfx/waiting.ogg",
+    "contract": "res://assets/audio/sfx/contract.ogg",
+    "discovery": "res://assets/audio/sfx/discovery.ogg",
+    "hazard": "res://assets/audio/sfx/hazard.ogg",
+    "milestone": "res://assets/audio/sfx/milestone.ogg"
   },
   "interface": {
     "click": "res://assets/audio/ui/click.ogg",
     "confirm": "res://assets/audio/ui/confirm.ogg",
-    "error": "res://assets/audio/ui/error.ogg"
+    "error": "res://assets/audio/ui/error.ogg",
+    "place": "res://assets/audio/ui/place.ogg",
+    "erase": "res://assets/audio/ui/erase.ogg",
+    "refused": "res://assets/audio/ui/refused.ogg",
+    "stamp": "res://assets/audio/ui/stamp.ogg",
+    "panel_open": "res://assets/audio/ui/panel_open.ogg",
+    "panel_close": "res://assets/audio/ui/panel_close.ogg",
+    "target": "res://assets/audio/ui/target.ogg",
+    "favourite": "res://assets/audio/ui/favourite.ogg",
+    "saved": "res://assets/audio/ui/saved.ogg",
+    "loaded": "res://assets/audio/ui/loaded.ogg"
+  },
+  "captions": {
+    "dock": "docked", "undock": "undocked", "land": "touchdown", "anchor": "clamps", "impact": "crash", "cruise_start": "cruise drive on", "cruise_stop": "cruise drive off",
+    "warp": "warp jump", "alarm": "power alarm", "part_lost": "a part breaks off", "gun_fire": "gunfire", "laser_fire": "laser fire", "missile_launch": "missile launch",
+    "point_defense": "point defence", "hit": "hit", "shield_hit": "shield hit", "explosion": "explosion", "ship_built": "ship built", "quantum_jump": "quantum jump",
+    "mega_stage": "megastructure stage done", "raid_alarm": "raid alarm", "crew_alarm": "crew alarm", "waiting": "a ship is waiting", "contract": "contract offered",
+    "discovery": "discovery", "hazard": "hazard warning", "milestone": "milestone", "saved": "saved", "loaded": "loaded", "refused": "can't place that"
   },
   "music": [
     "res://assets/audio/music/space_echo.ogg",
     "res://assets/audio/music/observing_the_star.ogg"
-  ]
+  ],
+  "moods": {
+    "tension": "res://assets/audio/music/tension.wav",
+    "combat": "res://assets/audio/music/combat.wav"
+  }
 }

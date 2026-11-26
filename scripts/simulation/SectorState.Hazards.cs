@@ -350,6 +350,7 @@ public sealed partial class SectorState
                     if (craft.Position.DistanceTo(meteor.Position) > craft.CollisionRadiusM + MeteorRadiusM + CellContactRadiusM) continue;
                     var (cell, at) = NearestCell(craft, meteor.Position);
                     if (at.DistanceTo(meteor.Position) > MeteorRadiusM + CellContactRadiusM) continue;
+                    Make("hit", meteor.Position); // #129
                     Wear(craft, cell, MeteorDamage);
                     spent = true;
                     break;

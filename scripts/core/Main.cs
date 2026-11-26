@@ -150,6 +150,7 @@ public partial class Main : Node2D
         _uiRoot.AddChild(_hud);
         _audio = new AudioDirector(_settings);
         AddChild(_audio);
+        _audio.Captioned += ShowCaption; // #129
         ApplyTheme(); // text size, focus highlight, colours (#68)
         _settingsPanel = new SettingsPanel(_settings, () => { _settings.ApplyWindow(); _settings.Save(); LayoutUi(); _audio.ApplySettings(); ApplyTheme(); }) { Visible = false };
         _uiRoot.AddChild(_settingsPanel);
@@ -636,6 +637,7 @@ public partial class Main : Node2D
             _savedTick = _sector.Tick;
             _changedSinceSave = false;
             ShowStatus($"Saved \"{name}\" at tick {_sector.Tick}.");
+            UiSounds.Play("saved"); // #129
             return true;
         }
         catch (System.Exception e)
@@ -703,6 +705,7 @@ public partial class Main : Node2D
             _changedSinceSave = false;
             _sinceAutosaveS = 0;
             ShowStatus($"Loaded \"{loaded.Header?.Name ?? System.IO.Path.GetFileNameWithoutExtension(path)}\" at tick {_sector.Tick}.");
+            UiSounds.Play("loaded"); // #129
             return true;
         }
     }
@@ -1021,6 +1024,7 @@ public partial class Main : Node2D
     private static void Toggle(Control? panel, System.Action open)
     {
         if (panel == null) return;
+        UiSounds.Play(panel.Visible ? "panel_close" : "panel_open"); // #129
         if (panel.Visible) panel.Visible = false;
         else open();
     }
@@ -1028,7 +1032,8 @@ public partial class Main : Node2D
     public override void _Process(double delta)
     {
         var audioStart = System.Diagnostics.Stopwatch.GetTimestamp();
-        _audio.Watch(InMenu ? null : _sector, InMenu ? null : _player, delta); // ship sounds; music plays throughout (#64)
+        UpdateCaptions(); // #129
+        _audio.Watch(InMenu ? null : _sector, InMenu ? null : _player, delta, _warp.Paused ? 0 : _warp.Speed); // ship sounds; music plays throughout (#64), by mood (#129)
         _audioCost.Add(System.Diagnostics.Stopwatch.GetElapsedTime(audioStart).TotalMilliseconds);
         ArrangePanels(); // #96
         WatchTarget(); // #109

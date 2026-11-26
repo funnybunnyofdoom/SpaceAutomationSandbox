@@ -63,6 +63,7 @@ public partial class Main
 
     private void ChooseTarget(TargetRef target)
     {
+        UiSounds.Play("target"); // #129
         if (_player is not { } p || target.Craft == p.Id && !target.Craft.IsNone) return;
         _sector.SetTarget(p.Id, target);
         _changedSinceSave = true;

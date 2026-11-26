@@ -79,6 +79,7 @@ public partial class AudioDirector : Node
         {
             if (node is BaseButton button) button.Pressed += () => Interface("click");
         };
+        SetUpMoods(_moodFiles, _captions); // #129
         ApplySettings();
         NextTrack();
         var found = _effects.Values.Concat(_interface.Values).Concat(_music).Count(path => Load(path) != null);
@@ -128,6 +129,8 @@ public partial class AudioDirector : Node
             _effects = root.GetProperty("effects").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString() ?? "", StringComparer.Ordinal);
             _interface = root.GetProperty("interface").EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString() ?? "", StringComparer.Ordinal);
             _music = root.GetProperty("music").EnumerateArray().Select(e => e.GetString() ?? "").Where(s => s.Length > 0).ToList();
+            _moodFiles = root.TryGetProperty("moods", out var moods) ? moods.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString() ?? "", StringComparer.Ordinal) : new(StringComparer.Ordinal);
+            _captions = root.TryGetProperty("captions", out var captions) ? captions.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.GetString() ?? "", StringComparer.Ordinal) : new(StringComparer.Ordinal);
         }
         catch (Exception e)
         {
@@ -145,22 +148,21 @@ public partial class AudioDirector : Node
         AudioStream? stream = null;
         var file = ProjectSettings.GlobalizePath(path);
         if (System.IO.File.Exists(file))
-        {
-            var ogg = AudioStreamOggVorbis.LoadFromFile(file);
-            if (ogg != null) stream = ogg;
-        }
+            stream = file.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) ? AudioStreamWav.LoadFromFile(file) : AudioStreamOggVorbis.LoadFromFile(file); // generated music is WAV (#129)
         _cache[path] = stream;
         return stream;
     }
 
-    /// <summary>Plays an effect once (on a free voice), unless it played a moment ago.</summary>
-    public void Effect(string name, float volumeDb = 0)
+    /// <summary>Plays an effect once (on a free voice), unless it played a moment ago; true if it played.</summary>
+    public bool Effect(string name, float volumeDb = 0, double gapS = MinGapS)
     {
-        if (Stream(_effects, name) is not { } stream || TooSoon(name)) return;
-        var voice = _voices.FirstOrDefault(v => !v.Playing) ?? _voices[0];
+        if (Stream(_effects, name) is not { } stream || TooSoon(name, gapS)) return false;
+        var voice = _voices.FirstOrDefault(v => !v.Playing) ?? _voices.MinBy(v => v.GetPlaybackPosition())!;
         voice.Stream = stream;
         voice.VolumeDb = volumeDb;
         voice.Play();
+        Caption(name);
+        return true;
     }
 
     /// <summary>Plays an interface sound.</summary>
@@ -169,11 +171,12 @@ public partial class AudioDirector : Node
         if (Stream(_interface, name) is not { } stream || TooSoon("ui:" + name)) return;
         _ui.Stream = stream;
         _ui.Play();
+        Caption(name);
     }
 
-    private bool TooSoon(string key)
+    private bool TooSoon(string key, double gapS = MinGapS)
     {
-        if (_lastPlayed.TryGetValue(key, out var last) && _clock - last < MinGapS) return true;
+        if (_lastPlayed.TryGetValue(key, out var last) && _clock - last < gapS) return true;
         _lastPlayed[key] = _clock;
         return false;
     }
@@ -202,9 +205,16 @@ public partial class AudioDirector : Node
     /// Once a frame: sounds for what the craft you fly is doing (and crashes near it). Null craft
     /// (title screen) silences the ship sounds; the music carries on.
     /// </summary>
-    public void Watch(SectorState? sector, CraftState? pilot, double delta)
+    public void Watch(SectorState? sector, CraftState? pilot, double delta, double timeSpeed = 1)
     {
         _clock += delta;
+        StepMusic(sector is null || pilot is null ? MusicMood.Calm : sector.MoodFor(pilot), delta); // #129
+        if (sector is not null && pilot is not null)
+        {
+            Hear(sector, pilot, timeSpeed);
+            Announce(sector);
+            Alerts(sector);
+        }
         if (sector is null || pilot is null)
         {
             foreach (var name in _loops.Keys.ToList()) Loop(name, false, 0, delta);

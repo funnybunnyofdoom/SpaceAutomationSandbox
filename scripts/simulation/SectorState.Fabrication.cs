@@ -117,6 +117,7 @@ public sealed partial class SectorState
             if (JoinSwarm(order)) continue; // its mass is now the swarm's (#30)
             var craft = new CraftState(AllocateCraftId(), order.ShipName, order.Design, order.Stats, yard.Position, yard.HeadingRad);
             AddCraft(craft);
+            Make("ship_built", craft.Position); // #129
             PlaceNextTo(yard, craft, endS);
         }
     }

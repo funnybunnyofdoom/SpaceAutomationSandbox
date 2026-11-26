@@ -130,4 +130,7 @@ public sealed partial class SectorState
         project.WorkTicks = 0;
         if (_craftsById.TryGetValue(project.HubId, out var hub)) PostMegaRequests(project, kind, hub);
     }
+
+    /// <summary>Tests: a noise (#129).</summary>
+    public void DebugNoise(string kind, Vector2D at) => Make(kind, at);
 }

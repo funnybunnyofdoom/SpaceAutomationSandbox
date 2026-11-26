@@ -19,6 +19,7 @@ public partial class BlueprintEditorView : Control
     private static readonly Color WarningColor = new(1f, 0.85f, 0.4f);
     private static readonly Color OkColor = new(0.5f, 1f, 0.6f);
 
+    private int _soundCount; // cells when a sound last played (#129)
     private readonly BlueprintEditor _model;
     private readonly PartCatalog _catalog;
     private readonly IReadOnlyDictionary<string, Color> _colors;
@@ -52,6 +53,7 @@ public partial class BlueprintEditorView : Control
         _colors = colors;
         _currentShipDesign = currentShipDesign;
         _model = new BlueprintEditor(catalog);
+        _soundCount = 0;
         _palette = catalog.Parts.ToList(); // the order of data/parts/parts.json
         _selectedPart = _palette.FirstOrDefault()?.Id;
         Build();
@@ -168,7 +170,14 @@ public partial class BlueprintEditorView : Control
         var centre = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         columns.AddChild(centre);
         _grid = new BlueprintGridCanvas(_model, _colors, () => _selectedPart, () => _rotation);
-        _grid.Edited += () => { _pendingConfirm = null; _refreshDue = true; }; // once a frame, however many cells changed
+        _grid.Edited += () =>
+        {
+            _pendingConfirm = null;
+            _refreshDue = true; // once a frame, however many cells changed
+            var count = _model.Cells.Count; // #129: placed or erased, by ear
+            UiSounds.Play(count >= _soundCount ? "place" : "erase");
+            _soundCount = count;
+        };
         BuildToolbar(centre);
         centre.AddChild(_grid);
         _grid.PartPointed += (id, cell) =>

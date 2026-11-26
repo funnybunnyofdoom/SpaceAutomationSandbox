@@ -156,6 +156,7 @@ public sealed partial class SectorState
             project.Working = false;
             project.WorkTicks = 0;
             project.Stages++;
+            Make("mega_stage", hub.Position); // #129
             var done = project.Stages == kind.Stages.Count;
             AddEvent(done ? $"{project.Name} is finished." : $"{project.Name}: {stage.Name} done ({project.Stages} of {kind.Stages.Count}).", EventKind.Milestone, TargetRef.Of(hub));
             if (done) ReachMilestone("megastructure");

@@ -81,6 +81,7 @@ public partial class Main
 
     private void RecallFavourite(int slot)
     {
+        UiSounds.Play("favourite"); // #129
         if (_sector.Favourites[slot] is not { } favourite) { ShowStatus($"Favourite {slot + 1} is empty ({InputActions.Key1(InputActions.FavouriteStore(slot))} keeps your target there)."); return; }
         if (!_sector.Exists(favourite.Target)) { ShowStatus($"{favourite.Name} (favourite {slot + 1}) is gone."); return; }
         if (favourite.Target.Craft == _player?.Id && !favourite.Target.Craft.IsNone) { ShowStatus($"You're flying {favourite.Name}."); return; }

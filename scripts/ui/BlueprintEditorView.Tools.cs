@@ -68,7 +68,7 @@ public partial class BlueprintEditorView
         _toolbar.AddChild(_replaceWith);
 
         _grid.SelectionChanged += RefreshTools;
-        _grid.Refused += why => SetStatus(why, WarningColor);
+        _grid.Refused += why => { SetStatus(why, WarningColor); UiSounds.Play("refused"); }; // #129
     }
 
     private Button Tool(Container bar, string icon, string text, string? action, Action press, bool toggle = false)

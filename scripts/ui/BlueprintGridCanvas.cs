@@ -305,6 +305,7 @@ public partial class BlueprintGridCanvas : Control
             var placed = StampAt(_from, cell);
             QueueRedraw();
             if (!_model.PlaceAll(placed)) { Refused?.Invoke("It doesn't fit the grid there, or nothing would change."); return; }
+            UiSounds.Play("stamp"); // #129
             _model.Selection.Clear();
             _model.Selection.UnionWith(placed.Select(c => c.Pos));
             SelectionChanged?.Invoke();

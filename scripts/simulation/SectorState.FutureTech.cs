@@ -158,6 +158,7 @@ public sealed partial class SectorState
 
     private void QuantumJump(CraftState craft, Vector2D position, Vector2D velocity)
     {
+        Make("quantum_jump", position); // #129
         craft.QuantumChargeKJ = 0;
         craft.QuantumRequested = false;
         craft.QuantumReadyTick = Tick + (long)(QuantumCooldownS * FixedStepClock.TicksPerSecond);
