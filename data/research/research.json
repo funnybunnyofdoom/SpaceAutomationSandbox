@@ -40,6 +40,8 @@
       "description": "Antimatter made from hydrogen with huge power, held in containment that explodes without power, for 100 MW reactors and mighty drives." },
     { "id": "orbital_engineering", "name": "Orbital engineering", "cost": 450, "requires": ["heavy_fabrication", "superconductors"], "parts": [],
       "description": "Megastructures round planets: orbital rings (storage and power) and space elevators (cargo up and down without fuel)." },
+    { "id": "planetary_engineering", "name": "Planetary engineering", "cost": 500, "requires": ["orbital_engineering"], "parts": ["mass_driver"],
+      "description": "Mass drivers: anchored on a rocky or icy body, they throw its own rock to move it to a new orbit (Megastructures panel: Move a world)." },
     { "id": "stellar_engineering", "name": "Stellar engineering", "cost": 550, "requires": ["orbital_engineering", "fusion_power"], "parts": [],
       "description": "A solar swarm: collectors round a star that power every station of yours in its system." },
     { "id": "orbital_docks", "name": "Orbital docks", "cost": 500, "requires": ["orbital_engineering", "nanotechnology"], "parts": [],

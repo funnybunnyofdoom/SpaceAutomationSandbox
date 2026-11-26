@@ -54,7 +54,7 @@ public static class SaveGameSerializer
     /// Older files are upgraded step by step by
     /// <see cref="SaveMigrations"/> before reading, so the loader below only reads the current format.
     /// </summary>
-    public const int SchemaVersion = 42;
+    public const int SchemaVersion = 43;
     public const int OldestReadableSchemaVersion = 1;
     public const string GameId = "SpaceAutomationSandbox";
 
@@ -132,6 +132,7 @@ public static class SaveGameSerializer
                         }).ToList(),
                     }
                     : null,
+                BodyMoves = sector.Moves.Count > 0 ? sector.Moves.OrderBy(m => m.Key.Value).Select(m => new BodyMoveDto { BodyId = m.Key.Value, StartTick = m.Value.StartTick, EndTick = m.Value.EndTick, ReactionKg = m.Value.ReactionKg, ThrownKg = m.Value.ThrownKg }).ToList() : null,
                 Megastructures = sector.Megas.Count > 0
                     ? sector.Megas.Select(m => new MegaDto { Id = m.Id, Kind = m.KindId, Name = m.Name, BodyId = m.BodyId.Value, HubId = m.HubId.Value, Stages = m.Stages, Working = m.Working, WorkTicks = m.WorkTicks, Paused = m.Paused, Neglected = m.Neglected, BuiltKg = m.BuiltKg }).ToList()
                     : null,
@@ -610,6 +611,11 @@ public static class SaveGameSerializer
             sector.MilestonesStarted = dto.MilestonesStarted;
             sector.LargeDesigns = dto.LargeDesigns;
             foreach (var (id, amount) in dto.Options ?? new SortedDictionary<string, WorldAmount>()) sector.Options[id] = amount; // #119
+            foreach (var m in dto.BodyMoves ?? new List<BodyMoveDto>()) // #127
+            {
+                if (sector.Bodies.All(b => b.Id.Value != m.BodyId) || m.EndTick <= m.StartTick || m.ThrownKg < 0 || m.ThrownKg > m.ReactionKg) throw new FormatException($"A move of body {m.BodyId} is invalid.");
+                sector.RestoreMove(new BodyId(m.BodyId), new BodyMove(m.StartTick, m.EndTick, m.ReactionKg, m.ThrownKg));
+            }
             foreach (var m in dto.Megastructures ?? new List<MegaDto>()) // #126; its kind or hub may be gone since: it waits
             {
                 if (m.Stages < 0 || m.WorkTicks < 0 || m.BuiltKg < 0 || sector.Megas.Any(x => x.Id == m.Id)) throw new FormatException($"Megastructure {m.Id} is invalid.");
@@ -888,11 +894,16 @@ public static class SaveGameSerializer
     private static VecDto Vec(Vector2D v) => new() { X = v.X, Y = v.Y };
 
     private static OrbitDto OrbitToDto(CircularOrbit o) =>
-        new() { ParentId = o.Parent.Value, RadiusM = o.RadiusM, PeriodS = o.PeriodS, PhaseAtZeroRad = o.PhaseAtZeroRad, Eccentricity = o.Eccentricity, PeriapsisRad = o.PeriapsisRad };
+        new() { ParentId = o.Parent.Value, RadiusM = o.RadiusM, PeriodS = o.PeriodS, PhaseAtZeroRad = o.PhaseAtZeroRad, Eccentricity = o.Eccentricity, PeriapsisRad = o.PeriapsisRad,
+            Move = o.Move is { } m ? new MoveDto { StartS = m.StartS, EndS = m.EndS, FromRadiusM = m.FromRadiusM, FromPeriodS = m.FromPeriodS, FromPhaseRad = m.FromPhaseRad } : null };
 
     private static CircularOrbit OrbitFromDto(OrbitDto o) =>
         o.Eccentricity is >= 0 and < 0.99 && double.IsFinite(o.PeriapsisRad)
-            ? new(new BodyId(o.ParentId), o.RadiusM, o.PeriodS, o.PhaseAtZeroRad) { Eccentricity = o.Eccentricity, PeriapsisRad = o.PeriapsisRad }
+            ? new(new BodyId(o.ParentId), o.RadiusM, o.PeriodS, o.PhaseAtZeroRad)
+            {
+                Eccentricity = o.Eccentricity, PeriapsisRad = o.PeriapsisRad,
+                Move = o.Move is { } m ? (m.EndS > m.StartS && m.FromRadiusM > 0 && m.FromPeriodS > 0 ? new OrbitMove(m.StartS, m.EndS, m.FromRadiusM, m.FromPeriodS, m.FromPhaseRad) : throw new FormatException("A move is invalid.")) : null,
+            }
             : throw new FormatException("An orbit is invalid.");
 
     private static DesignDto DesignToDto(ShipDesign d) => new()
@@ -980,6 +991,10 @@ public static class SaveGameSerializer
         /// <summary>v34: who the player is (#97); omitted for Human.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Race { get; set; }
+
+        /// <summary>v43: worlds being moved (#127).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<BodyMoveDto>? BodyMoves { get; set; }
 
         /// <summary>v41: megastructures (#126).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -1204,6 +1219,28 @@ public static class SaveGameSerializer
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public double PeriapsisRad { get; set; }
+
+        /// <summary>v43: a move under way (#127).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public MoveDto? Move { get; set; }
+    }
+
+    private sealed class MoveDto
+    {
+        public double StartS { get; set; }
+        public double EndS { get; set; }
+        public double FromRadiusM { get; set; }
+        public double FromPeriodS { get; set; }
+        public double FromPhaseRad { get; set; }
+    }
+
+    private sealed class BodyMoveDto
+    {
+        public uint BodyId { get; set; }
+        public long StartTick { get; set; }
+        public long EndTick { get; set; }
+        public long ReactionKg { get; set; }
+        public long ThrownKg { get; set; }
     }
 
     private sealed class CraftDto

@@ -133,4 +133,9 @@ public sealed partial class SectorState
 
     /// <summary>Tests: a noise (#129).</summary>
     public void DebugNoise(string kind, Vector2D at) => Make(kind, at);
+
+    /// <summary>Tests and demos: a landed craft anchored as it is (#127).</summary>
+    internal void SetAnchoredForTest(CraftId id) => GetCraft(id).IsAnchored = true;
+
+    public void DebugAnchor(CraftId id) => SetAnchoredForTest(id);
 }

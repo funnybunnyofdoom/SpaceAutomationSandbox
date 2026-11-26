@@ -59,6 +59,9 @@ public sealed record PartDefinition
     /// <summary>Energy from one batch (kJ).</summary>
     public double GeneratorKJPerBatch { get; init; }
 
+    /// <summary>Rock a mass driver throws off the body it's anchored on, kg/s, to move it (#127).</summary>
+    public double MassDriverKgPerS { get; init; }
+
     /// <summary>Power a geothermal tap gives while anchored on a hot surface site or a body close to its star (#77), kW.</summary>
     public double GeothermalKW { get; init; }
 

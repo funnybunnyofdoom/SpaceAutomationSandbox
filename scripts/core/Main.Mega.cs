@@ -66,6 +66,21 @@ public partial class Main
         }
     }
 
+    /// <summary>Moving worlds (#127): the new orbit of a body being moved, or planned in the panel, as a dashed circle.</summary>
+    private void DrawMoves(double renderTimeS)
+    {
+        void Ring(BodyId parent, double radiusM, Color colour)
+        {
+            if (!_sector.Exists(new TargetRef(CraftId.None, parent))) return;
+            var px = (float)radiusM * _pixelsPerMetre;
+            if (px is > 4 and < 200_000) DashedArc(ToPixels(_sector.GetPositionAt(parent, renderTimeS)), px, colour, 1.5f * _uiRoot.Scale.X);
+        }
+        foreach (var (id, _) in _sector.Moves)
+            if (_sector.Exists(new TargetRef(CraftId.None, id)) && _sector.GetBody(id).Orbit is { } orbit) Ring(orbit.Parent, orbit.RadiusM, new Color(MegaColor, 0.8f));
+        if (_megaPanel?.Planned is { } plan && _sector.Exists(new TargetRef(CraftId.None, plan.Body)) && _sector.GetBody(plan.Body).Orbit is { } now && !_sector.Moves.ContainsKey(plan.Body))
+            Ring(now.Parent, plan.RadiusM, new Color(Palette.Warning, 0.7f));
+    }
+
     /// <summary>Dev/test hook <c>--open-mega</c>: everything researched, a ring and an elevator founded at Home's neighbours, partly built, and the panel open.</summary>
     private void DemoMega()
     {
@@ -80,7 +95,21 @@ public partial class Main
             if (_sector.KindOf(project) is not { } kind) continue;
             _sector.DebugBuildMega(project.Id, project.KindId == "orbital_ring" ? 2 : 1);
         }
-        _player.TargetBodyId = home.Id;
+        // Mass drivers on Rock-1, targeted, to plan a move (#127).
+        var rock = _sector.Bodies.First(b => b.Name == "Rock-1");
+        var drivers = new ShipDesign("demo_drivers", "Mass drivers", new[]
+        {
+            new DesignCell(new GridPos(-1, 0), "mass_driver"), new DesignCell(new GridPos(0, 0), "mass_driver"), new DesignCell(new GridPos(1, 0), "mass_driver"), new DesignCell(new GridPos(0, -1), "battery"),
+            new DesignCell(new GridPos(-1, 1), "foundation"), new DesignCell(new GridPos(0, 1), "foundation"), new DesignCell(new GridPos(1, 1), "foundation"),
+        });
+        if (_catalog is not null)
+        {
+            var station = new CraftState(_sector.AllocateCraftId(), "Mass drivers", drivers, drivers.ComputeStats(_catalog), _sector.GetPosition(rock.Id), 0);
+            _sector.AddCraft(station);
+            _sector.RestoreLanding(station.Id, rock.Id, new Vector2D(0, -(rock.RadiusM + 6)));
+            _sector.DebugAnchor(station.Id);
+        }
+        _sector.SetTarget(_player.Id, rock.Id);
         _megaPanel?.Open();
     }
 }

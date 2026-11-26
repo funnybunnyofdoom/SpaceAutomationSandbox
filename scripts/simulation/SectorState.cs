@@ -192,6 +192,7 @@ public sealed partial class SectorState
         var endS = (Tick + 1) * FixedStepClock.TickSeconds;
         StepFlyTo(); // #108
         StepMegas(); // megastructures (#126): first, so that their storage counts all tick
+        StepMoves(); // moving worlds (#127)
         StepJobs(); // automated craft set their controls first, from this tick's state
         BeginPowerTick();
         StepLifeSupport(); // crew first: a craft without its crew can't fly or work this tick (#11)

@@ -372,7 +372,7 @@ public sealed class CelestialBodyState
     public bool IsMineable { get; }
 
     /// <summary>Null for a body fixed at the sector origin.</summary>
-    public CircularOrbit? Orbit { get; }
+    public CircularOrbit? Orbit { get; internal set; }
 
     /// <summary>Follows the mass at fixed density (updated whenever the mass changes).</summary>
     public double RadiusM { get; private set; }

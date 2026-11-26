@@ -30,6 +30,7 @@ public static class PartFacts
             Add(p.GeneratorBurnsKg is { Count: > 0 }, "mat_" + (p.GeneratorBurnsKg?.Keys.FirstOrDefault() ?? ""), $"Burns {Mix(p.GeneratorBurnsKg ?? new(), "kg")} for {N(p.GeneratorKJPerBatch / 1000)} MJ.");
             Add(p.GeneratorMakesKg is { Count: > 0 }, "mat_" + (p.GeneratorMakesKg?.Keys.FirstOrDefault() ?? ""), $"Leaves {Mix(p.GeneratorMakesKg ?? new(), "kg")}.");
         }
+        Add(p.MassDriverKgPerS > 0, "planet", $"Anchored on a rocky or icy body, throws {N(p.MassDriverKgPerS)} kg/s of its rock to move it to a new orbit (Moving worlds).");
         Add(p.GeothermalKW > 0, "power", $"Makes {N(p.GeothermalKW)} kW anchored on a hot spot, or on a body near its star.");
         Add(p.StellarHeatKW > 0, "star", $"Makes up to {N(p.StellarHeatKW)} kW close to a star: none below twice Home's sunlight, full at four times.");
         if (p.ConverterKW > 0)

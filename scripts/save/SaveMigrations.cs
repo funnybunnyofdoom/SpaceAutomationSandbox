@@ -61,6 +61,7 @@ public static class SaveMigrations
         [39] = ("v40 added contracts: older games have them off", (_, _) => { }),
         [40] = ("v41 gave civilizations' races traits and designs: civilizations met before play as they did", (_, _) => { }),
         [41] = ("v42 added megastructures: older games have none", (_, _) => { }),
+        [42] = ("v43 added moving worlds: older games have none under way", (_, _) => { }),
     };
 
     /// <summary>Versions this build can upgrade from, oldest first (for tests and docs).</summary>

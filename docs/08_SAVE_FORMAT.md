@@ -1,4 +1,4 @@
-# 08 — Save format (schema 42)
+# 08 — Save format (schema 43)
 
 The code is `scripts/save/SaveGameSerializer.cs` and `scripts/save/SaveStore.cs` (pure C#), and the tests are in `tests/Simulation.Tests/SaveLoadTests.cs` and `SaveStoreTests.cs`.
 
@@ -144,6 +144,7 @@ Older saves are upgraded by `scripts/save/SaveMigrations.cs` (#26): one step per
 | 40 | `sector.contracts` (contracts offered, under way and lately closed, and when each civilization offers next), a civilization's `miningAccessUntilTick`, and a craft's `isStranded` (#124). Older saves have none, with the option off. |
 | 41 | A civilization's `playsByRace`: met since #125, it behaves by its race's traits and designs. Older saves have it off. |
 | 42 | `sector.megastructures[]` (#126): kind, name, body, hub, stages done, whether a stage is being worked and for how long, paused, neglected, and the kg built into it (part of the mass ledger). Older saves have none. |
+| 43 | A body orbit's `move` (a move to a new circle under way: start and end, and the orbit it came from) and `sector.bodyMoves[]` (rock to throw and thrown so far) (#127). Older saves have none. |
 | 18 | Warp gates and further star systems: `gateLinkId`, `gateReadyTick`, `jumpRequestTick`, `jumps` per craft; `sector.discoveredKg` | An older save has one system and no gates; nothing changes. |
 | 17 (later additions, optional) | Kits record `originalCraftId` and `requestsKg` (a packed station comes back as itself, #24). Bodies record `originalMassKg` once mining has changed their mass, and `nextBodyId` is saved (#27); jobs may name bodies that are gone | Older kits are new kits: they deploy with a fresh id. Older bodies take their current mass as the starting mass. |
 | 17 | Refit, dismantle and pack orders (`yardOrder`, `yardProgressKg` per craft) and `sector.nextCraftId`. Jobs may now name craft that no longer exist (they were dismantled) | Nothing changes; the craft id counter follows from the craft. |

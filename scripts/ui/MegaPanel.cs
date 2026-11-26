@@ -17,6 +17,14 @@ public partial class MegaPanel : PanelContainer
     private readonly Func<CraftState?> _pilot;
     private readonly MaterialCatalog _materials;
     private readonly VBoxContainer _box = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+    private readonly VBoxContainer _move = new() { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+    private readonly SpinBox _radius = new() { MinValue = 1, MaxValue = 5_000_000, Step = 1, Suffix = "km", CustomMinimumSize = new Vector2(140, 0) };
+    private readonly InfoList _plan = new();
+    private readonly Button _start = new() { Text = "Start the move", FocusMode = FocusModeEnum.None, SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+    private BodyId _moving = BodyId.None;
+
+    /// <summary>Where a move would take the body (#127): its new orbit radius, or null when no move is planned in the panel.</summary>
+    public (BodyId Body, double RadiusM)? Planned => Visible && !_moving.IsNone ? (_moving, _radius.Value * 1000) : null;
     private readonly List<Action> _live = new();
     private string _key = "";
     private double _sinceRefresh;
@@ -41,7 +49,26 @@ public partial class MegaPanel : PanelContainer
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         outer.AddChild(scroll);
         _box.AddThemeConstantOverride("separation", 5);
-        scroll.AddChild(_box);
+        var inside = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        inside.AddThemeConstantOverride("separation", 5);
+        scroll.AddChild(inside);
+        inside.AddChild(_box);
+        inside.AddChild(_move); // #127
+        _move.AddThemeConstantOverride("separation", 5);
+        var row = new HBoxContainer();
+        row.AddChild(new Label { Text = "New orbit radius" });
+        row.AddChild(_radius);
+        _move.AddChild(UiTheme.Header("Move a world"));
+        _move.AddChild(row);
+        _move.AddChild(_plan);
+        _move.AddChild(_start);
+        _radius.ValueChanged += _ => ShowPlan();
+        _start.Pressed += () =>
+        {
+            if (_moving.IsNone) return;
+            Acted?.Invoke(_sector().StartMove(_moving, _radius.Value * 1000));
+            ShowPlan();
+        };
     }
 
     public MegaPanel() : this(() => new SectorState(0), () => null, new MaterialCatalog(Array.Empty<MaterialDefinition>())) { }
@@ -74,6 +101,52 @@ public partial class MegaPanel : PanelContainer
         var key = $"{place?.Id}|{sector.UnlockedTech.Count}|" + string.Join(";", sector.Megas.Select(m => $"{m.Id}{m.Stages}{m.Working}{m.Paused}{m.Neglected}"));
         if (key != _key) Rebuild(sector, place, key);
         foreach (var live in _live) live();
+        MoveSection(sector, place);
+    }
+
+    /// <summary>Moving the targeted body (#127): what it would take, or how its move is going.</summary>
+    private void MoveSection(SectorState sector, CelestialBodyState? body)
+    {
+        if (body is null || body.Orbit is not { } orbit || body.Kind == BodyKind.Star || !sector.Exists(new TargetRef(CraftId.None, orbit.Parent)))
+        {
+            _moving = BodyId.None;
+            _plan.Set(new[] { new HudRow("planet", "Target a rock, moon or planet to plan moving it to a new orbit round what it orbits.", Severity.Muted) });
+            _radius.Visible = _start.Visible = false;
+            return;
+        }
+        _radius.Visible = _start.Visible = true;
+        if (_moving != body.Id)
+        {
+            _moving = body.Id;
+            _radius.SetValueNoSignal(Math.Round((orbit.Move is null ? orbit.RadiusM : orbit.RadiusM) / 1000 * 0.8));
+        }
+        ShowPlan();
+    }
+
+    private void ShowPlan()
+    {
+        var sector = _sector();
+        if (_moving.IsNone || !sector.Exists(new TargetRef(CraftId.None, _moving))) return;
+        var body = sector.GetBody(_moving);
+        var parent = sector.GetBody(body.Orbit!.Parent);
+        var rows = new List<HudRow> { new("planet", $"{body.Name} orbits {parent.Name} at {body.Orbit.RadiusM / 1000:0.#} km") };
+        if (sector.Moves.TryGetValue(_moving, out var move))
+        {
+            var share = (double)(sector.Tick - move.StartTick) / (move.EndTick - move.StartTick);
+            rows.Add(new HudRow("speed", $"Moving: {(move.EndTick - sector.Tick) * FixedStepClock.TickSeconds / 3600:0.0} h left", Severity.Good, Math.Clamp(share, 0, 1)));
+            rows.Add(new HudRow("mat_rock", $"{move.ThrownKg / 1000.0:N0} of {move.ReactionKg / 1000.0:N0} t of rock thrown", Severity.Muted));
+            _plan.Set(rows);
+            _start.Disabled = true;
+            return;
+        }
+        var plan = sector.PlanMove(_moving, _radius.Value * 1000);
+        rows.Add(new HudRow("speed", $"{plan.DeltaVMps:0.0} m/s of change: {plan.ReactionKg / 1000.0:N0} t of its rock thrown", Severity.Normal, Tip: $"Mass drivers throw rock at {SectorState.DriverExhaustMps / 1000:0} km/s"));
+        rows.Add(new HudRow("power", plan.Drivers > 0 ? $"{plan.Drivers} mass drivers: {plan.ThrowKgPerS / 1000:0.#} t/s, {plan.PowerKW / 1000:0} MW while it moves" : "No mass drivers anchored on it", plan.Drivers > 0 ? Severity.Normal : Severity.Warning));
+        if (!double.IsInfinity(plan.Seconds)) rows.Add(new HudRow("clock", $"{plan.Seconds / 3600:0.0} h to get there"));
+        foreach (var problem in plan.Problems) rows.Add(new HudRow("warn", problem, Severity.Warning));
+        _plan.Set(rows);
+        _start.Disabled = !plan.CanStart;
+        _start.TooltipText = plan.Problems.FirstOrDefault() ?? "Everything on it and round it comes along";
     }
 
     private void Rebuild(SectorState sector, CelestialBodyState? place, string key)

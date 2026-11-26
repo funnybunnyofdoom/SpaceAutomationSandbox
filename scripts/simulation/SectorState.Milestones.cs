@@ -39,6 +39,7 @@ public static class Milestones
         new("quantum", "Quantum jump", "Jump across a system.", s => Any(s, c => c.QuantumReadyTick > 0)),
         new("dismantled", "A world dismantled", "Mine a body away completely.", _ => false), // noted when it happens
         new("megastructure", "Builder of worlds", "Finish a megastructure.", _ => false), // #126: noted when it happens
+        new("moved_world", "Mover of worlds", "Move a world to a new orbit.", _ => false), // #127: noted when it happens
     };
 }
 

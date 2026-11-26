@@ -1352,6 +1352,7 @@ public partial class Main : Node2D
         DrawPoints(renderTimeS); // #122
         DrawHazards(renderTimeS); // #123
         DrawMegas(renderTimeS); // #126
+        DrawMoves(renderTimeS); // #127
         DrawEdgeArrows(renderTimeS); // #101
         DrawHover(renderTimeS); // #108
         // Name tags, not when zoomed far out; in a crowd only stations and the target get one, so the text stays readable and cheap.
