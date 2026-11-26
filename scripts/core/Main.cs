@@ -81,7 +81,14 @@ public partial class Main : Node2D
     private ulong _statusUntilMs;
     private Camera2D _camera = null!;
     private Hud _hud = null!;
-    private readonly GameSettings _settings = GameSettings.Load();
+    private readonly GameSettings _settings = LoadSettings();
+
+    /// <summary>Saves from before the game had its name come over first (#137), then the settings are read.</summary>
+    private static GameSettings LoadSettings()
+    {
+        GameInfo.BringOverOldUserData();
+        return GameSettings.Load();
+    }
 
     /// <summary>Holds the HUD and every panel; scaled by the interface scale and sized to the window (#52).</summary>
     private Control _uiRoot = null!;
@@ -122,6 +129,8 @@ public partial class Main : Node2D
 
     /// <summary>The title screen and main menu (#58). While it shows, no game is running.</summary>
     private TitleScreen? _title;
+    private CreditsScreen? _credits; // #138
+    private RecapPanel? _recap; // #146
 
     private bool InMenu => _title is { Visible: true };
 
@@ -183,6 +192,8 @@ public partial class Main : Node2D
             _fleetPanel.CraftChosen += Pilot;
             _fleetPanel.RenameChosen += AskRename; // #115
             _fleetPanel.ScrapChosen += AskScrap; // #135
+            _fleetPanel.RepairChosen += ToggleSeekRepair; // #148
+            _fleetPanel.CleanUpChosen += AskCleanUp; // #144
             _fleetPanel.Changed += () => _changedSinceSave = true;
             _fleetPanel.CraftTargeted += target =>
             {
@@ -266,6 +277,7 @@ public partial class Main : Node2D
             if (System.Array.IndexOf(startArgs, "--title-pick=races") >= 0 && _catalog.Races.Races.FirstOrDefault(r => System.Array.IndexOf(startArgs, "--race=" + r.Id) >= 0) is { } raceArg) { _uiRoot.MoveChild(_raceCreator, _uiRoot.GetChildCount() - 1); _raceCreator.Open(raceArg); } // dev (#117)
             if (System.Array.IndexOf(startArgs, "--title-pick=setup") >= 0) { _uiRoot.MoveChild(_newGame, _uiRoot.GetChildCount() - 1); _newGame.Open(); if (System.Array.IndexOf(startArgs, "--advanced") >= 0) _newGame.ShowAdvanced(); } // #62 check
             if (System.Array.IndexOf(startArgs, "--title-pick=continue") >= 0) ContinueFromTitle();
+            if (System.Array.IndexOf(startArgs, "--title-pick=credits") >= 0) _title?.PickCredits(); // #138 check
             return;
         }
         // Continue where the player left off; a new game only if there's no usable save.
@@ -578,7 +590,7 @@ public partial class Main : Node2D
         _pausedBeforeMenu = _warp.Paused;
         _warp.Paused = true;
         if (_sector is not null) _pause.Portrait = RaceLibrary.Portrait(_sector.Race);
-        _pause.Open(_sector is null ? "" : $"{_gameName}   ·   seed {_sector.Seed}   ·   played {(int)(_playTimeS / 3600)} h {(int)(_playTimeS / 60) % 60} min", _goalsOn, _sector?.Options);
+        _pause.Open(_sector is null ? "" : $"{_gameName}   ·   seed {_sector.Seed}   ·   played {(int)(_playTimeS / 3600)} h {(int)(_playTimeS / 60) % 60} min   ·   {GameInfo.Name} {GameInfo.VersionLabel}", _goalsOn, _sector?.Options);
     }
 
     /// <summary>Back to the pause menu from a screen opened from it (the game stays paused as it was).</summary>
@@ -633,7 +645,7 @@ public partial class Main : Node2D
         if (_player == null) return false;
         try
         {
-            var header = new SaveHeader(name, System.DateTime.UtcNow.ToString("O"), _playTimeS, _sector.Tick, _sector.Seed, _gameName, _goalsOn, _goalsDone.ToArray(), _sector.Race.Id);
+            var header = new SaveHeader(name, System.DateTime.UtcNow.ToString("O"), _playTimeS, _sector.Tick, _sector.Seed, _gameName, _goalsOn, _goalsDone.ToArray(), _sector.Race.Id, GameInfo.Version);
             SaveStore.Write(path, SaveGameSerializer.ToJson(_sector, _player.Id, header));
             SavePicture(path); // #98
             _savedTick = _sector.Tick;
@@ -708,8 +720,19 @@ public partial class Main : Node2D
             _sinceAutosaveS = 0;
             ShowStatus($"Loaded \"{loaded.Header?.Name ?? System.IO.Path.GetFileNameWithoutExtension(path)}\" at tick {_sector.Tick}.");
             UiSounds.Play("loaded"); // #129
+            ShowRecap();
             return true;
         }
+    }
+
+    /// <summary>Where you left off (#146), unless it's turned off or this is a command-line run (screenshots, dev hooks) without --recap.</summary>
+    private void ShowRecap()
+    {
+        var args = OS.GetCmdlineUserArgs();
+        if (!_settings.ShowRecap || (args.Length > 0 && System.Array.IndexOf(args, "--recap") < 0 && System.Array.IndexOf(args, "--title") < 0)) return;
+        if (_recap is null) { _recap = new RecapPanel(); _uiRoot.AddChild(_recap); }
+        _uiRoot.MoveChild(_recap, _uiRoot.GetChildCount() - 1);
+        _recap.Open(_gameName, _sector.Recap());
     }
 
     /// <summary>Loads the newest good save (Continue, and command-line starts). False if there's none or it fails.</summary>
@@ -784,6 +807,7 @@ public partial class Main : Node2D
             _title.NewGameChosen += () => { _uiRoot.MoveChild(_newGame, _uiRoot.GetChildCount() - 1); _newGame.Open(); }; // name and seed first (#62)
             _title.SettingsChosen += () => { _settingsPanel!.Open(); EnterPanelNav(_settingsPanel, fromMenu: true); };
             if (_settingsPanel != null) _settingsPanel.Closed += () => { if (InMenu) ShowTitle(); }; // focus back on the menu
+            _title.CreditsChosen += () => { if (_credits is null) { _credits = new CreditsScreen(); _credits.Closed += () => { if (InMenu) ShowTitle(); }; } if (_credits.GetParent() is null) _uiRoot.AddChild(_credits); _uiRoot.MoveChild(_credits, _uiRoot.GetChildCount() - 1); _credits.Open(); };
             _title.QuitChosen += () => GetTree().Quit();
             _uiRoot.AddChild(_title);
             _uiRoot.MoveChild(_title, _uiRoot.GetChildCount() - 1);

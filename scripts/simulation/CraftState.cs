@@ -262,6 +262,12 @@ public sealed class CraftState
     /// <summary>Marked as a wreck by you (#135) and not yet salvaged at all: it can be taken back. Saved.</summary>
     public bool Scrapped { get; internal set; }
 
+    /// <summary>Sent to the nearest shipyard for repairs by you (#148), until it's mended. Saved.</summary>
+    public bool SeekRepair { get; internal set; }
+
+    /// <summary>What the repair trip is doing or waiting for (set each tick; not saved).</summary>
+    public string? SeekRepairStatus { get; internal set; }
+
     /// <summary>The player's order not to fire. Saved.</summary>
     public bool HoldFire { get; set; }
 

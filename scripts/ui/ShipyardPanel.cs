@@ -349,6 +349,8 @@ public partial class ShipyardPanel : PanelContainer
                         if (SelectedDesign() is not { } design) return new ActionResult(false, "No design selected.");
                         return sector.OrderRefit(yardId, craftId, design);
                     });
+                    if (sector.UpgradedDesign(c).Changed is var better and > 0)
+                        AddButton(buttons, $"Upgrade {better} parts", () => sector.OrderUpgrade(yardId, craftId)); // #141
                     if (c.Id != yard.Id)
                     {
                         AddButton(buttons, "Dismantle", () =>

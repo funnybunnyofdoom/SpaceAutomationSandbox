@@ -55,6 +55,8 @@ public partial class Main
         if (craft is null || SectorState.IsPlayers(craft) || craft.IsWreck) items.Add(("Rename...", true, () => AskRename(target))); // #115, #109
         if (craft is not null && SectorState.IsPlayers(craft) && !craft.IsWreck) items.Add(("Mark as a wreck...", true, () => AskScrap(craft.Id))); // #135
         if (craft is { Scrapped: true }) items.Add(("Not a wreck after all", true, () => { ShowStatus(_sector.UnscrapCraft(craft.Id).Message); _changedSinceSave = true; }));
+        if (craft is not null && (craft.SeekRepair || SectorState.NeedsRepair(craft) && SectorState.IsPlayers(craft) && !craft.IsWreck && !craft.IsShipyard))
+            items.Add((craft.SeekRepair ? "Call off repairs" : "Seek repair", craft.SeekRepair || _sector.SeekRepairBlocker(craft) is null, () => ToggleSeekRepair(craft.Id))); // #148
         var kept = _sector.Favourites.ToList().FindIndex(f => f?.Target == target);
         var slot = kept >= 0 ? kept : _sector.Favourites.ToList().FindIndex(f => f is null);
         if (slot >= 0 && !you)
@@ -67,6 +69,25 @@ public partial class Main
     }
 
     private void AskRename(CraftId id) => AskRename(new TargetRef(id, BodyId.None));
+
+    /// <summary>Sends a craft for repairs, or calls the trip off (#148).</summary>
+    private void ToggleSeekRepair(CraftId id)
+    {
+        if (_sector.Crafts.FirstOrDefault(c => c.Id == id) is not { } craft) return;
+        ShowStatus((craft.SeekRepair ? _sector.CancelSeekRepair(id) : _sector.OrderSeekRepair(id)).Message);
+        _changedSinceSave = true;
+    }
+
+    /// <summary>Marks every defunct craft as a wreck, once you've seen which (#144).</summary>
+    private void AskCleanUp()
+    {
+        var defunct = _sector.DefunctCrafts();
+        if (defunct.Count == 0) { ShowStatus("None of your craft is defunct."); return; }
+        var names = string.Join(", ", defunct.Take(12).Select(c => c.Name)) + (defunct.Count > 12 ? $" and {defunct.Count - 12} more" : "");
+        var sector = _sector;
+        _confirm.Ask($"Mark {defunct.Count} defunct craft as wrecks? {names}. Their crew go to your nearest craft with room, and salvagers take them apart with their cargo.",
+            ("Mark them all", () => { if (ReferenceEquals(sector, _sector)) { ShowStatus(sector.ScrapDefunct().Message); _changedSinceSave = true; } }));
+    }
 
     /// <summary>Marks a craft of yours as a wreck for salvagers to clean up, once you say so (#135).</summary>
     private void AskScrap(CraftId id)

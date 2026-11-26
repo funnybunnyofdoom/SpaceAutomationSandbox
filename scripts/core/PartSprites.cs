@@ -33,7 +33,10 @@ public static class PartSprites
         UvRects.Clear();
         Icons.Clear();
         var images = new List<(string Id, Image Image)>();
-        var fx = DirAccess.DirExistsAbsolute(FxFolder) ? DirAccess.GetFilesAt(FxFolder).Where(f => f.EndsWith(".png")).Select(f => "fx:" + f[..^4]).OrderBy(f => f, StringComparer.Ordinal) : Enumerable.Empty<string>();
+        // An exported game has only "name.png.import" files here (the pictures are packed): both are listed (#140).
+        var fx = DirAccess.DirExistsAbsolute(FxFolder)
+            ? DirAccess.GetFilesAt(FxFolder).Select(f => f.EndsWith(".png.import") ? f[..^7] : f).Where(f => f.EndsWith(".png")).Distinct().Select(f => "fx:" + f[..^4]).OrderBy(f => f, StringComparer.Ordinal)
+            : Enumerable.Empty<string>();
         foreach (var id in partIds.Concat(fx))
         {
             var path = id.StartsWith("fx:", StringComparison.Ordinal) ? $"{FxFolder}/{id[3..]}.png" : $"{Folder}/{id}.png";

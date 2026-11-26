@@ -56,6 +56,9 @@ public sealed class GameSettings
     /// <summary>Silence everything while the window isn't in front (#64).</summary>
     public bool MuteWhenUnfocused { get; set; } = true;
 
+    /// <summary>Show what needs attention when a save is loaded (#146).</summary>
+    public bool ShowRecap { get; set; } = true;
+
     /// <summary>Captions for important sounds (#129).</summary>
     public bool Captions { get; set; }
 
@@ -104,6 +107,7 @@ public sealed class GameSettings
             if (file.GetValue("audio", $"{bus.ToLowerInvariant()}_muted", false).AsBool()) settings.Muted.Add(bus);
         }
         settings.MuteWhenUnfocused = file.GetValue("audio", "mute_when_unfocused", true).AsBool();
+        settings.ShowRecap = file.GetValue("game", "show_recap", true).AsBool();
         settings.Captions = file.GetValue("audio", "captions", false).AsBool();
         settings.Effects = Math.Clamp(file.GetValue("display", "effects", 0).AsInt32(), 0, 2);
         var autosave = file.GetValue("game", "autosave_minutes", 10).AsInt32();
@@ -133,6 +137,7 @@ public sealed class GameSettings
             file.SetValue("audio", $"{bus.ToLowerInvariant()}_muted", Muted.Contains(bus));
         }
         file.SetValue("audio", "mute_when_unfocused", MuteWhenUnfocused);
+        file.SetValue("game", "show_recap", ShowRecap);
         file.SetValue("audio", "captions", Captions);
         file.SetValue("display", "effects", Effects);
         file.SetValue("game", "autosave_minutes", AutosaveMinutes);

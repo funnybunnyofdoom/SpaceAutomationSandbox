@@ -44,6 +44,7 @@ public partial class BlueprintEditorView
         _redo = Tool(bar, "redo", "Redo", InputActions.EditRedo, Redo);
         _mirrorH = Tool(bar, "mirror_h", "Mirror left to right while drawing", InputActions.EditMirror, () => ToggleMirror(true), toggle: true);
         _mirrorV = Tool(bar, "mirror_v", "Mirror front to back while drawing", InputActions.EditMirrorFront, () => ToggleMirror(false), toggle: true);
+        Tool(bar, "upgrade", "Upgrade every part (or the selected ones) to the best tier you have researched", null, UpgradeTiers); // #141
 
         _everyones = bar.GetChildCount();
         foreach (var (tool, icon, name, action) in Tools) _toolButtons.Add(Tool(_toolbar, icon, name, action, () => SetTool(tool), toggle: true));
@@ -224,6 +225,14 @@ public partial class BlueprintEditorView
         }
         if (_replaceWith.ItemCount == 0) { _replaceWith.AddItem("Nothing to replace with the chosen part"); _replaceWith.SetItemDisabled(0, true); }
         string Name(string id) => _catalog.TryGet(id, out var p) ? p!.Name : id;
+    }
+
+    private void UpgradeTiers()
+    {
+        var count = _model.UpgradeTiers(id => LockedBy(id) is null);
+        Refresh();
+        SetStatus(count > 0 ? $"{count} parts upgraded to the best tier researched." : "Every part is already the best tier you have researched.");
+        if (count > 0) UiSounds.Play("stamp");
     }
 
     private void Replace(long index)

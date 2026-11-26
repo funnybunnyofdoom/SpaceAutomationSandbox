@@ -123,6 +123,9 @@ def wait(d): d.hline(5, 11, 3, Y); d.hline(5, 11, 13, Y); line(d, 5, 4, 11, 12, 
 
 
 def undo(d): d.hline(5, 11, 5, W); d.vline(12, 6, 9, W); d.hline(6, 11, 10, W); line(d, 4, 5, 7, 2, C); line(d, 4, 5, 7, 8, C); line(d, 5, 5, 8, 2, C); line(d, 5, 5, 8, 8, C)
+def upgrade(d): up(d, 8, 2, 5, L); up(d, 8, 8, 5, L)  # two arrowheads: a better tier (#141)
+
+
 def redo(d):
     u = Img(); undo(u)
     for y in range(N):
@@ -168,7 +171,7 @@ def fit(d):
     d.rect(6, 6, 9, 9, C)
 
 
-MENU = {"undo": undo, "redo": redo, "mirror_h": mirror_h, "mirror_v": mirror_v, "tool_draw": tool_draw, "tool_line": tool_line, "tool_rect": tool_rect,
+MENU = {"upgrade": upgrade, "undo": undo, "redo": redo, "mirror_h": mirror_h, "mirror_v": mirror_v, "tool_draw": tool_draw, "tool_line": tool_line, "tool_rect": tool_rect,
         "tool_outline": tool_outline, "tool_fill": tool_fill, "tool_select": tool_select, "copy": copy, "paste": paste, "cut": cut, "trash": trash,
         "turn": turn, "pick": pick, "replace": replace, "fit": fit, "find": find, "discovery": discovery, "ruin": ruin, "comet": comet, "contract": contract, "mega": mega, "edit_program": edit_program, "favourite": favourite,
         "pause": pause, "editor": editor, "shipyard": shipyard, "fleet": fleet, "swarm": swarm, "cargo": cargo, "trade": trade, "job": job,

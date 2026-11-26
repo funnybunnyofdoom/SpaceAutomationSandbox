@@ -4,7 +4,7 @@ The code is `scripts/save/SaveGameSerializer.cs` and `scripts/save/SaveStore.cs`
 
 ## Where and when
 
-- Saves are files in `user://saves/` (#60). On Windows that's `%APPDATA%\Godot\app_userdata\SpaceAutomationSandbox\saves\`.
+- Saves are files in `user://saves/` (#60). On Windows that's `%APPDATA%\Godot\app_userdata\Starjux\saves\` (before the game had its name, `...\SpaceAutomationSandbox\saves\`; copied over once on first start, #137).
   - **Manual saves** (`save_<date>_<time>.json`), made and named from the save screen (pause menu → Save).
   - **The quicksave** (`quicksave.json`): **F6** saves, **F9** loads (asking first if there's unsaved progress).
   - **Autosaves** (`autosave_1..3.json`), rotating (the oldest is replaced): every N minutes of play (Settings: off, 5, 10, 15 or 30; default 10) and when the window is closed. Stopping the game from the Godot editor kills the process without the close notification.
@@ -27,7 +27,7 @@ The code is `scripts/save/SaveGameSerializer.cs` and `scripts/save/SaveStore.cs`
 ```jsonc
 {
   "schemaVersion": 19,
-  "game": "SpaceAutomationSandbox",
+  "game": "SpaceAutomationSandbox",  // the game's id in saves: kept from before it was named Starjux (#137)
   "playerCraftId": 1,                 // 0 = no player craft
   "sector": {
     "seed": 20261120,

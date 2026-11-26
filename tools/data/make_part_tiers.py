@@ -2,7 +2,7 @@
 
 Run from the repository root: python tools/data/make_part_tiers.py
 Tiers already in the file are left as they are (their numbers were tuned by hand). A new tier's main numbers are Mk I's times 2, 3 or 5
-(Mk IV at least 1.5 times Mk III), its power use 1.5, 1.9 or 2.6 times and its mass 1.2, 1.35 or 1.6 times. Its bill keeps Mk I's mix, with
+(Mk IV at least 1.5 times Mk III), its power use 1.5, 1.9 or 2.6 times (Mk IV at least 1.3 times Mk III) and its mass 1.2, 1.35 or 1.6 times. Its bill keeps Mk I's mix, with
 superconductors from Mk III and exotic ore in Mk IV. Mk II comes with the part's usual tech, Mk III with Superconductors, Mk IV with Exotic engineering.
 New parts are inserted one a line after the tier before them; the rest of the files is left as it is.
 """
@@ -59,6 +59,8 @@ def make(base_part, tier, mk3):
             p[key] = v
         elif key == "powerUseKW":
             p[key] = round(value * POWER[tier])
+            # Never less than the tier below (#143: a hand-tuned Mk3 can use more than Mk1's scaling gives Mk4).
+            if tier == 4 and mk3 is not None and mk3.get(key): p[key] = max(p[key], round(mk3[key] * 1.3))
         elif key == "toughness" and base_part["id"] == "armour_plate":
             p[key] = round(value * FACTOR[tier])
         elif key == "weapon":

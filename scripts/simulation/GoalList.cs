@@ -8,7 +8,8 @@ namespace SpaceAutomationSandbox.Simulation;
 public sealed record GoalStep(string Id, string Title, string Hint);
 
 /// <summary>
-/// The optional goal checklist for new players (#65): the core loop in order. Each goal is checked
+/// The optional goal checklist for new players (#65): the core loop in order. Automating comes before building and designing (#147):
+/// the ship you fly can take a mining job at once, so the first automated route needs neither. Each goal is checked
 /// from the simulation state (never from button clicks) and stays done once met, even if the state
 /// changes later. Only the ids of met goals are saved (in the save header).
 /// </summary>
@@ -24,12 +25,12 @@ public static class GoalList
             "Landed with a drill, your ship mines on its own. Watch the cargo grow in the Ship area; [Cargo] shows the hold."),
         new("refine", "Refine ore at a station",
             "Fly back and dock at the shipyard with [Dock]. In the cargo panel ([Cargo]) move the ore into the station; its refinery starts by itself."),
-        new("design", "Design a ship",
-            "Open the blueprint editor with [Editor]. Place parts on the grid (a control part, thrusters at the back) and save it with Ctrl+S."),
+        new("automate", "Automate your ship",
+            "Open the job panel with [Job], choose Mining, the asteroid you surveyed and the shipyard, and press Start: your ship mines and delivers on its own. Stop the job there to fly it yourself again."),
         new("build", "Build a second ship",
-            "Open the shipyard with [Shipyard], pick your design and press Order. The yard needs the materials in stock."),
-        new("automate", "Automate a ship",
-            "Open the job panel with [Job] and start a mining or freight job. The ship then works on its own; [Fleet] shows all your ships."),
+            "Open the shipyard with [Shipyard], pick the Starter prospector and press Order; the yard builds it from its stock. Then fly it from [Fleet] and give it a job too."),
+        new("design", "Design a ship",
+            "Open the blueprint editor with [Editor]. Place parts on the grid (a control part, thrusters at the back), save it with Ctrl+S, then order it at the shipyard."),
     };
 
     /// <summary>

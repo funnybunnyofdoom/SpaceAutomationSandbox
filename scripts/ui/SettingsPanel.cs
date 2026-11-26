@@ -21,6 +21,7 @@ public partial class SettingsPanel : PanelContainer
     private CheckBox _captions = null!;
     private OptionButton _effects = null!;
     private CheckBox _muteUnfocused = null!;
+    private CheckBox _recap = null!;
     private OptionButton _autosave = null!;
     private OptionButton _textSize = null!;
     private CheckBox _colorblind = null!;
@@ -83,6 +84,11 @@ public partial class SettingsPanel : PanelContainer
         foreach (var minutes in GameSettings.AutosaveChoices) _autosave.AddItem(minutes == 0 ? "Off" : $"Every {minutes} minutes of play");
         _autosave.ItemSelected += i => Change(() => _settings.AutosaveMinutes = GameSettings.AutosaveChoices[i]);
         grid.AddChild(_autosave);
+
+        grid.AddChild(new Label { Text = "On loading" }); // #146
+        _recap = new CheckBox { Text = "Show where you left off", TooltipText = "After a save loads: craft in trouble or waiting, research you can buy, contracts and recent dangers" };
+        _recap.Toggled += on => Change(() => _settings.ShowRecap = on);
+        grid.AddChild(_recap);
 
         grid.AddChild(new Label { Text = "Text size" }); // #68
         _textSize = new OptionButton { FocusMode = FocusModeEnum.None };
@@ -204,6 +210,7 @@ public partial class SettingsPanel : PanelContainer
             mute.ButtonPressed = _settings.Muted.Contains(bus);
         }
         _muteUnfocused.ButtonPressed = _settings.MuteWhenUnfocused;
+        _recap.ButtonPressed = _settings.ShowRecap;
         _captions.ButtonPressed = _settings.Captions;
         _effects.Select(_settings.Effects);
         _textSize.Select(Math.Max(0, Array.FindIndex(GameSettings.TextScales, t => Math.Abs(t - _settings.TextScale) < 0.001f)));

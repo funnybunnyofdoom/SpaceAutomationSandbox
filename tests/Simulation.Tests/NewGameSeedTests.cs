@@ -1,3 +1,4 @@
+using System.Linq;
 using SpaceAutomationSandbox.Save;
 using Xunit;
 
@@ -73,6 +74,23 @@ public sealed class GoalListTests
         Assert.False(GoalList.Update(done, game.Sector, game.PlayerCraftId, savedDesigns: 0)); // nothing new; design stays done
         Assert.Contains("design", done);
         Assert.Equal("land", GoalList.Current(done)!.Id);
+    }
+
+    [Fact]
+    public void The_first_automated_mining_route_needs_no_new_design_or_ship()
+    {
+        // #147: the goals go survey, land, mine, refine, automate; the starter ship can take the job itself.
+        Assert.Equal(new[] { "survey", "land", "mine", "refine", "automate", "build", "design" }, GoalList.Steps.Select(s => s.Id));
+        var game = TestData.NewGame();
+        var sector = game.Sector;
+        var asteroid = sector.Bodies.First(b => b.IsMineable && b.DepositsKg.Count > 0);
+        sector.MarkSurveyed(asteroid.Id);
+        var ore = asteroid.DepositsKg.Keys.First();
+        var started = sector.StartJob(game.PlayerCraftId, new MiningJob(asteroid.Id, ore, game.ShipyardId, 0.25));
+        Assert.True(started.Done, started.Message);
+        Assert.Contains("automate", GoalList.MetNow(sector, game.PlayerCraftId, savedDesigns: 0));
+        // And the next goal: the yard builds the starter design from the stock it starts with.
+        Assert.True(sector.OrderBuild(game.ShipyardId, TestData.StarterShip(), TestData.Catalog()).Accepted);
     }
 
     [Fact]

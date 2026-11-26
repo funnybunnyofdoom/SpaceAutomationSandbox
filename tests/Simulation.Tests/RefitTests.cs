@@ -72,6 +72,49 @@ public class RefitTests
     }
 
     [Fact]
+    public void Upgrading_swaps_each_part_for_its_best_researched_tier_in_place()
+    {
+        var (sector, ship, yard) = DockedSecondShip();
+        sector.RestoreResearch(0, new[] { "advanced_fabrication", "deep_drilling", "photovoltaics", "dense_batteries", "improved_engines" }, allUnlocked: false);
+        var (design, changed) = sector.UpgradedDesign(ship);
+        Assert.True(changed > 0);
+        Assert.Equal(ship.Design.Id, design.Id);
+        Assert.Equal(ship.Design.Cells.Select(c => (c.Pos, c.Rotation)), design.Cells.Select(c => (c.Pos, c.Rotation)));
+        foreach (var (before, after) in ship.Design.Cells.Zip(design.Cells))
+        {
+            Assert.Equal(PartTiers.Split(before.PartId).Base, PartTiers.Split(after.PartId).Base);
+            Assert.True(sector.IsPartUnlocked(after.PartId), after.PartId);
+            Assert.Equal(PartTiers.BestUnlocked(Catalog, before.PartId, sector.IsPartUnlocked) ?? before.PartId, after.PartId);
+        }
+        Assert.Contains(design.Cells, c => c.PartId == "cargo_mk2"); // advanced fabrication
+        Assert.DoesNotContain(design.Cells, c => c.PartId.EndsWith("_mk3") || c.PartId.EndsWith("_mk4")); // not researched
+
+        yard.Inventory.Add(NewGame.StartingStockKg);
+        var massBefore = sector.ComputeMassLedger().TotalKg;
+        var result = sector.OrderUpgrade(yard.Id, ship.Id);
+        Assert.True(result.Done, result.Message);
+        Assert.True(RunUntil(sector, () => ship.YardOrder is null, 30 * TicksPerMinute), ship.YardStatus);
+        Assert.Equal(design.Cells, ship.Design.Cells);
+        Assert.Equal(massBefore, sector.ComputeMassLedger().TotalKg);
+        Assert.False(sector.OrderUpgrade(yard.Id, ship.Id).Done); // nothing better now
+    }
+
+    [Fact]
+    public void Part_tiers_split_and_compare()
+    {
+        Assert.Equal(("storage_silo", 3), PartTiers.Split("storage_silo_mk3"));
+        Assert.Equal(("drill", 1), PartTiers.Split("drill"));
+        Assert.Equal("drill_mk3", PartTiers.Previous(Catalog, "drill_mk4")!.Id);
+        Assert.Null(PartTiers.Previous(Catalog, "drill"));
+        Assert.Null(PartTiers.Previous(Catalog, "cockpit"));
+        Assert.Equal("drill_mk4", PartTiers.BestUnlocked(Catalog, "drill", _ => true));
+        Assert.Null(PartTiers.BestUnlocked(Catalog, "drill_mk4", _ => true));
+        var lines = PartTiers.Compare(Catalog.Get("drill"), Catalog.Get("drill_mk2"));
+        Assert.Equal("Mining 200 kg/s (+100%)", lines[0]);
+        Assert.Contains(lines, l => l.StartsWith("Power use 150 kW (+50%)"));
+    }
+
+    [Fact]
     public void Refit_PausesTheJob_WithAReason_ThenItCarriesOn()
     {
         var (sector, ship, yard) = DockedSecondShip();

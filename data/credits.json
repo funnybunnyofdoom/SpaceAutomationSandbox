@@ -1,0 +1,24 @@
+{
+  "_comment": "The credits screen (#66, #138). Every third-party author in assets/ASSET_MANIFEST.md must be named here (a test checks). The Godot licence text is added by the game itself.",
+  "sections": [
+    { "title": "Made by", "lines": ["funnybunnyofdoom"] },
+    { "title": "Art", "lines": ["Pixel art drawn for the game in Pixelorama"] },
+    {
+      "title": "Music",
+      "lines": [
+        "\"Space Echo\" by Centurion_of_war, CC0 1.0 (opengameart.org)",
+        "\"Another space background track\" by yd, CC0 1.0 (opengameart.org)",
+        "Tension and combat layers made for the game"
+      ]
+    },
+    {
+      "title": "Sound",
+      "lines": ["\"Sci-Fi Sounds\" and \"Interface Sounds\" by Kenney (www.kenney.nl), CC0 1.0"]
+    },
+    {
+      "title": "Built with",
+      "lines": ["Godot Engine (godotengine.org), MIT licence", ".NET (dotnet.microsoft.com), MIT licence", "Pixelorama (pixelorama.org), MIT licence"]
+    },
+    { "title": "Thanks", "lines": ["Everyone who plays it"] }
+  ]
+}

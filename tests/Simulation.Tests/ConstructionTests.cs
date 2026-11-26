@@ -78,6 +78,13 @@ public class ConstructionTests
             {
                 Assert.True(Main(chain[i]) > Main(chain[i - 1]), $"{chain[i].Id} isn't better than {chain[i - 1].Id}");
                 Assert.True(chain[i].MassKg >= chain[i - 1].MassKg, $"{chain[i].Id} is lighter than {chain[i - 1].Id}");
+                // Balance (#143): a better tier never uses less power, and never does less for each kW it uses.
+                Assert.True(chain[i].PowerUseKW >= chain[i - 1].PowerUseKW, $"{chain[i].Id} uses less power than {chain[i - 1].Id}");
+                if (chain[i - 1].PowerUseKW > 0)
+                {
+                    var (now, before) = (Main(chain[i]) / chain[i].PowerUseKW, Main(chain[i - 1]) / chain[i - 1].PowerUseKW);
+                    Assert.InRange(now / before, 1.0, 1.6); // better for each kW, but not a leap
+                }
             }
             Assert.Equal("exotic_engineering", catalog.Research.TechFor(chain[3].Id)!.Id);
             Assert.True(chain[3].Bill.ToWholeKg().ContainsKey("exotic_ore"));

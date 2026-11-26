@@ -130,18 +130,18 @@ public sealed partial class SectorState
     private static IEnumerable<string> Salvaged(CraftState craft) => craft.Inventory.Kg.Keys.Where(m =>
         m is not (FuelMaterial or FoodMaterial or WaterMaterial) && !(m is ShellMaterial or MissileMaterial && craft.Stats.WeaponList.Count > 0));
 
-    /// <summary>The nearest wreck it can finish, in this system first, then in others it can reach; not those on the ground.</summary>
+    /// <summary>The nearest wreck it can finish, in this system first, then in others it can reach, your own first (#144); not those on the ground.</summary>
     private CraftState? PickWreck(CraftState craft)
     {
         var here = StarAt(craft.Position)?.Id;
         CraftState? best = null;
-        var bestKey = (Elsewhere: true, Distance: double.MaxValue);
+        var bestKey = (Elsewhere: true, NotYours: true, Distance: double.MaxValue); // your own wrecks first (#144)
         foreach (var wreck in _crafts)
         {
             if (!wreck.IsWreck || IsUndecided(wreck) || wreck.IsLanded || wreck.Id == craft.Id || LastPartKg(wreck) > craft.CargoCapacityKg) continue;
             var elsewhere = StarAt(wreck.Position)?.Id != here;
             if (elsewhere && GateHop(craft, wreck.Position, out _) is null) continue;
-            var key = (elsewhere, wreck.Position.DistanceTo(craft.Position));
+            var key = (elsewhere, !IsPlayers(wreck), wreck.Position.DistanceTo(craft.Position));
             if (best is null || key.CompareTo(bestKey) < 0) { best = wreck; bestKey = key; }
         }
         return best;

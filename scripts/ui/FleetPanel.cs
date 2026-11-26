@@ -47,6 +47,14 @@ public partial class FleetPanel : PanelContainer
     /// <summary>Mark it as a wreck to salvage (#135).</summary>
     public event Action<CraftId>? ScrapChosen;
 
+    /// <summary>Send it for repairs, or call that off (#148).</summary>
+    public event Action<CraftId>? RepairChosen;
+
+    /// <summary>Mark every defunct craft as a wreck (#144).</summary>
+    public event Action? CleanUpChosen;
+
+    private Button _cleanUp = null!;
+
     /// <summary>Raised by the Swarms button (#30).</summary>
     public event Action? SwarmsChosen;
 
@@ -103,6 +111,9 @@ public partial class FleetPanel : PanelContainer
         foreach (var s in Sorts) _sort.AddItem($"by {s}");
         _sort.ItemSelected += _ => Refresh();
         controls.AddChild(_sort);
+        _cleanUp = new Button { FocusMode = FocusModeEnum.None, Icon = UiIcons.Get("salvage"), Visible = false, TooltipText = "Mark every defunct craft (lost half its parts, or all its engines) as a wreck for salvagers" };
+        _cleanUp.Pressed += () => CleanUpChosen?.Invoke();
+        controls.AddChild(_cleanUp);
 
         _empty = new Label { Text = "  No craft match.", Modulate = new Color(1, 1, 1, 0.6f), Visible = false };
         box.AddChild(_empty);
@@ -159,6 +170,9 @@ public partial class FleetPanel : PanelContainer
         var pilot = Pilot(sector);
         _title.Text = $"FLEET ({crafts.Count:N0})  ({InputActions.Key1(InputActions.Fleet)} to close)"
                       + (sector.Swarms.Count > 0 ? $"   + {sector.Swarms.Sum(s => s.Count):N0} in swarms" : "");
+        var defunct = sector.DefunctCrafts().Count; // #144
+        _cleanUp.Visible = defunct > 0;
+        _cleanUp.Text = $"Clean up {defunct}";
         for (var i = 0; i < Filters.Length; i++)
         {
             var count = crafts.Count(c => Matches(c, i));
@@ -198,6 +212,7 @@ public partial class FleetPanel : PanelContainer
             row.Target += id => CraftTargeted?.Invoke(id);
             row.Rename += id => RenameChosen?.Invoke(id);
             row.Scrap += id => ScrapChosen?.Invoke(id);
+            row.Repair += id => { RepairChosen?.Invoke(id); Refresh(); };
             row.Shelter += id => // #123
             {
                 if (_sector().Crafts.FirstOrDefault(c => c.Id == id) is not { } ship) return;
@@ -256,10 +271,10 @@ public partial class FleetPanel : PanelContainer
         private readonly Label _name = Line(), _doing = Line();
         private readonly TextureRect _light = UiTheme.Icon(""), _job = UiTheme.Icon("");
         private readonly StatBar _battery = new(), _cargo = new();
-        private readonly Button _fly, _target, _gate, _rename, _shelter, _scrap;
+        private readonly Button _fly, _target, _gate, _rename, _shelter, _scrap, _repair;
         private CraftId _id = CraftId.None;
 
-        public event Action<CraftId>? Fly, Target, Gate, Rename, Shelter, Scrap;
+        public event Action<CraftId>? Fly, Target, Gate, Rename, Shelter, Scrap, Repair;
 
         private static Label Line() => new()
         {
@@ -293,6 +308,9 @@ public partial class FleetPanel : PanelContainer
             _scrap = Button("", "Mark as a wreck: crew go home, salvagers take it apart", () => Scrap?.Invoke(_id)); // #135
             (_scrap.Icon, _scrap.Flat, _scrap.TextureFilter) = (UiIcons.Get("salvage"), true, TextureFilterEnum.Nearest);
             row.AddChild(_scrap);
+            _repair = Button("", "", () => Repair?.Invoke(_id)); // #148
+            (_repair.Icon, _repair.Flat, _repair.TextureFilter) = (UiIcons.Get("shipyard"), true, TextureFilterEnum.Nearest);
+            row.AddChild(_repair);
             middle.AddChild(top);
             var second = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
             second.AddChild(_job);
@@ -329,6 +347,7 @@ public partial class FleetPanel : PanelContainer
             Put(_light, trouble is not null ? craft.IsWreck ? "danger" : "warn" : waiting ? "wait" : craft.IsAutomated || craft.BuildQueue.Count > 0 ? "work" : you ? "ok" : "idle");
             var where = Where(sector, craft);
             var doing = (trouble is not null ? trouble + ";  " : "")
+                        + (craft.SeekRepair ? $"repairs: {craft.SeekRepairStatus ?? "setting off"};  " : "") // #148
                         + (craft.Job is { Active: true } job ? $"{job.Status} ({job.CompletedCycles})"
                             : craft.BuildQueue.Count > 0 ? $"building {craft.BuildQueue[0].ShipName} {craft.BuildQueue[0].Fraction * 100:0}%"
                             : craft.GateClosed ? "GATE CLOSED" : where + (craft.Crew > 0 ? $", crew {craft.Crew}" : ""));
@@ -350,6 +369,9 @@ public partial class FleetPanel : PanelContainer
                     craft.HasCargoLimit ? $"{craft.CargoKg / 1000.0:0.#} / {craft.CargoCapacityKg / 1000.0:0.#} t" : $"{craft.CargoKg / 1000.0:0.#} t");
 
             _rename.Visible = !craft.IsWreck;
+            _repair.Visible = craft.SeekRepair || sector.SeekRepairBlocker(craft) is null;
+            _repair.Modulate = new Color(1, 1, 1, craft.SeekRepair ? 1 : 0.75f);
+            _repair.TooltipText = craft.SeekRepair ? "Going for repairs. Click: call it off" : "Seek repair: fly to the nearest shipyard and be repaired, then carry on";
             _scrap.Visible = !craft.IsWreck && !you && (SectorState.NeedsRepair(craft) || craft.Stats.TotalThrustN <= 0 && !craft.IsShipyard || craft.CrewShortReason is not null); // shown for the defunct; the menu has it for any
             _shelter.Visible = craft.IsAutomated && (sector.Options[WorldOptions.SolarFlares] != WorldAmount.Off || sector.Options[WorldOptions.MeteorShowers] != WorldAmount.Off); // #123
             _shelter.Modulate = new Color(1, 1, 1, craft.KeepWorking ? 0.3f : 1);

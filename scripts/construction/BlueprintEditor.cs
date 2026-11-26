@@ -255,6 +255,16 @@ public sealed class BlueprintEditor
     }
 
     /// <summary>Every part of one kind becomes another, keeping its facing: in the selection, or everywhere if nothing is selected.</summary>
+    /// <summary>Swaps every part (or every selected one) for its best tier <paramref name="unlocked"/> allows, as one undo step (#141); how many changed.</summary>
+    public int UpgradeTiers(Func<string, bool> unlocked)
+    {
+        if (IsLocked) return 0;
+        var cells = (Selection.Count > 0 ? Selected : _cells.Values.ToList())
+            .Select(c => (Cell: c, Better: PartTiers.BestUnlocked(_catalog, c.PartId, unlocked))).Where(x => x.Better is not null).ToList();
+        AsOneStep(() => cells.Aggregate(false, (changed, x) => Place(x.Cell.Pos, x.Better!, x.Cell.Rotation) | changed));
+        return cells.Count;
+    }
+
     public int ReplaceParts(string from, string to)
     {
         if (IsLocked || from == to) return 0;

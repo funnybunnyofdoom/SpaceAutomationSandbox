@@ -110,7 +110,7 @@ public static class SaveStore
                 else if (string.Equals(property, "header", StringComparison.OrdinalIgnoreCase)) header = ReadHeader(ref reader);
                 else if (!reader.TrySkip()) break;
             }
-            if (game != SaveGameSerializer.GameId) throw new FormatException("not a SpaceAutomationSandbox save");
+            if (game != SaveGameSerializer.GameId) throw new FormatException("not a Starjux save");
             if (version is not { } v) throw new FormatException("no save-format version");
             if (v > SaveGameSerializer.SchemaVersion) throw new FormatException($"made by a newer version of the game (save format {v})");
             return new SaveSlot(path, kind, header, v, null, modified) { OldRace = RaceIn(bytes) };
@@ -138,7 +138,7 @@ public static class SaveStore
     private static SaveHeader ReadHeader(ref Utf8JsonReader reader)
     {
         if (reader.TokenType != JsonTokenType.StartObject) throw new FormatException("bad header");
-        string name = "", saved = "", game = "", race = "";
+        string name = "", saved = "", game = "", race = "", version = "";
         double play = 0;
         long tick = 0;
         ulong seed = 0;
@@ -155,12 +155,13 @@ public static class SaveStore
                 case "seed": seed = reader.GetUInt64(); break;
                 case "race": race = reader.GetString() ?? ""; break;
                 case "gamename": game = reader.GetString() ?? ""; break;
+                case "gameversion": version = reader.GetString() ?? ""; break;
                 default: // Skip() refuses to work on part of a file, whatever is in it: saves over 64 KB were listed as broken
                     if (!reader.TrySkip()) throw new FormatException("the header is too long");
                     break;
             }
         }
-        return new SaveHeader(name, saved, play, tick, seed, game, Race: race);
+        return new SaveHeader(name, saved, play, tick, seed, game, Race: race, GameVersion: version);
     }
 
     /// <summary>Writes a save safely: to a temporary file, then into place.</summary>

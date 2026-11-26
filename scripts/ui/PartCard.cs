@@ -34,10 +34,10 @@ public partial class PartCard : PanelContainer
     }
 
     /// <summary>Shows a part beside an area (both in this control's parent), kept inside the parent.</summary>
-    public void Show(PartDefinition part, MaterialCatalog materials, string? lockedBy, Rect2 beside, string? problem = null)
+    public void Show(PartDefinition part, MaterialCatalog materials, string? lockedBy, Rect2 beside, string? problem = null, PartDefinition? previous = null)
     {
         var scale = GetThemeDefaultFontSize() / 16f;
-        var key = $"{part.Id}|{lockedBy}|{scale}|{problem}";
+        var key = $"{part.Id}|{lockedBy}|{scale}|{problem}|{previous?.Id}";
         if (key != _key)
         {
             _key = key;
@@ -54,6 +54,13 @@ public partial class PartCard : PanelContainer
             if (problem is not null) Line("danger", problem, Severity.Bad, scale);
             if (lockedBy is not null) Line("research", $"Needs {lockedBy} researched before it can be built.", Severity.Warning, scale);
             foreach (var fact in PartFacts.Of(part, materials)) Line(fact.Icon, fact.Text, Severity.Normal, scale);
+            if (previous is not null) // what this tier gains over the one before it (#142)
+            {
+                _box.AddChild(new HSeparator { MouseFilter = MouseFilterEnum.Ignore });
+                Line("upgrade", $"Compared with {previous.Name}:", Severity.Muted, scale);
+                foreach (var line in PartTiers.Compare(previous, part))
+                    Line("upgrade", line, line.Contains("(-") ^ (line.StartsWith("Power use") || line.StartsWith("Mass")) ? Severity.Warning : Severity.Good, scale);
+            }
             if (part.MaterialsKg is { Count: > 0 } made)
             {
                 _box.AddChild(new HSeparator { MouseFilter = MouseFilterEnum.Ignore });

@@ -176,14 +176,15 @@ public sealed partial class SectorState
         craft.ServiceAt = serviceAt;
     }
 
-    private CraftState? NearestShipyard(CraftState craft)
+    private CraftState? NearestShipyard(CraftState craft, bool thisSystem = false)
     {
+        var here = thisSystem ? StarAt(craft.Position)?.Id : null;
         CraftState? best = null;
         var bestDistance = double.MaxValue;
         foreach (var c in _crafts)
         {
             if (c.Id == craft.Id || !c.IsShipyard || c.IsWreck || (c.Stats.TotalThrustN > 0 && !c.IsOnRails && !c.IsLanded) || // not a ship that may fly off (#83)
-                c.Stats.DockingPorts.Count == 0) continue;
+                c.Stats.DockingPorts.Count == 0 || (thisSystem && StarAt(c.Position)?.Id != here)) continue;
             var d = c.Position.DistanceTo(craft.Position);
             if (d < bestDistance) { best = c; bestDistance = d; }
         }
@@ -203,15 +204,27 @@ public sealed partial class SectorState
 
     /// <summary>
     /// Servicing for automated craft: returns true when it flies the craft this tick (going to a
-    /// shipyard, or docked there for repairs). Decided from saved state only.
+    /// shipyard, or docked there for repairs). Decided from saved state only. <paramref name="forced"/>: a repair trip you ordered
+    /// (#148), for any damage and with or without a job (a craft with no job only looks in its own system); it ends when every part is
+    /// mended, waiting for materials if it must.
     /// </summary>
-    private bool StepService(CraftState craft, ShipJob job)
+    private bool StepService(CraftState craft, ShipJob? job, bool forced = false)
     {
-        job.ServiceStatus = null;
+        if (job is not null) job.ServiceStatus = null;
+        void Status(string text)
+        {
+            if (job is not null) job.ServiceStatus = text;
+            if (forced) craft.SeekRepairStatus = text;
+        }
         if (craft.ServiceAt.IsNone)
         {
-            if (!NeedsService(craft) || craft.IsLanded || !CanBreakForService(job)) return false;
-            if (NearestShipyard(craft) is not { } nearest) return false; // nowhere to go: keep working
+            if (forced && craft.IsLanded) { Status("waiting: landed; take off to go for repairs"); return false; }
+            if (!(forced ? NeedsRepair(craft) : NeedsService(craft)) || craft.IsLanded || job is not null && !CanBreakForService(job)) return false;
+            if (NearestShipyard(craft, thisSystem: job is null) is not { } nearest)
+            {
+                if (forced) { Status("waiting: no shipyard with a docking port" + (job is null ? " in this system" : "")); craft.Controls = new ShipControls(0, 0, !craft.IsDocked); }
+                return false; // nowhere to go: keep working
+            }
             craft.ServiceAt = nearest.Id;
         }
         if (!_craftsById.TryGetValue(craft.ServiceAt, out var yard) || !yard.IsShipyard || yard.Stats.DockingPorts.Count == 0)
@@ -219,15 +232,20 @@ public sealed partial class SectorState
             craft.ServiceAt = CraftId.None;
             return false;
         }
-        // Done when fully repaired; or when only light damage is left and the yard lacks the materials for it.
-        if (!NeedsRepair(craft) || (!NeedsService(craft) && RepairShortfall(yard, craft).Count > 0))
+        // Done when fully repaired; or when only light damage is left and the yard lacks the materials for it (a trip you ordered waits).
+        if (!NeedsRepair(craft) || (!forced && !NeedsService(craft) && RepairShortfall(yard, craft).Count > 0))
         {
             craft.ServiceAt = CraftId.None;
             if (craft.DockedToCraftId == yard.Id) TryUndock(craft.Id);
             return false;
         }
 
-        if (StarAt(yard.Position)?.Id != StarAt(craft.Position)?.Id) return StepGateRoute(craft, job) || false; // yard in another system (#23)
+        if (StarAt(yard.Position)?.Id != StarAt(craft.Position)?.Id) // yard in another system (#23)
+        {
+            if (job is not null) return StepGateRoute(craft, job);
+            craft.ServiceAt = CraftId.None;
+            return false;
+        }
         var damaged = craft.HealthList.Count;
         var missing = MissingParts(craft);
         var what = string.Join(", ", new[] { damaged > 0 ? $"{damaged} damaged" : "", missing > 0 ? $"{missing} broken off" : "" }.Where(s => s.Length > 0));
@@ -241,23 +259,23 @@ public sealed partial class SectorState
         {
             if (approach == DockApproach.Docked) craft.Controls = ShipControls.Idle;
             else if (approach == DockApproach.NoFreePort) craft.Controls = new ShipControls(0, 0, true);
-            job.ServiceStatus = craft.Position.DistanceTo(yard.Position) - yard.CollisionRadiusM > ClaimRangeM
+            Status(craft.Position.DistanceTo(yard.Position) - yard.CollisionRadiusM > ClaimRangeM
                 ? $"flying to {yard.Name} for repairs ({what})"
-                : $"waiting: repairs at {yard.Name} need {Describe(shortfall)} more";
+                : $"waiting: repairs at {yard.Name} need {Describe(shortfall)} more");
             return true;
         }
         switch (approach)
         {
             case DockApproach.Docked:
                 craft.Controls = ShipControls.Idle;
-                job.ServiceStatus = $"in for repairs at {yard.Name} ({what})";
+                Status($"in for repairs at {yard.Name} ({what})");
                 break;
             case DockApproach.NoFreePort:
                 craft.Controls = new ShipControls(0, 0, true);
-                job.ServiceStatus = $"queued for repairs at {yard.Name}";
+                Status($"queued for repairs at {yard.Name}");
                 break;
             default:
-                job.ServiceStatus = $"flying to {yard.Name} for repairs ({what})";
+                Status($"flying to {yard.Name} for repairs ({what})");
                 break;
         }
         return true;

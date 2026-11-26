@@ -146,8 +146,11 @@ public partial class AudioDirector : Node
     {
         if (_cache.TryGetValue(path, out var cached)) return cached;
         AudioStream? stream = null;
+        // Imported sounds load as resources: an exported game packs them and has no loose files (#140). A file that wasn't
+        // imported (one dropped in later) is read from disk.
+        if (ResourceLoader.Exists(path)) stream = ResourceLoader.Load<AudioStream>(path);
         var file = ProjectSettings.GlobalizePath(path);
-        if (System.IO.File.Exists(file))
+        if (stream is null && System.IO.File.Exists(file))
             stream = file.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) ? AudioStreamWav.LoadFromFile(file) : AudioStreamOggVorbis.LoadFromFile(file); // generated music is WAV (#129)
         _cache[path] = stream;
         return stream;

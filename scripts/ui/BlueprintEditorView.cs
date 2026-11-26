@@ -300,7 +300,7 @@ public partial class BlueprintEditorView : Control
         var area = _pointedArea is { } a ? new Rect2(where.GlobalPosition + a.Position * GetGlobalTransform().Scale, a.Size * GetGlobalTransform().Scale) : where.GetGlobalRect();
         var back = GetGlobalTransform().AffineInverse();
         _card.Show(part, _catalog.Materials, LockedBy(id), new Rect2(back * area.Position, area.Size / GetGlobalTransform().Scale),
-            where == _grid ? _grid.ProblemAtPointer : null);
+            where == _grid ? _grid.ProblemAtPointer : null, PartTiers.Previous(_catalog, id));
     }
 
     /// <summary>Shows the parts of the category that match the search, with the keys that pick them.</summary>

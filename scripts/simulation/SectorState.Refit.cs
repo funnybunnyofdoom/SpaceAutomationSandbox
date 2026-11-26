@@ -153,6 +153,20 @@ public sealed partial class SectorState
         return null;
     }
 
+    /// <summary>The craft's design with every part at its best researched tier (#141), and how many parts change.</summary>
+    public (ShipDesign Design, int Changed) UpgradedDesign(CraftState craft) =>
+        PartTiers.Upgraded(craft.IntactDesign ?? craft.Design, Parts!, IsPartUnlocked);
+
+    /// <summary>Refits a craft at a yard to its own design with every part at the best tier researched (#141).</summary>
+    public ActionResult OrderUpgrade(CraftId yardId, CraftId craftId)
+    {
+        var craft = GetCraft(craftId);
+        var (design, changed) = UpgradedDesign(craft);
+        if (changed == 0) return new(false, $"{craft.Name} already has the best parts you have researched.");
+        var result = OrderRefit(yardId, craftId, design);
+        return result.Done ? new(true, $"Upgrading {changed} parts of {craft.Name}. " + result.Message) : result;
+    }
+
     public ActionResult OrderRefit(CraftId yardId, CraftId craftId, ShipDesign target)
     {
         var yard = GetCraft(yardId);

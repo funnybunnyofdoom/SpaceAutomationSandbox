@@ -8,7 +8,7 @@ namespace SpaceAutomationSandbox.UI;
 /// Title screen and main menu (#58): the game's (working) name over a scene of its own (#98), then Continue
 /// (the save, if there is one), New Game, Load, Settings and Quit. Keyboard and controller
 /// drive it with the usual UI keys (arrows/D-pad to move, Enter/A to choose); the first available
-/// button has focus. Load opens the save list (#60). No credits screen for now (#66).
+/// button has focus. Load opens the save list (#60). Credits (#66, #138) lists who made it. The version is in the corner (#136).
 /// </summary>
 public partial class TitleScreen : Control
 {
@@ -16,6 +16,7 @@ public partial class TitleScreen : Control
     public event Action? NewGameChosen;
     public event Action? LoadChosen;
     public event Action? SettingsChosen;
+    public event Action? CreditsChosen;
     public event Action? QuitChosen;
 
     private Button _continue = null!;
@@ -77,6 +78,7 @@ public partial class TitleScreen : Control
         box.AddChild(_newGame);
         box.AddChild(MenuButton("Load", () => LoadChosen?.Invoke()));
         box.AddChild(MenuButton("Settings", () => SettingsChosen?.Invoke()));
+        box.AddChild(MenuButton("Credits", () => CreditsChosen?.Invoke()));
         box.AddChild(MenuButton("Quit", () => QuitChosen?.Invoke()));
         _message = new Label
         {
@@ -84,9 +86,15 @@ public partial class TitleScreen : Control
             AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(420, 0),
         };
         box.AddChild(_message);
+
+        var version = new Label { Text = $"{GameInfo.Name} {GameInfo.VersionLabel}", Modulate = new Color(1, 1, 1, 0.45f), MouseFilter = MouseFilterEnum.Ignore };
+        version.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomRight, LayoutPresetMode.KeepSize, 14);
+        version.GrowHorizontal = GrowDirection.Begin;
+        version.GrowVertical = GrowDirection.Begin;
+        AddChild(version);
     }
 
-    /// <summary>The game's name isn't final: it's data, and a logo picture (assets/art/ui/logo.png or .webp) takes its place if there is one (#98).</summary>
+    /// <summary>The game's name is data, and a logo picture (assets/art/ui/logo.png or .webp) takes its place if there is one (#98).</summary>
     private static (string Name, string Subtitle) GameTitle()
     {
         const string path = "res://data/title.json";
@@ -96,7 +104,7 @@ public partial class TitleScreen : Control
                 return (root.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "", root.TryGetProperty("subtitle", out var t) ? t.GetString() ?? "" : "");
         }
         catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException) { GD.PushWarning($"{path}: {e.Message}"); }
-        return ("Space Automation Sandbox", "");
+        return (GameInfo.Name, "");
     }
 
     private static Texture2D? Logo()
@@ -113,6 +121,9 @@ public partial class TitleScreen : Control
         button.Pressed += pressed;
         return button;
     }
+
+    /// <summary>Opens the credits as if chosen (a dev check).</summary>
+    public void PickCredits() => CreditsChosen?.Invoke();
 
     /// <summary>Shows the menu. <paramref name="saveSummary"/> describes the save Continue loads, or null if there's none.</summary>
     public void Open(string? saveSummary, string? message = null)

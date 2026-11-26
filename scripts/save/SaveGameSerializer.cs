@@ -18,10 +18,11 @@ public sealed record LoadedGame(SectorState Sector, CraftId PlayerCraftId, SaveH
 /// </summary>
 /// <remarks>
 /// Later optional fields: <c>GameName</c> (#62); <c>GoalsOn</c> and <c>GoalsDone</c>, the new-player goal
-/// list and the ids of goals met (#65). Saves without them load with the goal list off.
+/// list and the ids of goals met (#65). Saves without them load with the goal list off. <c>GameVersion</c> (#136): the
+/// version of the game that wrote it, e.g. "1.0.0-rc1"; empty in older saves.
 /// </remarks>
 public sealed record SaveHeader(string Name, string SavedAtUtc, double PlayTimeS, long Tick, ulong Seed, string GameName = "",
-    bool GoalsOn = false, string[]? GoalsDone = null, string Race = "");
+    bool GoalsOn = false, string[]? GoalsDone = null, string Race = "", string GameVersion = "");
 
 /// <summary>
 /// Converts a whole <see cref="SectorState"/> to and from versioned JSON (format in docs/08_SAVE_FORMAT.md).
@@ -247,6 +248,7 @@ public static class SaveGameSerializer
                     FactionId = c.FactionId,
                     IsWreck = c.IsWreck,
                     Scrapped = c.Scrapped,
+                    SeekRepair = c.SeekRepair,
                     IsPatrol = c.IsPatrol,
                     IsStranded = c.IsStranded,
                     PatrolStop = c.PatrolStop,
@@ -473,6 +475,7 @@ public static class SaveGameSerializer
                 craft.FactionId = c.FactionId; // #84
                 craft.IsWreck = c.IsWreck;
                 craft.Scrapped = c.Scrapped && c.IsWreck;
+                craft.SeekRepair = c.SeekRepair && !c.IsWreck;
                 if (c.PatrolStop < 0) throw new FormatException($"Craft {c.Id} has an invalid patrol.");
                 craft.IsPatrol = c.IsPatrol;
                 craft.IsStranded = c.IsStranded;
@@ -1321,6 +1324,10 @@ public static class SaveGameSerializer
         /// <summary>#135; no schema change: older saves have none.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool Scrapped { get; set; }
+
+        /// <summary>#148; no schema change: older saves have none.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool SeekRepair { get; set; }
 
         /// <summary>v24: a civilization's standing patrol (#89).</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
